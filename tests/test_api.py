@@ -51,3 +51,32 @@ def test_shutdown_requires_token_and_signals(api, monkeypatch):
 def test_openapi_documents_routes(api):
     paths = api.get("/openapi.json").json()["paths"]
     assert {"/api/v1/works", "/api/v1/works/{ref}", "/api/v1/works/{ref}/changes"} <= set(paths), set(paths)
+
+
+def test_journals_routes(api):
+    info = api.get("/api/v1/journals").json()
+    assert info["current"]["published_on"] == "2026-10-01" and len(info["history"]) == 1
+    assert len(info["current"]["warnings"]) == 2
+    jama = api.get("/api/v1/journals/lookup", params={"issn": "0098-7484"}).json()
+    assert jama["status"] == "recommended" and jama["journal"]["name"] == "JAMA"
+    assert api.get("/api/v1/journals/lookup").status_code == 422
+    assert api.post("/api/v1/journals/update").status_code == 502  # page absente : la liste reste en place
+    assert api.get("/api/v1/journals").json()["last_error"]
+
+
+def test_journal_import_and_status_filter(api):
+    from conftest import small_list
+
+    api.post("/api/v1/works", json={"identifier": MERINO_DOI})
+    assert api.get("/api/v1/works", params={"journal_status": "recommended"}).json()["total"] == 1
+    assert api.get("/api/v1/works", params={"journal_status": ["withdrawn", "not_listed"]}).json()["total"] == 0
+    assert api.get("/api/v1/works", params={"journal_status": "inconnu"}).status_code == 422
+
+    bad = api.post("/api/v1/journals/import", content=b"pas un zip")
+    assert bad.status_code == 422
+    imported = api.post("/api/v1/journals/import", params={"filename": "liste_05-01-27.xlsx"}, content=small_list())
+    assert imported.status_code == 200 and imported.json()["updated"]
+    assert imported.json()["current"]["published_on"] == "2027-01-05"
+    work = api.get("/api/v1/works/harris2018effect").json()
+    assert work["journal_status"]["status"] == "not_listed"
+    assert api.get("/api/v1/works", params={"journal_status": "not_listed"}).json()["total"] == 1

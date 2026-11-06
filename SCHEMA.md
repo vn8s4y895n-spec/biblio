@@ -4,7 +4,7 @@ SQLite en mode WAL, clés étrangères actives. Les migrations sont dans `src/bi
 
 Ce document décrit le schéma **réellement en place**. Les tables prévues pour les phases suivantes sont dans [PLAN.md](PLAN.md).
 
-## `schema_migrations` (version actuelle : 1)
+## `schema_migrations` (version actuelle : 2)
 
 | Colonne | Type | Rôle |
 |---|---|---|
@@ -79,11 +79,74 @@ Les auteurs sont stockés par article, sans table d'auteurs commune. Fusionner l
 | field | Champ modifié (`abstract`, `identifiers.pmid`, `authors`…), NULL pour `create` |
 | old_json, new_json | Valeurs avant et après, en JSON (notice complète pour `create`) |
 
-## Exemple de requête
+## Liste des revues recommandées (migration 2)
+
+Source : la liste de la Conférence des doyens et du CNU santé, publiée par Sorbonne Université. Chaque version téléchargée ou importée est conservée. La version **en vigueur** est la dernière enregistrée (`max(id)`).
+
+### `journal_lists` : une ligne par version de la liste
+
+| Colonne | Rôle |
+|---|---|
+| id | |
+| source_url | URL du fichier, ou `manual:<nom>` pour un import manuel |
+| sha256 | Empreinte du fichier (UNIQUE) : une version déjà connue n'est jamais réimportée |
+| published_on | Date tirée du nom du fichier (`…_01-10-26.xlsx` → `2026-10-01`) |
+| fetched_at | Date d'enregistrement |
+| file_path | Copie du fichier dans `journals/` du dossier de données |
+| row_count | Nombre de revues |
+| warnings | Anomalies repérées dans le fichier (JSON) : lignes sans nom, colonne décalée… |
+
+### `journals` : les revues d'une version
+
+| Colonne | Rôle |
+|---|---|
+| id, list_id → journal_lists | |
+| sheet_row | Numéro de ligne dans le fichier Excel |
+| name | Nom complet. NULL si la ligne du fichier n'a qu'un identifiant. |
+| abbrev, abbrev_norm | Abréviation NLM ; `abbrev_norm` = `lower(trim(replace(abbrev, '.', '')))` |
+| issn_print, issn_e | Normalisés `NNNN-NNNN` : espaces insécables retirés, zéro initial ajouté si besoin |
+| nlmid | Identifiant NLM |
+| start_year, end_year | Années de publication |
+| new_name | Nouveau nom (revue renommée) |
+| withdrawn_on | Date de retrait de la liste |
+| withdrawal_reason | 1 nouveau nom, 2 n'est plus recommandée, 3 arrêt de publication |
+
+Index : `(list_id, issn_print)`, `(list_id, issn_e)`, `(list_id, nlmid)`, `(list_id, abbrev_norm)`.
+
+### Vue `work_journal_status` : statut de revue de chaque notice
+
+`work_id`, `journal_id` (ligne retenue dans la liste en vigueur, ou NULL), `status` :
+
+| status | Règle |
+|---|---|
+| `no_list` | Aucune liste chargée |
+| `recommended` | Revue trouvée dans la liste, active ou retirée pour motif 1 ou 3 |
+| `withdrawn` | Revue trouvée, retirée pour motif 2. Une date de retrait sans motif est traitée de même, par prudence. |
+| `preprint` | `csl_type = 'article'` (preprint Crossref) |
+| `unidentified` | Ni ISSN, ni NLMID, ni abréviation |
+| `not_listed` | Sinon |
+
+**Correspondance.** On cherche successivement par NLMID, par ISSN papier, par ISSN électronique (chacun des deux ISSN de la notice contre chacune des deux colonnes), puis par abréviation normalisée. L'identifiant le plus sûr l'emporte ; à égalité, la ligne active passe avant la ligne retirée. Chaque recherche est indexée, réunies par `UNION ALL` : environ 30 ms pour filtrer 10 000 notices.
+
+La vue est du SQL standard : `SELECT * FROM work_journal_status` marche dans n'importe quel client SQLite. Elle est recréée au démarrage depuis `journals.py`, qui reste la seule définition de la règle.
+
+## `meta` : petits états du programme
+
+| key | value |
+|---|---|
+| `journals.last_check` | Dernière vérification réussie de la liste en ligne |
+| `journals.last_error` | Dernière erreur de vérification (supprimée après une vérification réussie) |
+
+## Exemples de requêtes
 
 ```sql
 -- Articles de type essai randomisé avec leur DOI
 SELECT w.citekey, w.title, i.value AS doi
 FROM works w LEFT JOIN identifiers i ON i.work_id = w.id AND i.scheme = 'doi'
 WHERE w.study_type = 'rct';
+
+-- Articles publiés dans une revue hors liste ou retirée
+SELECT w.citekey, w.container_title, s.status
+FROM works w JOIN work_journal_status s ON s.work_id = w.id
+WHERE s.status IN ('not_listed', 'withdrawn');
 ```

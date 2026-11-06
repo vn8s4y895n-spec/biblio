@@ -10,8 +10,9 @@ import sqlite3
 import string
 import unicodedata
 from collections.abc import Callable
+from pathlib import Path
 
-from . import db
+from . import db, journals
 from .sources import crossref, pubmed
 from .sources.http import SourceError
 
@@ -24,6 +25,12 @@ CLIENTS = {"api", "cli", "web", "mcp", "inbox", "worker", "package"}
 STOPWORDS = set(
     "a an and are as at by de des du en et for from in into is la le les of on or the to un une vs with".split()
 )
+
+
+def setup(conn: sqlite3.Connection, home: Path) -> None:
+    """Prépare la base : migrations, vue de statut des revues, liste des revues livrée."""
+    db.migrate(conn)
+    journals.install(conn, home)
 
 
 class InvalidIdentifier(ValueError):
@@ -271,18 +278,27 @@ def get_work(conn: sqlite3.Connection, ref: str | int) -> dict:
             (work_id,),
         )
     ]
+    work["journal_status"] = journals.status_of_work(conn, work_id)
     return work
 
 
-def list_works(conn: sqlite3.Connection, limit: int = 50, offset: int = 0) -> dict:
+def list_works(conn: sqlite3.Connection, limit: int = 50, offset: int = 0, journal_status: list[str] | None = None) -> dict:
+    """Notices les plus récentes d'abord ; `journal_status` filtre sur le statut de revue (voir journals.STATUSES)."""
+    if unknown := set(journal_status or ()) - set(journals.STATUSES):
+        raise ValueError(f"Statut de revue inconnu : {', '.join(sorted(unknown))}")
+    where, params = "", []
+    if journal_status:
+        where = f"WHERE s.status IN ({', '.join('?' * len(journal_status))})"
+        params = list(journal_status)
+    base = f"FROM works w JOIN work_journal_status s ON s.work_id = w.id {where}"
     rows = conn.execute(
-        """SELECT w.id, w.citekey, w.title, w.year, w.container_title, w.study_type,
-                  (SELECT family FROM work_authors WHERE work_id = w.id AND position = 0) AS first_author,
-                  (SELECT value FROM identifiers WHERE work_id = w.id AND scheme = 'doi') AS doi
-           FROM works w ORDER BY w.created_at DESC, w.id DESC LIMIT ? OFFSET ?""",
-        (limit, offset),
+        f"""SELECT w.id, w.citekey, w.title, w.year, w.container_title, w.study_type, s.status AS journal_status,
+                   (SELECT family FROM work_authors WHERE work_id = w.id AND position = 0) AS first_author,
+                   (SELECT value FROM identifiers WHERE work_id = w.id AND scheme = 'doi') AS doi
+            {base} ORDER BY w.created_at DESC, w.id DESC LIMIT ? OFFSET ?""",
+        [*params, limit, offset],
     )
-    total = conn.execute("SELECT count(*) FROM works").fetchone()[0]
+    total = conn.execute(f"SELECT count(*) {base}", params).fetchone()[0]
     return {"total": total, "items": [dict(r) for r in rows]}
 
 

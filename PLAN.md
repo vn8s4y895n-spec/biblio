@@ -1,6 +1,6 @@
 # Biblio — Plan
 
-Statut : **plan validé le 2026-11-06. Phase 1 terminée** (2026-11-06). Prochaine étape : phase 2.
+Statut : **plan validé le 2026-11-06. Phases 1 et 2 terminées** (2026-11-06). Prochaine étape : phase 3.
 
 ## Objectif
 
@@ -273,7 +273,16 @@ Chaque phase se termine par : tests verts (aucun appel réseau, réponses enregi
      - le Python installé par `uv` charge bien les extensions SQLite (risque levé) ;
      - `uv` a été installé avec `pip --user`, Homebrew étant absent ;
      - iCloud masque des fichiers de `.venv`, d'où un environnement placé dans `.venv.nosync` (voir README).
-2. **Liste des revues.** Lecture du `.xlsx`, versions conservées, mise à jour automatique depuis la page Sorbonne, comparaison ISSN / NLMID / nom abrégé, vue de statut, filtre dans l'API.
+2. ✅ **Liste des revues.** Lecture du `.xlsx`, versions conservées, mise à jour automatique depuis la page Sorbonne, comparaison ISSN / NLMID / nom abrégé, vue de statut, filtre dans l'API.
+   - *Bilan* : 62 tests verts. Démo réelle contre le site de la Sorbonne : le fichier en ligne est identique à celui livré, et la base de la phase 1 a été migrée sans perte. Filtrer 10 000 notices par statut prend environ 27 ms.
+   - *Écarts au plan* :
+     - lecture du `.xlsx` avec la bibliothèque standard, sans `openpyxl` (un .xlsx est un zip de XML) ;
+     - la vérification hebdomadaire tourne dans un thread du serveur, en attendant la file de tâches de la phase 5 ;
+     - la recherche d'une revue absente de la bibliothèque (`/journals/lookup`) est déjà prête pour les résultats en ligne de la phase 3.
+   - *Constats* :
+     - **le fichier Sorbonne du 01-10-26 contient une erreur** : la colonne « ISSN Electronic » est décalée d'une ligne à partir de la ligne 2650. Biblio la détecte et la signale, et la correspondance passe d'abord par NLMID et ISSN papier pour que le statut reste juste ;
+     - 192 ISSN mal formés (espaces insécables, zéro initial manquant) sont normalisés ;
+     - un premier essai de correspondance avec un OR entre colonnes prenait 20 s pour 10 000 notices ; il a été réécrit en recherches indexées, et un test garde-fou protège ce gain.
 3. **Recherche en ligne fédérée.** Les 5 adaptateurs en parallèle, cache, limites de débit, fusion et dédup, filtres, syntaxe PubMed, PDF libres via Unpaywall / PMC.
 4. **Import et stockage.** PDF par empreinte, extraction du DOI, saisie assistée, BibTeX / RIS / CSL-JSON / nbib, arXiv / bioRxiv / medRxiv / URL, extraction du texte et découpage en passages, FTS5, notes Markdown, boîte d'entrée, fusion des doublons.
 5. **Sémantique et hybride.** File de tâches, bge-m3 (téléchargé au premier lancement), sqlite-vec, RRF, reclassement des résultats en ligne, **benchmark sur 10 000 notices** (objectif < 200 ms).

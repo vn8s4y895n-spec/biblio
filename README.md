@@ -1,7 +1,7 @@
 # Biblio
 
 Gestionnaire de bibliographie local, autonome et ouvert, pensé pour la recherche en santé.
-Le projet avance par phases : voir [PLAN.md](PLAN.md). Ce README décrit ce qui fonctionne **aujourd'hui** (phase 1).
+Le projet avance par phases : voir [PLAN.md](PLAN.md). Ce README décrit ce qui fonctionne **aujourd'hui** (phases 1 et 2).
 
 ## Installation (développement)
 
@@ -36,6 +36,30 @@ uv run biblio token                             # jeton de l'API
 - Un article est cherché sur **PubMed** (résumé structuré, MeSH, type d'étude) et complété par **Crossref** (ISSN papier, licence). Si une source est injoignable, l'import se fait avec l'autre et un avertissement s'affiche.
 - **Aucun doublon** : un même article ajouté par DOI, PMID ou URL renvoie la notice existante, éventuellement complétée.
 
+### Liste des revues recommandées
+
+Chaque article porte un statut de revue, calculé avec la [liste des revues recommandées](https://sante.sorbonne-universite.fr/recherche/liste-des-revues-presumees-non-predatrices) de la Conférence des doyens et du CNU santé :
+
+- ● revue recommandée
+- ▲ retirée de la liste (n'est plus recommandée)
+- ○ hors liste
+- ◇ preprint
+- ? revue non identifiée
+
+```bash
+uv run biblio journals                          # version en vigueur, dernière vérification, anomalies
+uv run biblio journals update                   # vérifier en ligne maintenant
+uv run biblio journals lookup "Clin Infect Dis" # une revue est-elle dans la liste ? (ISSN, NLMID ou abréviation)
+uv run biblio journals import liste.xlsx        # import manuel d'un fichier
+uv run biblio list --revue recommended          # filtrer (répétable : --revue not_listed --revue withdrawn)
+```
+
+- **Disponible hors ligne** : la liste du 1er octobre 2026 est livrée avec Biblio.
+- **Mise à jour automatique** : le serveur vérifie la page de Sorbonne Université une fois par semaine. Il ne télécharge le fichier que s'il a changé, et uniquement depuis `sante.sorbonne-universite.fr`.
+- **En cas d'échec** (page modifiée, fichier illisible) : la version précédente reste en vigueur et l'erreur est affichée par `biblio journals`.
+- **Statut toujours à jour** : il est recalculé à chaque lecture, donc toute la bibliothèque suit une nouvelle liste sans modification des notices.
+- **Anomalie du fichier actuel** : dans le fichier du 01-10-26, la colonne « ISSN Electronic » est décalée d'une ligne à partir de la ligne 2650 (« Molecular Vision » → fin). Biblio le détecte et le signale. Le statut reste fiable, car la correspondance se fait d'abord par NLMID et ISSN papier, mais le nom de revue affiché peut être celui de la ligne voisine quand seul l'ISSN électronique est connu.
+
 ## API REST
 
 Documentation interactive : <http://127.0.0.1:8765/docs> (schéma : `/openapi.json`). Toutes les routes, sauf `/api/v1/health`, exigent le jeton :
@@ -52,9 +76,13 @@ curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:8765/api/v1/works/10.100
 |---|---|---|
 | GET | `/api/v1/health` | État du serveur (public) |
 | POST | `/api/v1/works` | Ajouter par identifiant (201 créé, 200 déjà présent) |
-| GET | `/api/v1/works?limit=&offset=` | Lister |
+| GET | `/api/v1/works?limit=&offset=&journal_status=` | Lister (filtre répétable sur le statut de revue) |
 | GET | `/api/v1/works/{ref}` | Lire (id, clé, DOI, PMID) |
 | GET | `/api/v1/works/{ref}/changes` | Journal des modifications |
+| GET | `/api/v1/journals` | Liste des revues : version en vigueur, historique, dernière vérification |
+| POST | `/api/v1/journals/update` | Vérifier en ligne (502 si échec, la liste précédente reste en place) |
+| POST | `/api/v1/journals/import?filename=` | Importer un .xlsx (corps brut de la requête) |
+| GET | `/api/v1/journals/lookup?issn=&nlmid=&abbrev=` | Statut d'une revue |
 | POST | `/api/v1/shutdown` | Arrêter le serveur |
 
 L'en-tête facultatif `X-Biblio-Client` (`api`, `cli`, `web`, `mcp`…) est inscrit dans le journal des modifications.
@@ -76,4 +104,6 @@ En attendant `biblio backup` (phase 10) : arrêtez le serveur (`biblio stop`), p
 uv run pytest
 ```
 
-Les tests n'accèdent jamais au réseau : les réponses de Crossref et PubMed sont enregistrées dans `tests/fixtures/` (essai MERINO, JAMA 2018).
+Les tests n'accèdent jamais au réseau :
+- les réponses de Crossref et PubMed sont enregistrées dans `tests/fixtures/` (essai MERINO, JAMA 2018) ;
+- le site de Sorbonne Université est simulé, avec des fichiers .xlsx générés par les tests.

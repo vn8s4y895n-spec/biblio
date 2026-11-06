@@ -1,9 +1,12 @@
 """Interface en ligne de commande. C'est un client de l'API REST : elle n'accède jamais à la base directement."""
 
 import json
+import logging
+import re
 import subprocess
 import sys
 import time
+from pathlib import Path
 from typing import Annotated
 
 import httpx
@@ -11,7 +14,22 @@ import typer
 
 from . import config
 
+XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
 app = typer.Typer(help="Biblio : gestionnaire de bibliographie local.", no_args_is_help=True, add_completion=False)
+journals_app = typer.Typer(help="Liste des revues recommandées (CDD / CNU santé, Sorbonne Université).")
+app.add_typer(journals_app, name="journals")
+
+STATUS_LABELS = {
+    "recommended": "● revue recommandée",
+    "withdrawn": "▲ revue retirée de la liste",
+    "not_listed": "○ hors liste",
+    "preprint": "◇ preprint",
+    "unidentified": "? revue non identifiée",
+    "no_list": "— aucune liste chargée",
+}
+STATUS_MARKS = {k: v[0] for k, v in STATUS_LABELS.items()}
+REASONS = {1: "nouveau nom", 2: "n'est plus recommandée", 3: "arrêt de publication"}
 
 
 def _is_biblio(client: httpx.Client) -> bool:
@@ -84,7 +102,8 @@ def serve(
     from .api import create_app
 
     cfg = config.load()
-    uvicorn.run(create_app(cfg), host=host or cfg.host, port=port or cfg.port)
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s:     %(message)s")
+    uvicorn.run(create_app(cfg, background=True), host=host or cfg.host, port=port or cfg.port)
 
 
 @app.command()
@@ -124,6 +143,7 @@ def get(
         return
     typer.secho(work["title"], bold=True)
     typer.echo(f"{_authors(work, 6)}\n{_source(work)}")
+    typer.echo(_status_line(work["journal_status"]))
     typer.echo(f"clé : {work['citekey']}   type : {work['study_type'] or '—'}")
     typer.echo("   ".join(f"{k} : {v}" for k, v in work["identifiers"].items()))
     mesh = [s["term"] + ("*" if s["major"] else "") for s in work["subjects"] if s["scheme"] == "mesh"]
@@ -137,12 +157,81 @@ def get(
 def list_(
     limit: Annotated[int, typer.Option(help="Nombre de notices")] = 20,
     offset: Annotated[int, typer.Option(help="Décalage (pagination)")] = 0,
+    revue: Annotated[
+        list[str] | None,
+        typer.Option(help=f"Filtrer par statut de revue (répétable) : {', '.join(STATUS_LABELS)}"),
+    ] = None,
 ) -> None:
-    """Liste les notices, les plus récentes d'abord."""
-    data = _call("GET", "/api/v1/works", params={"limit": limit, "offset": offset}).json()
+    """Liste les notices, les plus récentes d'abord. ● recommandée ▲ retirée ○ hors liste ◇ preprint ? non identifiée."""
+    params = {"limit": limit, "offset": offset, "journal_status": revue or []}
+    data = _call("GET", "/api/v1/works", params=params).json()
     for w in data["items"]:
-        typer.echo(f"{w['citekey']:<28} {w['year'] or '':<5} {(w['first_author'] or '')[:18]:<18} {w['title'][:70]}")
+        mark = STATUS_MARKS.get(w["journal_status"], " ")
+        typer.echo(f"{mark} {w['citekey']:<28} {w['year'] or '':<5} {(w['first_author'] or '')[:18]:<18} {w['title'][:70]}")
     typer.secho(f"{len(data['items'])} sur {data['total']} notice(s)", dim=True)
+
+
+def _status_line(status: dict) -> str:
+    line = STATUS_LABELS[status["status"]]
+    j = status["journal"]
+    if j and j["withdrawn_on"]:
+        reason = REASONS.get(j["withdrawal_reason"], "motif non précisé")
+        line += f" (retirée le {j['withdrawn_on']} : {reason}" + (f" → {j['new_name']}" if j["new_name"] else "") + ")"
+    if status["list_published_on"]:
+        line += f"   [liste du {status['list_published_on']}]"
+    return line
+
+
+def _list_summary(data: dict) -> None:
+    current = data["current"]
+    typer.echo(f"Liste en vigueur : {current['published_on'] or 'date inconnue'} ({current['row_count']} revues)")
+    typer.echo(f"Source : {current['source_url']}")
+    typer.echo(f"Dernière vérification en ligne : {data['last_check'] or 'jamais'}")
+    for warning in current["warnings"]:
+        typer.secho(f"⚠ Anomalie du fichier : {warning}", fg="yellow")
+    if data["last_error"]:
+        typer.secho(f"⚠ Dernière erreur : {data['last_error']}", fg="yellow")
+
+
+@journals_app.callback(invoke_without_command=True)
+def journals_info(ctx: typer.Context) -> None:
+    """Affiche la version de la liste en vigueur."""
+    if ctx.invoked_subcommand is None:
+        _list_summary(_call("GET", "/api/v1/journals").json())
+
+
+@journals_app.command("update")
+def journals_update() -> None:
+    """Vérifie en ligne si une nouvelle liste est publiée, et la charge."""
+    data = _call("POST", "/api/v1/journals/update").json()
+    typer.echo("✓ Nouvelle liste chargée." if data["updated"] else "= La liste en vigueur est déjà la plus récente.")
+    _list_summary(data)
+
+
+@journals_app.command("import")
+def journals_import(path: Annotated[Path, typer.Argument(exists=True, dir_okay=False, help="Fichier .xlsx de la liste")]) -> None:
+    """Importe manuellement un fichier .xlsx de la liste."""
+    data = _call(
+        "POST", "/api/v1/journals/import", params={"filename": path.name},
+        content=path.read_bytes(), headers={"Content-Type": XLSX},
+    ).json()  # fmt: skip
+    typer.echo("✓ Liste importée." if data["updated"] else "= Cette liste était déjà chargée.")
+    _list_summary(data)
+
+
+@journals_app.command("lookup")
+def journals_lookup(value: Annotated[str, typer.Argument(help="ISSN, NLMID ou abréviation (ex. « Clin Infect Dis »)")]) -> None:
+    """Indique si une revue figure dans la liste."""
+    if re.fullmatch(r"\s*\d{3,4}-?\d{3}[\dXx]\s*", value):
+        params = {"issn": value}
+    elif re.fullmatch(r"\s*\d+R?\s*", value):
+        params = {"nlmid": value.strip()}
+    else:
+        params = {"abbrev": value}
+    status = _call("GET", "/api/v1/journals/lookup", params=params).json()
+    if status["journal"]:
+        typer.secho(status["journal"]["name"], bold=True)
+    typer.echo(_status_line(status))
 
 
 @app.command()
