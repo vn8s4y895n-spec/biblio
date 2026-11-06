@@ -295,13 +295,14 @@ def status_of_work(conn: sqlite3.Connection, work_id: int) -> dict:
 
 
 def lookup(conn: sqlite3.Connection, issn: str | None = None, nlmid: str | None = None, abbrev: str | None = None,
-           csl_type: str = "article-journal") -> dict:  # fmt: skip
-    """Statut d'une revue qui n'est pas forcément dans la bibliothèque (résultats de recherche en ligne)."""
-    issn = normalize_issn(issn)
+           csl_type: str = "article-journal", issn_e: str | None = None) -> dict:  # fmt: skip
+    """Statut d'une revue qui n'est pas forcément dans la bibliothèque (résultats de recherche en ligne).
+    Avec un seul ISSN, on ne sait pas s'il est papier ou électronique : il est comparé aux deux colonnes."""
+    issn, issn_e = normalize_issn(issn), normalize_issn(issn_e)
     row = conn.execute(
         f"WITH w (id, issn_print, issn_e, nlmid, container_abbrev, csl_type) AS (VALUES (NULL, ?, ?, ?, ?, ?))"
         f" {_status_select('w')}",
-        (issn, issn, nlmid, abbrev, csl_type),
+        (issn or issn_e, issn_e or issn, nlmid, abbrev, csl_type),
     ).fetchone()
     return _journal_details(conn, row["status"], row["journal_id"])
 

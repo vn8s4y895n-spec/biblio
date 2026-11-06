@@ -4,7 +4,7 @@ SQLite en mode WAL, clés étrangères actives. Les migrations sont dans `src/bi
 
 Ce document décrit le schéma **réellement en place**. Les tables prévues pour les phases suivantes sont dans [PLAN.md](PLAN.md).
 
-## `schema_migrations` (version actuelle : 2)
+## `schema_migrations` (version actuelle : 3)
 
 | Colonne | Type | Rôle |
 |---|---|---|
@@ -129,6 +129,18 @@ Index : `(list_id, issn_print)`, `(list_id, issn_e)`, `(list_id, nlmid)`, `(list
 **Correspondance.** On cherche successivement par NLMID, par ISSN papier, par ISSN électronique (chacun des deux ISSN de la notice contre chacune des deux colonnes), puis par abréviation normalisée. L'identifiant le plus sûr l'emporte ; à égalité, la ligne active passe avant la ligne retirée. Chaque recherche est indexée, réunies par `UNION ALL` : environ 30 ms pour filtrer 10 000 notices.
 
 La vue est du SQL standard : `SELECT * FROM work_journal_status` marche dans n'importe quel client SQLite. Elle est recréée au démarrage depuis `journals.py`, qui reste la seule définition de la règle.
+
+## `http_cache` : réponses des sources en ligne (migration 3)
+
+Cache des recherches en ligne (un jour) et des réponses Unpaywall (sept jours). On peut le vider sans aucune perte : `DELETE FROM http_cache`.
+
+| Colonne | Rôle |
+|---|---|
+| key | sha256 de l'URL et des paramètres (PK) |
+| url | URL sans les paramètres : aucune clé API n'est stockée en clair |
+| status, content_type, body | Réponse |
+| fetched_at | Date de la requête |
+| expires_at | Expiration (horodatage Unix, indexé) ; les entrées expirées sont purgées à chaque écriture |
 
 ## `meta` : petits états du programme
 

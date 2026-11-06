@@ -1,7 +1,7 @@
 # Biblio
 
 Gestionnaire de bibliographie local, autonome et ouvert, pensé pour la recherche en santé.
-Le projet avance par phases : voir [PLAN.md](PLAN.md). Ce README décrit ce qui fonctionne **aujourd'hui** (phases 1 et 2).
+Le projet avance par phases : voir [PLAN.md](PLAN.md). Ce README décrit ce qui fonctionne **aujourd'hui** (phases 1 à 3).
 
 ## Installation (développement)
 
@@ -35,6 +35,43 @@ uv run biblio token                             # jeton de l'API
 - La CLI est un client de l'API REST. Si le serveur ne tourne pas, elle le démarre en arrière-plan (journal : `server.log` dans le dossier de données). Il reste actif jusqu'à `biblio stop`.
 - Un article est cherché sur **PubMed** (résumé structuré, MeSH, type d'étude) et complété par **Crossref** (ISSN papier, licence). Si une source est injoignable, l'import se fait avec l'autre et un avertissement s'affiche.
 - **Aucun doublon** : un même article ajouté par DOI, PMID ou URL renvoie la notice existante, éventuellement complétée.
+
+### Recherche en ligne
+
+```bash
+uv run biblio search '(ESBL[tiab] OR "extended-spectrum beta-lactamase"[tiab]) AND household[tiab] AND transmission[tiab]'
+uv run biblio search "carbapenemase colonization ICU" --from 2019 --type meta-analysis --type systematic-review
+uv run biblio search "..." --oa --mesh "Escherichia coli Infections" --journal "Clin Infect Dis"
+uv run biblio search "..." --source pubmed --source europepmc --all-journals --json
+uv run biblio oa 10.1016/j.cmi.2016.08.021        # version libre et légale (PMC, Unpaywall)
+```
+
+**Sources et requêtes**
+- PubMed, Europe PMC, OpenAlex, Crossref et Semantic Scholar sont interrogés **en parallèle**.
+- **PubMed** reçoit la requête telle quelle : `[MeSH]`, `[tiab]` et les booléens fonctionnent.
+- **Europe PMC et OpenAlex** reçoivent la requête sans les étiquettes entre crochets.
+- **Crossref et Semantic Scholar** reçoivent du texte libre.
+
+**Fusion et classement**
+- **Doublons** : ils sont fusionnés (DOI > PMID > PMCID > titre + année), en gardant le meilleur de chaque source : MeSH et résumé de PubMed, citations d'OpenAlex…
+- **Classement** : par fusion des rangs (RRF). Un article trouvé par plusieurs sources monte.
+- **Lettres affichées** : elles indiquent les sources (P E O C S) ; ★ marque un article déjà dans la bibliothèque.
+
+**Filtres**
+- **Revues** : par défaut, seules les revues recommandées sont montrées. Le nombre de résultats masqués est affiché, et `--all-journals` les montre.
+- **Date et MeSH** : transmis aux sources qui les comprennent, puis réappliqués à tous les résultats.
+- **Autres filtres** : type d'étude, accès libre et revue.
+
+**Fiabilité**
+- **Source défaillante** : elle est signalée et n'empêche pas les autres de répondre. Après un refus pour excès de requêtes (HTTP 429), elle est mise en pause 10 minutes.
+- **Cache** : les réponses sont gardées un jour (table `http_cache`).
+- **Débit** : il est limité par source (PubMed : 3 requêtes/s, 10 avec une clé).
+- **PDF libre** : il vient d'Europe PMC, d'OpenAlex ou de Semantic Scholar, et `biblio oa` interroge PMC puis Unpaywall. Uniquement des sources légales.
+
+**Recommandé dans `config.toml`**
+- `contact_email` : demandé par Crossref, OpenAlex et NCBI, **indispensable pour Unpaywall**.
+- `openalex_api_key` : gratuite. Sans elle, OpenAlex partage un petit budget quotidien entre tous les utilisateurs d'une même adresse IP.
+- `semanticscholar_api_key` : gratuite sur demande. Sans elle, Semantic Scholar refuse presque toujours (HTTP 429).
 
 ### Liste des revues recommandées
 
@@ -79,6 +116,8 @@ curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:8765/api/v1/works/10.100
 | GET | `/api/v1/works?limit=&offset=&journal_status=` | Lister (filtre répétable sur le statut de revue) |
 | GET | `/api/v1/works/{ref}` | Lire (id, clé, DOI, PMID) |
 | GET | `/api/v1/works/{ref}/changes` | Journal des modifications |
+| GET | `/api/v1/search/online?q=&source=&per_source=&limit=&year_from=&year_to=&study_type=&open_access=&mesh=&journal=&journal_status=&all_journals=` | Recherche fédérée |
+| GET | `/api/v1/search/open-access?doi=` ou `?pmcid=` | Version libre et légale |
 | GET | `/api/v1/journals` | Liste des revues : version en vigueur, historique, dernière vérification |
 | POST | `/api/v1/journals/update` | Vérifier en ligne (502 si échec, la liste précédente reste en place) |
 | POST | `/api/v1/journals/import?filename=` | Importer un .xlsx (corps brut de la requête) |
@@ -106,4 +145,5 @@ uv run pytest
 
 Les tests n'accèdent jamais au réseau :
 - les réponses de Crossref et PubMed sont enregistrées dans `tests/fixtures/` (essai MERINO, JAMA 2018) ;
+- une recherche réelle auprès des 5 sources est enregistrée dans `tests/fixtures/search/`. La réponse de Semantic Scholar est écrite à la main d'après son format documenté, le service ayant refusé toutes les requêtes sans clé ;
 - le site de Sorbonne Université est simulé, avec des fichiers .xlsx générés par les tests.

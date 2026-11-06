@@ -2,13 +2,15 @@
 
 from urllib.parse import quote
 
-from . import http
+from . import SEARCH_TTL, Query, http
 
+NAME, LABEL = "crossref", "Crossref"
 API = "https://api.crossref.org/works/"
 
 CSL_TYPES = {
     "journal-article": "article-journal",
-    "posted-content": "article",
+    "posted-content": "manuscript",  # posters, présentations… ; seul le sous-type « preprint » est un preprint
+    "dissertation": "thesis",
     "book": "book",
     "book-chapter": "chapter",
     "proceedings-article": "paper-conference",
@@ -20,6 +22,15 @@ CSL_TYPES = {
 def fetch(doi: str) -> dict | None:
     response = http.get(API + quote(doi, safe="/"))
     return parse(response.json()["message"]) if response else None
+
+
+def search(q: Query) -> list[dict]:
+    """Crossref ne comprend que le texte libre : la requête est simplifiée."""
+    params = {"query.bibliographic": q.plain, "rows": q.limit}
+    if years := q.years:
+        params["filter"] = f"from-pub-date:{years[0]},until-pub-date:{years[1]}"
+    response = http.get(API.rstrip("/"), params, ttl=SEARCH_TTL)
+    return [parse(m) for m in response.json()["message"]["items"] if m.get("title")] if response else []
 
 
 def _first(values: list | None) -> str | None:
@@ -34,7 +45,7 @@ def parse(m: dict) -> dict:
     return {
         "title": http.clean(_first(m.get("title"))),
         "abstract": http.clean(m.get("abstract")),
-        "csl_type": CSL_TYPES.get(m.get("type"), "article"),
+        "csl_type": "article" if m.get("subtype") == "preprint" else CSL_TYPES.get(m.get("type"), "document"),
         "container_title": _first(m.get("container-title")),
         "container_abbrev": _first(m.get("short-container-title")),
         "issn_print": issn.get("print"),
@@ -57,4 +68,5 @@ def parse(m: dict) -> dict:
         ],
         "identifiers": {"doi": m["DOI"].lower()},
         "subjects": [],
+        "cited_by_count": m.get("is-referenced-by-count"),
     }

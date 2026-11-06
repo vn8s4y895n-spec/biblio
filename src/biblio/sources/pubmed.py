@@ -3,8 +3,9 @@
 import re
 import xml.etree.ElementTree as ET
 
-from . import http
+from . import SEARCH_TTL, Query, http
 
+NAME, LABEL = "pubmed", "PubMed"
 EUTILS = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/"
 
 MONTHS = {m: i for i, m in enumerate("Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec".split(), 1)}
@@ -34,8 +35,8 @@ def _params(**params) -> dict:
     params["tool"] = "biblio"
     if http.contact_email:
         params["email"] = http.contact_email
-    if http.ncbi_api_key:
-        params["api_key"] = http.ncbi_api_key
+    if key := http.api_keys.get("ncbi"):
+        params["api_key"] = key
     return params
 
 
@@ -51,6 +52,30 @@ def fetch(pmid: str) -> dict | None:
         return None
     article = ET.fromstring(response.content).find("PubmedArticle")
     return parse(article) if article is not None else None
+
+
+def search(q: Query) -> list[dict]:
+    """La requête est transmise telle quelle : PubMed comprend sa syntaxe avancée."""
+    term = q.text
+    if years := q.years:
+        term = f"({term}) AND {years[0]}:{years[1]}[dp]"
+    for heading in q.mesh:
+        term += f' AND "{heading}"[MeSH Terms]'
+    found = http.get(
+        EUTILS + "esearch.fcgi",
+        _params(db="pubmed", retmode="json", sort="relevance", retmax=q.limit, term=term),
+        ttl=SEARCH_TTL,
+    )
+    ids = found.json()["esearchresult"]["idlist"] if found else []
+    if not ids:
+        return []
+    fetched = http.get(EUTILS + "efetch.fcgi", _params(db="pubmed", retmode="xml", id=",".join(ids)), ttl=SEARCH_TTL)
+    records = {}
+    for article in ET.fromstring(fetched.content).findall("PubmedArticle") if fetched else []:
+        rec = parse(article)
+        rec["is_oa"] = "pmcid" in rec["identifiers"]  # tout article dans PMC est lisible gratuitement
+        records[rec["identifiers"]["pmid"]] = rec
+    return [records[i] for i in ids if i in records]  # ordre de pertinence de PubMed
 
 
 def _text(el: ET.Element | None) -> str | None:

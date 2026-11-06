@@ -61,3 +61,19 @@ def test_list_shows_and_filters_status(cfg):
     assert "0 sur 0 notice(s)" in out.output
     out = runner.invoke(cli.app, ["get", "harris2018effect"])
     assert "● revue recommandée   [liste du 2026-10-01]" in out.output
+
+
+def test_search_command(cfg):
+    query = '(ESBL[tiab] OR "extended-spectrum beta-lactamase"[tiab]) AND household[tiab] AND transmission[tiab]'
+    out = runner.invoke(cli.app, ["search", query, "--per-source", "5"])
+    assert out.exit_code == 0, out.output
+    assert "Quantifying within-household transmission" in out.output and "[PS]" in out.output
+    assert "Masqués par le filtre des revues" in out.output and "PubMed 5" in out.output
+    out = runner.invoke(cli.app, ["search", query, "--per-source", "5", "--all-journals", "--source", "openalex"])
+    assert "Antibiotics" in out.output and "○" in out.output
+    assert json.loads(runner.invoke(cli.app, ["search", query, "--json", "--per-source", "5"]).output)["total"] > 0
+
+
+def test_oa_command(cfg):
+    out = runner.invoke(cli.app, ["oa", "PMC3244693"])
+    assert "europepmc.org/articles/PMC3244693?pdf=render" in out.output

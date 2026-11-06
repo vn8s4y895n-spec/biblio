@@ -16,8 +16,10 @@ port = 8765
 token = "{token}"   # jeton de l'API : en-tête « Authorization: Bearer <jeton> »
 
 [sources]
-contact_email = ""   # recommandé : Crossref, OpenAlex et NCBI demandent un e-mail de contact
+contact_email = ""   # recommandé : Crossref, OpenAlex et NCBI le demandent ; indispensable pour Unpaywall
 ncbi_api_key = ""    # facultatif : fait passer la limite PubMed de 3 à 10 requêtes/s
+openalex_api_key = ""         # facultatif, gratuit (openalex.org/settings/api) : sans clé, petit budget quotidien partagé
+semanticscholar_api_key = ""  # facultatif, gratuit sur demande : sans clé, Semantic Scholar refuse souvent (HTTP 429)
 """
 
 
@@ -39,7 +41,7 @@ class Config:
     port: int
     token: str
     contact_email: str
-    ncbi_api_key: str
+    api_keys: dict[str, str]  # ncbi, openalex, semanticscholar
 
     @property
     def path(self) -> Path:
@@ -70,5 +72,5 @@ def load() -> Config:
         port=int(server.get("port", 8765)),
         token=server["token"],
         contact_email=sources.get("contact_email", ""),
-        ncbi_api_key=sources.get("ncbi_api_key", ""),
+        api_keys={name: sources.get(f"{name}_api_key", "") for name in ("ncbi", "openalex", "semanticscholar")},
     )

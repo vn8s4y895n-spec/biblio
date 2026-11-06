@@ -1,6 +1,6 @@
 # Biblio — Plan
 
-Statut : **plan validé le 2026-11-06. Phases 1 et 2 terminées** (2026-11-06). Prochaine étape : phase 3.
+Statut : **plan validé le 2026-11-06. Phases 1 à 3 terminées** (2026-11-06). Prochaine étape : phase 4.
 
 ## Objectif
 
@@ -283,7 +283,19 @@ Chaque phase se termine par : tests verts (aucun appel réseau, réponses enregi
      - **le fichier Sorbonne du 01-10-26 contient une erreur** : la colonne « ISSN Electronic » est décalée d'une ligne à partir de la ligne 2650. Biblio la détecte et la signale, et la correspondance passe d'abord par NLMID et ISSN papier pour que le statut reste juste ;
      - 192 ISSN mal formés (espaces insécables, zéro initial manquant) sont normalisés ;
      - un premier essai de correspondance avec un OR entre colonnes prenait 20 s pour 10 000 notices ; il a été réécrit en recherches indexées, et un test garde-fou protège ce gain.
-3. **Recherche en ligne fédérée.** Les 5 adaptateurs en parallèle, cache, limites de débit, fusion et dédup, filtres, syntaxe PubMed, PDF libres via Unpaywall / PMC.
+3. ✅ **Recherche en ligne fédérée.** Les 5 adaptateurs en parallèle, cache, limites de débit, fusion et dédup, filtres, syntaxe PubMed, PDF libres via Unpaywall / PMC.
+   - *Bilan* : 83 tests verts, sans réseau. Démo réelle : 4 sources sur 5 répondent en 3,5 s (100 notices, fusionnées en 42 résultats, dont 50 masqués par le filtre des revues). La même recherche servie par le cache prend 0,4 s.
+   - *Écarts au plan* :
+     - le PDF libre est *trouvé* (lien), son téléchargement et son stockage par empreinte arrivent en phase 4 ;
+     - les filtres de type d'étude, d'accès libre et de revue sont appliqués après fusion, seuls la date et les MeSH sont transmis aux sources ;
+     - le classement fusionne les rangs des sources (RRF), le reclassement sémantique viendra en phase 5 ;
+     - ajout d'une pause de 10 minutes pour une source qui refuse (HTTP 429), pour ne pas ralentir chaque recherche.
+   - *Constats* :
+     - **Semantic Scholar refuse toutes les requêtes sans clé** (HTTP 429), d'où sa fixture écrite à la main d'après le format documenté ;
+     - **OpenAlex sans clé** partage un petit budget quotidien par adresse IP (environ 100 requêtes/jour) : une clé gratuite est recommandée ;
+     - **Unpaywall exige un e-mail de contact** (`contact_email`) ;
+     - Crossref en texte libre remonte surtout des thèses et des posters, écartés par le filtre des revues ;
+     - le filtre par ISSN s'appuie aussi sur la liste des revues, car PubMed ne donne souvent qu'un des deux ISSN.
 4. **Import et stockage.** PDF par empreinte, extraction du DOI, saisie assistée, BibTeX / RIS / CSL-JSON / nbib, arXiv / bioRxiv / medRxiv / URL, extraction du texte et découpage en passages, FTS5, notes Markdown, boîte d'entrée, fusion des doublons.
 5. **Sémantique et hybride.** File de tâches, bge-m3 (téléchargé au premier lancement), sqlite-vec, RRF, reclassement des résultats en ligne, **benchmark sur 10 000 notices** (objectif < 200 ms).
 6. **Interface Svelte, FR + EN.** Écran question → réponse → sources (réponse extraite, sans LLM pour l'instant), résumé Biblio, enregistrement des recherches, bibliothèque en trois panneaux, lecteur PDF, collections, tags, notes, clavier, thèmes, traductions FR/EN. Fenêtre `pywebview`.

@@ -80,3 +80,28 @@ def test_journal_import_and_status_filter(api):
     work = api.get("/api/v1/works/harris2018effect").json()
     assert work["journal_status"]["status"] == "not_listed"
     assert api.get("/api/v1/works", params={"journal_status": "not_listed"}).json()["total"] == 1
+
+
+def test_search_online_route(api):
+    from conftest import SORBONNE
+
+    query = '(ESBL[tiab] OR "extended-spectrum beta-lactamase"[tiab]) AND household[tiab] AND transmission[tiab]'
+    data = api.get("/api/v1/search/online", params={"q": query, "per_source": 5}).json()
+    assert data["total"] > 0 and {r["journal_status"]["status"] for r in data["results"]} == {"recommended"}
+    assert data["hidden"]
+    every = api.get("/api/v1/search/online", params={"q": query, "per_source": 5, "all_journals": True}).json()
+    assert every["total"] == data["total"] + sum(data["hidden"].values())
+    only = api.get("/api/v1/search/online", params={"q": query, "source": ["pubmed", "europepmc"], "per_source": 5}).json()
+    assert set(only["sources"]) == {"pubmed", "europepmc"}
+    assert api.get("/api/v1/search/online", params={"q": query, "source": "google"}).status_code == 422
+    assert api.get("/api/v1/search/online").status_code == 422
+    SORBONNE["s2_status"] = 429
+    # Requête différente : la précédente serait resservie par le cache.
+    degraded = api.get("/api/v1/search/online", params={"q": query + " AND child[tiab]", "per_source": 5}).json()
+    assert degraded["sources"]["semanticscholar"]["status"] == "error"
+
+
+def test_open_access_route(api):
+    assert api.get("/api/v1/search/open-access", params={"pmcid": "PMC3244693"}).json()["source"] == "pmc"
+    assert api.get("/api/v1/search/open-access").status_code == 422
+    assert api.get("/api/v1/search/open-access", params={"doi": "10.1016/j.cmi.2016.08.021"}).status_code == 502  # pas d'e-mail

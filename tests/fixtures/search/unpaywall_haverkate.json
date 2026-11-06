@@ -1,0 +1,12 @@
+{
+ "doi": "10.1016/j.cmi.2016.08.021",
+ "is_oa": true,
+ "best_oa_location": {
+  "url": "https://repository.example/haverkate.pdf",
+  "url_for_pdf": "https://repository.example/haverkate.pdf",
+  "url_for_landing_page": "https://repository.example/haverkate",
+  "license": "cc-by-nc-nd",
+  "version": "acceptedVersion",
+  "host_type": "repository"
+ }
+}

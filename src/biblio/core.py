@@ -100,9 +100,9 @@ def unique_citekey(conn: sqlite3.Connection, base: str) -> str:
 def merge(primary: dict, secondary: dict) -> dict:
     """Complète `primary` avec les champs vides trouvés dans `secondary`."""
     out = dict(primary)
-    for field in FIELDS:
-        if not out.get(field) and secondary.get(field):
-            out[field] = secondary[field]
+    for field, value in secondary.items():
+        if field not in ("identifiers", "authors", "subjects") and out.get(field) in (None, "", False) and value:
+            out[field] = value
     out["identifiers"] = {**secondary["identifiers"], **primary["identifiers"]}
     out["authors"] = [dict(a) for a in primary["authors"] or secondary["authors"]]
     if primary["authors"] and len(primary["authors"]) == len(secondary["authors"]):

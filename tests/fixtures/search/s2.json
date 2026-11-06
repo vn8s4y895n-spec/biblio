@@ -1,0 +1,108 @@
+{
+ "_note": "Réponse écrite à la main d'après le format documenté de l'API (graph/v1/paper/search) : sans clé, Semantic Scholar a refusé toutes les requêtes (HTTP 429, voir s2_429.json). Les deux premiers articles recoupent volontairement PubMed et OpenAlex pour tester la fusion.",
+ "total": 3,
+ "offset": 0,
+ "next": 3,
+ "data": [
+  {
+   "paperId": "s2a",
+   "externalIds": {
+    "DOI": "10.1016/j.cmi.2016.08.021",
+    "PubMed": "27596534",
+    "CorpusId": 1001
+   },
+   "title": "Quantifying within-household transmission of extended-spectrum β-lactamase-producing bacteria",
+   "abstract": null,
+   "year": 2017,
+   "venue": "Clinical Microbiology and Infection",
+   "publicationVenue": {
+    "id": "v1",
+    "name": "Clinical Microbiology and Infection",
+    "type": "journal",
+    "issn": "1198-743X",
+    "alternate_issns": [
+     "1469-0691"
+    ]
+   },
+   "journal": {
+    "name": "Clinical Microbiology and Infection",
+    "volume": "23",
+    "pages": "46.e1-46.e7"
+   },
+   "authors": [
+    {
+     "authorId": "1",
+     "name": "M. R. Haverkate"
+    }
+   ],
+   "publicationTypes": [
+    "JournalArticle"
+   ],
+   "citationCount": 61,
+   "isOpenAccess": false,
+   "openAccessPdf": null,
+   "publicationDate": "2017-01-01"
+  },
+  {
+   "paperId": "s2b",
+   "externalIds": {
+    "DOI": "10.3390/ANTIBIOTICS10020171",
+    "CorpusId": 1002
+   },
+   "title": "Transmission Chains of Extended-Spectrum Beta-Lactamase-Producing Enterobacteriaceae at the Companion Animal Veterinary Clinic–Household Interface",
+   "abstract": "Résumé fourni par Semantic Scholar.",
+   "year": 2021,
+   "venue": "Antibiotics",
+   "publicationVenue": {
+    "id": "v2",
+    "name": "Antibiotics",
+    "type": "journal",
+    "issn": "2079-6382"
+   },
+   "journal": {
+    "name": "Antibiotics",
+    "volume": "10"
+   },
+   "authors": [
+    {
+     "authorId": "2",
+     "name": "Someone Example"
+    }
+   ],
+   "publicationTypes": [
+    "JournalArticle",
+    "Review"
+   ],
+   "citationCount": 20,
+   "isOpenAccess": true,
+   "openAccessPdf": {
+    "url": "https://www.mdpi.com/2079-6382/10/2/171/pdf",
+    "status": "GOLD"
+   },
+   "publicationDate": "2021-02-08"
+  },
+  {
+   "paperId": "s2c",
+   "externalIds": {
+    "CorpusId": 1003
+   },
+   "title": "A household transmission model for resistant Enterobacterales",
+   "abstract": null,
+   "year": 2023,
+   "venue": "",
+   "publicationVenue": null,
+   "journal": null,
+   "authors": [
+    {
+     "authorId": "3",
+     "name": "Ana García López"
+    }
+   ],
+   "publicationTypes": null,
+   "citationCount": 0,
+   "isOpenAccess": false,
+   "openAccessPdf": null,
+   "publicationDate": null
+  }
+ ]
+}

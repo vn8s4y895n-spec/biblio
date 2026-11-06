@@ -14,7 +14,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, FastAPI, Header, HTTPEx
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from . import __version__, core, db, journals
+from . import __version__, core, db, journals, search
 from .config import Config
 from .sources import http
 from .sources.http import SourceError
@@ -86,6 +86,45 @@ def list_works(
     return core.list_works(conn, limit, offset, journal_status)
 
 
+SourceName = Literal[tuple(search.SOURCES)]  # type: ignore[valid-type]
+
+
+@router.get("/search/online", summary="Recherche fédérée dans les bases en ligne")
+def search_online(
+    conn: Conn,
+    q: Annotated[str, Query(min_length=1, description="Requête ; syntaxe PubMed acceptée ([MeSH], [tiab], AND/OR/NOT)")],
+    source: Annotated[list[SourceName] | None, Query(description="Sources à interroger (répétable ; défaut : toutes)")] = None,
+    per_source: Annotated[int, Query(ge=1, le=100, description="Résultats demandés à chaque source")] = 25,
+    limit: Annotated[int, Query(ge=1, le=500)] = 50,
+    year_from: int | None = None,
+    year_to: int | None = None,
+    study_type: Annotated[list[str] | None, Query(description="rct, meta-analysis, systematic-review, cohort… (répétable)")] = None,
+    open_access: bool = False,
+    mesh: Annotated[list[str] | None, Query(description="Descripteur MeSH exigé (répétable)")] = None,
+    journal: Annotated[str | None, Query(description="Nom, abréviation ou ISSN de revue (contient)")] = None,
+    journal_status: Annotated[list[JournalStatus] | None, Query(description="Statuts de revue montrés (défaut : recommended)")] = None,
+    all_journals: Annotated[bool, Query(description="Montrer toutes les revues (désactive le filtre de la liste)")] = False,
+):
+    """Interroge PubMed, Europe PMC, OpenAlex, Crossref et Semantic Scholar en parallèle, fusionne les doublons
+    (DOI > PMID > PMCID > titre + année) et classe par fusion des rangs (RRF). Par défaut, seules les revues de la
+    liste des revues recommandées sont montrées ; `hidden` compte les résultats masqués par statut."""
+    filters = search.Filters(
+        year_from=year_from, year_to=year_to, study_types=study_type or [], open_access=open_access,
+        mesh=mesh or [], journal=journal, journal_status=[] if all_journals else (journal_status or ["recommended"]),
+    )  # fmt: skip
+    return search.search(conn, q, source, per_source, limit, filters)
+
+
+@router.get("/search/open-access", summary="Trouver la version libre et légale d'un article (PMC, Unpaywall)")
+def open_access(doi: str | None = None, pmcid: str | None = None):
+    if not (doi or pmcid):
+        raise HTTPException(422, "Indiquer doi ou pmcid")
+    found = search.find_open_access(doi, pmcid)
+    if found is None:
+        raise HTTPException(404, "Aucune version en accès libre connue")
+    return found
+
+
 @router.get("/journals", summary="Liste des revues recommandées : version en vigueur, dernière vérification")
 def journals_info(conn: Conn):
     return {**journals.info(conn), "history": journals.history(conn)}
@@ -154,7 +193,7 @@ def create_app(config: Config, background: bool = False) -> FastAPI:
     conn = db.connect(config.db_path)
     core.setup(conn, config.home)
     conn.close()
-    http.configure(config.contact_email, config.ncbi_api_key)
+    http.configure(config.contact_email, config.api_keys, config.db_path)
     if background:
         threading.Thread(target=_watch_journal_list, args=(config,), daemon=True, name="journal-list").start()
 

@@ -171,6 +171,64 @@ def list_(
     typer.secho(f"{len(data['items'])} sur {data['total']} notice(s)", dim=True)
 
 
+SOURCE_LETTERS = {"pubmed": "P", "europepmc": "E", "openalex": "O", "crossref": "C", "semanticscholar": "S"}
+
+
+@app.command("search")
+def search_(
+    query: Annotated[str, typer.Argument(help="Requête ; syntaxe PubMed acceptée ([MeSH], [tiab], AND/OR/NOT)")],
+    source: Annotated[list[str] | None, typer.Option(help=f"Source (répétable) : {', '.join(SOURCE_LETTERS)}")] = None,
+    limit: Annotated[int, typer.Option(help="Nombre de résultats affichés")] = 20,
+    per_source: Annotated[int, typer.Option(help="Résultats demandés à chaque source")] = 25,
+    year_from: Annotated[int | None, typer.Option("--from", help="Année minimale")] = None,
+    year_to: Annotated[int | None, typer.Option("--to", help="Année maximale")] = None,
+    study_type: Annotated[list[str] | None, typer.Option("--type", help="rct, meta-analysis, systematic-review, cohort…")] = None,
+    oa: Annotated[bool, typer.Option("--oa", help="Accès libre seulement")] = False,
+    mesh: Annotated[list[str] | None, typer.Option(help="Descripteur MeSH exigé (répétable)")] = None,
+    journal: Annotated[str | None, typer.Option(help="Revue (nom, abréviation ou ISSN)")] = None,
+    all_journals: Annotated[bool, typer.Option("--all-journals", help="Montrer aussi les revues hors liste")] = False,
+    as_json: Annotated[bool, typer.Option("--json", help="Résultat complet en JSON")] = False,
+) -> None:
+    """Recherche dans PubMed, Europe PMC, OpenAlex, Crossref et Semantic Scholar, résultats fusionnés.
+    Par défaut, seules les revues recommandées sont montrées. Sources : P E O C S. ★ = déjà dans la bibliothèque."""
+    params = {"q": query, "source": source or [], "limit": limit, "per_source": per_source, "study_type": study_type or [],
+              "mesh": mesh or [], "open_access": oa, "all_journals": all_journals}  # fmt: skip
+    params |= {k: v for k, v in {"year_from": year_from, "year_to": year_to, "journal": journal}.items() if v is not None}
+    data = _call("GET", "/api/v1/search/online", params=params).json()
+    if as_json:
+        typer.echo(json.dumps(data, ensure_ascii=False, indent=2))
+        return
+    for i, r in enumerate(data["results"], 1):
+        letters = "".join(SOURCE_LETTERS[s] for s in SOURCE_LETTERS if s in r["sources"])
+        first = r["authors"][0]["family"] if r["authors"] else "—"
+        venue = r.get("container_abbrev") or r.get("container_title") or "—"
+        star = "  ★ " + r["in_library"] if r["in_library"] else ""
+        typer.echo(f"{i:>3}. {STATUS_MARKS[r['journal_status']['status']]} {r.get('year') or '':<5} {first} · {venue}  [{letters}]{star}")
+        typer.secho(f"     {r['title']}", bold=True)
+        ids = "  ".join(f"{k}:{v}" for k, v in r["identifiers"].items() if k in ("doi", "pmid"))
+        extra = "  ".join(x for x in (r.get("study_type") or "", "PDF libre" if r.get("oa_pdf_url") else "") if x)
+        typer.echo(f"     {ids}  {extra}".rstrip())
+    states = []
+    for s in data["sources"].values():
+        states.append(f"{s['label']} {s['count']}" if s["status"] == "ok" else f"{s['label']} ✗")
+    typer.secho(f"{len(data['results'])} sur {data['total']} résultat(s) · " + " · ".join(states), dim=True)
+    for s in data["sources"].values():
+        if s["status"] != "ok":
+            typer.secho(f"⚠ {s['label']} : {s['error']}", fg="yellow")
+    if data["hidden"]:
+        detail = ", ".join(f"{n} {STATUS_LABELS[k][2:]}" for k, n in data["hidden"].items())
+        typer.secho(f"Masqués par le filtre des revues : {detail} (--all-journals pour les voir)", dim=True)
+
+
+@app.command("oa")
+def open_access(ref: Annotated[str, typer.Argument(help="DOI ou PMCID")]) -> None:
+    """Cherche la version libre et légale d'un article (PMC, Unpaywall)."""
+    params = {"pmcid": ref} if ref.upper().startswith("PMC") else {"doi": ref}
+    found = _call("GET", "/api/v1/search/open-access", params=params).json()
+    typer.echo(f"PDF : {found['pdf_url'] or '—'}\nPage : {found['landing_url'] or '—'}")
+    typer.echo(f"Source : {found['source']}   licence : {found['license'] or '—'}   version : {found['version'] or '—'}")
+
+
 def _status_line(status: dict) -> str:
     line = STATUS_LABELS[status["status"]]
     j = status["journal"]
