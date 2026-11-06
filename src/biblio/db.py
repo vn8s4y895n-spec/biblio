@@ -53,3 +53,16 @@ def migrate(conn: sqlite3.Connection) -> list[int]:
             raise
         applied.append(version)
     return applied
+
+
+def set_meta(conn: sqlite3.Connection, key: str, value: str | None) -> None:
+    """Petit état du programme (table `meta`) ; None l'efface."""
+    if value is None:
+        conn.execute("DELETE FROM meta WHERE key = ?", (key,))
+    else:
+        conn.execute("INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value", (key, value))
+
+
+def get_meta(conn: sqlite3.Connection, key: str) -> str | None:
+    row = conn.execute("SELECT value FROM meta WHERE key = ?", (key,)).fetchone()
+    return row[0] if row else None

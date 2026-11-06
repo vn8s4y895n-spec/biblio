@@ -20,6 +20,12 @@ contact_email = ""   # recommandé : Crossref, OpenAlex et NCBI le demandent ; i
 ncbi_api_key = ""    # facultatif : fait passer la limite PubMed de 3 à 10 requêtes/s
 openalex_api_key = ""         # facultatif, gratuit (openalex.org/settings/api) : sans clé, petit budget quotidien partagé
 semanticscholar_api_key = ""  # facultatif, gratuit sur demande : sans clé, Semantic Scholar refuse souvent (HTTP 429)
+
+[inbox]
+# Importer automatiquement les PDF d'articles téléchargés dans ce dossier (ceux qui ne sont pas reconnus comme
+# des articles sont laissés de côté). Les fichiers du dossier ne sont jamais déplacés ni supprimés.
+watch_downloads = false
+downloads_dir = "~/Downloads"
 """
 
 
@@ -42,6 +48,8 @@ class Config:
     token: str
     contact_email: str
     api_keys: dict[str, str]  # ncbi, openalex, semanticscholar
+    watch_downloads: bool = False
+    downloads_dir: Path = Path.home() / "Downloads"
 
     @property
     def path(self) -> Path:
@@ -65,7 +73,7 @@ def load() -> Config:
         path.write_text(TEMPLATE.format(token=secrets.token_urlsafe(32)), encoding="utf-8")
         path.chmod(0o600)
     data = tomllib.loads(path.read_text(encoding="utf-8"))
-    server, sources = data.get("server", {}), data.get("sources", {})
+    server, sources, inbox = data.get("server", {}), data.get("sources", {}), data.get("inbox", {})
     return Config(
         home=root,
         host=server.get("host", "127.0.0.1"),
@@ -73,4 +81,6 @@ def load() -> Config:
         token=server["token"],
         contact_email=sources.get("contact_email", ""),
         api_keys={name: sources.get(f"{name}_api_key", "") for name in ("ncbi", "openalex", "semanticscholar")},
+        watch_downloads=bool(inbox.get("watch_downloads", False)),
+        downloads_dir=Path(inbox.get("downloads_dir", "~/Downloads")).expanduser(),
     )

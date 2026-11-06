@@ -335,18 +335,6 @@ def _now() -> str:
     return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def set_meta(conn: sqlite3.Connection, key: str, value: str | None) -> None:
-    if value is None:
-        conn.execute("DELETE FROM meta WHERE key = ?", (key,))
-    else:
-        conn.execute("INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value", (key, value))
-
-
-def get_meta(conn: sqlite3.Connection, key: str) -> str | None:
-    row = conn.execute("SELECT value FROM meta WHERE key = ?", (key,)).fetchone()
-    return row[0] if row else None
-
-
 def update(conn: sqlite3.Connection, home: Path) -> dict:
     """Télécharge la liste en ligne si elle a changé.
 
@@ -364,15 +352,15 @@ def update(conn: sqlite3.Connection, home: Path) -> dict:
             raise ListError("Fichier de la liste anormalement volumineux")
         _, created = store(conn, response.content, url, published_from_url(url), home)
     except (http.SourceError, ListError) as exc:
-        set_meta(conn, "journals.last_error", f"{_now()} {exc}")
+        db.set_meta(conn, "journals.last_error", f"{_now()} {exc}")
         raise
-    set_meta(conn, "journals.last_check", _now())
-    set_meta(conn, "journals.last_error", None)
+    db.set_meta(conn, "journals.last_check", _now())
+    db.set_meta(conn, "journals.last_error", None)
     return {"updated": created, **info(conn)}
 
 
 def update_if_stale(conn: sqlite3.Connection, home: Path) -> dict | None:
-    last = get_meta(conn, "journals.last_check")
+    last = db.get_meta(conn, "journals.last_check")
     if last and datetime.fromisoformat(last) > datetime.now(UTC) - CHECK_EVERY:
         return None
     return update(conn, home)
@@ -381,8 +369,8 @@ def update_if_stale(conn: sqlite3.Connection, home: Path) -> dict | None:
 def info(conn: sqlite3.Connection) -> dict:
     return {
         "current": current_list(conn),
-        "last_check": get_meta(conn, "journals.last_check"),
-        "last_error": get_meta(conn, "journals.last_error"),
+        "last_check": db.get_meta(conn, "journals.last_check"),
+        "last_error": db.get_meta(conn, "journals.last_error"),
         "page_url": PAGE_URL,
     }
 

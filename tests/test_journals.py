@@ -1,7 +1,7 @@
 import pytest
 from conftest import MERINO_DOI, SORBONNE_PAGE, make_xlsx, small_list, sorbonne_page
 
-from biblio import core, journals
+from biblio import core, db, journals
 from biblio.sources import http
 
 SITE = "https://sante.sorbonne-universite.fr"
@@ -51,7 +51,7 @@ def test_bundled_list_is_parsed():
 def test_bundled_list_installed_on_setup(conn):
     current = journals.current_list(conn)
     assert (current["published_on"], current["row_count"]) == ("2026-10-01", 3554)
-    assert journals.update_if_stale is not None and journals.get_meta(conn, "journals.last_check") is None
+    assert journals.update_if_stale is not None and db.get_meta(conn, "journals.last_check") is None
 
 
 def test_statuses(conn):
@@ -147,8 +147,8 @@ def test_failed_update_keeps_previous_list(conn, cfg, sorbonne):
     with pytest.raises(journals.ListError, match="Colonnes attendues absentes"):
         journals.update(conn, cfg.home)
     assert journals.current_list(conn)["published_on"] == "2026-10-01"
-    assert "Colonnes attendues absentes" in journals.get_meta(conn, "journals.last_error")
-    assert journals.get_meta(conn, "journals.last_check") is None  # réessai à la prochaine vérification
+    assert "Colonnes attendues absentes" in db.get_meta(conn, "journals.last_error")
+    assert db.get_meta(conn, "journals.last_check") is None  # réessai à la prochaine vérification
 
     sorbonne["files"][NEW_URL] = small_list()
     assert journals.update(conn, cfg.home)["last_error"] is None
@@ -168,7 +168,7 @@ def test_invalid_files_rejected(conn, cfg, data, message):
 def test_source_errors_are_recorded(conn, cfg):
     with pytest.raises(journals.ListError, match="introuvable"):
         journals.update(conn, cfg.home)  # page absente (404)
-    assert "introuvable" in journals.get_meta(conn, "journals.last_error")
+    assert "introuvable" in db.get_meta(conn, "journals.last_error")
 
 
 def test_update_if_stale(conn, cfg, sorbonne, network):
@@ -180,7 +180,7 @@ def test_update_if_stale(conn, cfg, sorbonne, network):
     calls = len(network)
     assert journals.update_if_stale(conn, cfg.home) is None  # vérifiée il y a moins de 7 jours
     assert len(network) == calls
-    journals.set_meta(conn, "journals.last_check", "2020-01-01T00:00:00Z")
+    db.set_meta(conn, "journals.last_check", "2020-01-01T00:00:00Z")
     assert journals.update_if_stale(conn, cfg.home) is not None
 
 
@@ -201,7 +201,7 @@ def test_http_source_error_is_recorded(conn, cfg, monkeypatch):
     monkeypatch.setattr(http, "get", down)
     with pytest.raises(http.SourceError):
         journals.update(conn, cfg.home)
-    assert "réseau coupé" in journals.get_meta(conn, "journals.last_error")
+    assert "réseau coupé" in db.get_meta(conn, "journals.last_error")
 
 
 def test_page_route_constant_matches():

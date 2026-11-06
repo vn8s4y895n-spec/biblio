@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 
 import pytest
 from conftest import MERINO_DOI
@@ -102,3 +103,29 @@ def test_import_find_note_commands(cfg, tmp_path):
     assert "← citée par : harris2018effect" in runner.invoke(cli.app, ["note", "martischang2020household"]).output
     assert "0 paire(s)" in runner.invoke(cli.app, ["duplicates"]).output
     assert "library/" in runner.invoke(cli.app, ["pdf", "harris2018effect"]).output
+
+
+def test_pdf_open_falls_back_to_browser(cfg, monkeypatch):
+    import httpx
+
+    from biblio.sources import http
+    from conftest import fake_sources
+
+    opened = []
+    monkeypatch.setattr(cli.webbrowser, "open", opened.append)
+    monkeypatch.setattr(http, "transport", httpx.MockTransport(
+        lambda r: httpx.Response(403) if r.url.host == "europepmc.org" else fake_sources(r)))  # fmt: skip
+    runner.invoke(cli.app, ["add", MERINO_DOI])
+    out = runner.invoke(cli.app, ["pdf", "harris2018effect", "--open"])
+    assert "Aucun PDF récupérable automatiquement" in out.output and opened == [f"https://doi.org/{MERINO_DOI}"]
+
+
+def test_downloads_settings(tmp_path, monkeypatch):
+    from biblio import config
+
+    monkeypatch.setenv("BIBLIO_HOME", str(tmp_path))
+    assert config.load().watch_downloads is False
+    text = (tmp_path / "config.toml").read_text().replace("watch_downloads = false", "watch_downloads = true")
+    (tmp_path / "config.toml").write_text(text.replace('downloads_dir = "~/Downloads"', 'downloads_dir = "~/Desktop/pdf"'))
+    loaded = config.load()
+    assert loaded.watch_downloads and loaded.downloads_dir == Path.home() / "Desktop" / "pdf"

@@ -4,7 +4,7 @@ SQLite en mode WAL, clés étrangères actives. Les migrations sont dans `src/bi
 
 Ce document décrit le schéma **réellement en place**. Les tables prévues pour les phases suivantes sont dans [PLAN.md](PLAN.md).
 
-## `schema_migrations` (version actuelle : 4)
+## `schema_migrations` (version actuelle : 5)
 
 | Colonne | Type | Rôle |
 |---|---|---|
@@ -119,6 +119,10 @@ Le texte d'une note vit dans `notes/<citekey>.md`, avec un en-tête YAML (citeke
 
 `(work_a, work_b)` avec `work_a < work_b`, `reason` (`fingerprint`), `status` (`open`, `dismissed`), `created_at`. Une ligne est créée quand une nouvelle notice a la même empreinte (titre, année, premier auteur) qu'une notice existante sans partager d'identifiant. La fusion (`merge_works`) reprend identifiants, sujets, fichiers, note et historique dans la notice gardée, puis supprime l'autre.
 
+### `watched_files` : fichiers déjà examinés dans les Téléchargements (migration 5)
+
+`(path, mtime, size)` (PK), `status` (`attached`, `duplicate`, `ignored` : pas un article reconnu, `refused` : pas un PDF lisible), `seen_at`. Un fichier modifié (autre date ou taille) est réexaminé. La date d'activation de la surveillance est dans `meta` (`downloads.since`).
+
 ## Liste des revues recommandées (migration 2)
 
 Source : la liste de la Conférence des doyens et du CNU santé, publiée par Sorbonne Université. Chaque version téléchargée ou importée est conservée. La version **en vigueur** est la dernière enregistrée (`max(id)`).
@@ -188,6 +192,7 @@ Cache des recherches en ligne (un jour) et des réponses Unpaywall (sept jours).
 |---|---|
 | `journals.last_check` | Dernière vérification réussie de la liste en ligne |
 | `journals.last_error` | Dernière erreur de vérification (supprimée après une vérification réussie) |
+| `downloads.since` | Début de la surveillance des Téléchargements (horodatage Unix) : les fichiers plus anciens sont ignorés |
 
 ## Exemples de requêtes
 

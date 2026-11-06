@@ -145,14 +145,13 @@ def identifier_from_page(url: str) -> tuple[str, str]:
         raise NotFound(f"Page introuvable : {url}")
     page = response.text[:2_000_000]
     for name in ("citation_doi", "dc.identifier", "prism.doi", "citation_pmid"):
-        for meta in re.findall(rf"<meta[^>]+name=[\"']{re.escape(name)}[\"'][^>]*>", page, re.I):
-            if m := re.search(r"content=[\"']([^\"']+)", meta):
-                try:
-                    found = parse_identifier(("pmid:" if name == "citation_pmid" else "") + m.group(1))
-                except InvalidIdentifier:
-                    continue
-                if found[0] != "url":
-                    return found
+        for value in http.meta_contents(page, name):
+            try:
+                found = parse_identifier(("pmid:" if name == "citation_pmid" else "") + value)
+            except InvalidIdentifier:
+                continue
+            if found[0] != "url":
+                return found
     raise NotFound(f"Aucun DOI ni PMID trouvé sur la page {url}")
 
 

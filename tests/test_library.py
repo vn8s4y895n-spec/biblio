@@ -2,7 +2,7 @@ import httpx
 import pytest
 from conftest import MERINO_DOI, MERINO_PDF, MERINO_PMID, MERINO_TITLE, fake_sources, make_pdf
 
-from biblio import core, formats, importer, library, notes
+from biblio import core, db, formats, importer, library, notes
 from biblio.sources import http
 
 # --- Identifiants -------------------------------------------------------------------------------------
@@ -395,3 +395,78 @@ def test_manual_entry(conn):
 
 def test_merino_title_constant():
     assert MERINO_TITLE.startswith("Effect of Piperacillin")
+
+
+# --- PDF déclaré par l'éditeur, Téléchargements ---------------------------------------------------------------------
+
+
+def publisher_site(request: httpx.Request) -> httpx.Response:
+    """Éditeur simulé : doi.org redirige vers la page de l'article, qui déclare son PDF ; le PDF n'est servi
+    qu'avec le cookie de session posé par la page et la page en Referer (comme beaucoup d'éditeurs)."""
+    url = request.url
+    if url.host == "doi.org":
+        return httpx.Response(302, headers={"location": "https://editeur.example/article/merino"})
+    if url.path == "/article/merino":
+        page = '<html><head><meta name="citation_title" content="x"><meta content="/pdf/merino.pdf?download=1&amp;v=2" name="citation_pdf_url"></head></html>'
+        return httpx.Response(200, text=page, headers={"set-cookie": "session=abc; Path=/"})
+    if url.path == "/pdf/merino.pdf":
+        ok = request.headers.get("cookie") == "session=abc" and request.headers.get("referer") == "https://editeur.example/article/merino"
+        assert url.params["download"] == "1" and url.params["v"] == "2"
+        return httpx.Response(200, content=MERINO_PDF) if ok else httpx.Response(403)
+    return httpx.Response(404)
+
+
+def test_pdf_declared_by_publisher(conn, cfg, monkeypatch, sorbonne):
+    def sources(request):
+        if request.url.host == "europepmc.org":
+            return httpx.Response(403)
+        if request.url.host in ("doi.org", "editeur.example"):
+            return publisher_site(request)
+        return fake_sources(request)
+
+    monkeypatch.setattr(http, "transport", httpx.MockTransport(sources))
+    result = importer.add(conn, cfg.home, MERINO_DOI)
+    assert result["pdf"]["source"] == "publisher" and result["warnings"] == []
+    assert result["pdf"]["pdf_url"] == "https://editeur.example/pdf/merino.pdf?download=1&v=2"
+    assert library.files_of(conn, result["work"]["id"])[0]["source_url"] == result["pdf"]["pdf_url"]
+
+
+def test_publisher_page_without_pdf_link(conn, cfg, monkeypatch, sorbonne):
+    sorbonne["publisher"] = lambda request: httpx.Response(200, text="<html><head><title>Article</title></head></html>")
+    monkeypatch.setattr(http, "transport", httpx.MockTransport(
+        lambda r: httpx.Response(403) if r.url.host == "europepmc.org" else fake_sources(r)))  # fmt: skip
+    result = importer.add(conn, cfg.home, MERINO_DOI)
+    assert result["pdf"] is None and "publisher : doi.org : la page ne déclare pas de PDF" in result["warnings"][0]
+
+
+def test_meta_contents_variants():
+    page = """<meta name="citation_pdf_url" content="a.pdf"><META CONTENT='b.pdf' PROPERTY='citation_pdf_url'>
+              <meta name="other" content="c.pdf"><meta content="d&amp;e" name="citation_pdf_url" />"""
+    assert http.meta_contents(page, "citation_pdf_url") == ["a.pdf", "b.pdf", "d&e"]
+
+
+def test_watch_downloads(conn, cfg, tmp_path, network):
+    import os
+    import time
+
+    downloads = tmp_path / "Téléchargements"
+    downloads.mkdir()
+    old = downloads / "ancien.pdf"
+    old.write_bytes(MERINO_PDF)
+    assert importer.scan_downloads(conn, downloads, cfg.home, min_age=0) == []  # l'historique n'est pas repris
+    since = time.time() - 100  # surveillance activée il y a 100 s ; fichiers arrivés depuis
+    db.set_meta(conn, "downloads.since", str(since))
+    os.utime(old, (since - 10, since - 10))
+    later = since + 10
+    for name, data in [("merino (1).pdf", MERINO_PDF), ("facture.pdf", make_pdf(["Facture n° 42 — 120 euros"])),
+                       ("casse.pdf", b"%PDF-1.4 pas lisible"), ("photo.jpg", b"jpeg")]:  # fmt: skip
+        (downloads / name).write_bytes(data)
+        os.utime(downloads / name, (later, later))
+    results = {r["file"]: r["status"] for r in importer.scan_downloads(conn, downloads, cfg.home, min_age=0)}
+    assert results == {"merino (1).pdf": "attached", "facture.pdf": "ignored", "casse.pdf": "refused"}
+    assert conn.execute("SELECT count(*) FROM files").fetchone()[0] == 1  # la facture n'est pas gardée
+    assert sorted(p.name for p in downloads.iterdir()) == ["ancien.pdf", "casse.pdf", "facture.pdf", "merino (1).pdf", "photo.jpg"]
+    calls = len(network)
+    assert importer.scan_downloads(conn, downloads, cfg.home, min_age=0) == []  # déjà examinés
+    assert len(network) == calls
+    assert importer.scan_downloads(conn, tmp_path / "absent", cfg.home) == []

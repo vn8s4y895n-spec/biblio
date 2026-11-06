@@ -305,7 +305,12 @@ Chaque phase se termine par : tests verts (aucun appel réseau, réponses enregi
      - une notice sans identifiant réimportée (même titre, année, premier auteur) complète l'existante au lieu d'être recréée ;
      - la boîte d'entrée est surveillée par le serveur (dossier `inbox/` des données) et non par un `biblio watch` côté client, l'usage étant personnel.
    - *Constats* :
-     - **le téléchargement automatique des PDF libres est souvent refusé** (HTTP 403) par Europe PMC et par des éditeurs (JAMA). Biblio ne contourne pas ces protections : il essaie la source suivante, puis signale l'échec, et le PDF se dépose alors à la main dans la boîte d'entrée. L'ancien service OA de PMC (`oa.fcgi`) ne répond plus, et je n'ai pas trouvé de documentation officielle de son remplaçant (le service cloud de PMC) : à vérifier quand il sera documenté ;
+     - **le téléchargement automatique des PDF libres est souvent refusé** (HTTP 403) par Europe PMC et par des éditeurs (JAMA). Biblio ne contourne pas ces protections : il essaie la source suivante, puis signale l'échec. L'ancien service OA de PMC (`oa.fcgi`) ne répond plus, et je n'ai pas trouvé de documentation officielle de son remplaçant (le service cloud de PMC) : à vérifier quand il sera documenté ;
+     - **ajout (2026-11-06), sur le modèle de Zotero** :
+       - lecture du lien PDF déclaré par l'éditeur (`citation_pdf_url`) sur la page de l'article, téléchargé dans la même session ; vérifié en réel sur PLoS One et Frontiers ;
+       - `biblio pdf --open`, qui ouvre la page de l'article dans le navigateur pour un téléchargement avec la session de l'utilisateur ;
+       - surveillance facultative des Téléchargements (seuls les PDF reconnus comme articles sont importés, les fichiers ne sont jamais touchés) ;
+       - pas de navigateur caché pour passer les protections anti-robots. Une extension de navigateur « Envoyer à Biblio » est envisageable en phase 10 ou 11 ;
      - les accents LaTeX de BibTeX (`{\'\i}`) sont recomposés correctement ;
      - OpenAlex indique déjà, pour chaque revue, sa présence dans la liste des doyens (`listed_in: doyens`), ce qui fournira une seconde source pour le statut de revue.
 5. **Sémantique et hybride.** File de tâches, bge-m3 (téléchargé au premier lancement), sqlite-vec, RRF, reclassement des résultats en ligne, **benchmark sur 10 000 notices** (objectif < 200 ms).

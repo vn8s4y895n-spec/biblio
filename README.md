@@ -49,6 +49,7 @@ uv run biblio note harris2018effect --edit         # note Markdown (notes/<clé>
 uv run biblio duplicates                           # doublons probables
 uv run biblio merge <garder> <supprimer>           # fusion (ou --dismiss : ce ne sont pas les mêmes)
 uv run biblio pdf harris2018effect                 # chemin du PDF, ou recherche d'un PDF libre
+uv run biblio pdf harris2018effect --open          # l'ouvrir, ou ouvrir la page de l'article dans le navigateur
 ```
 
 **Identifiants acceptés**
@@ -60,10 +61,22 @@ uv run biblio pdf harris2018effect                 # chemin du PDF, ou recherche
 - **Repérage de la notice** : Biblio cherche le DOI dans les métadonnées XMP et du document, puis dans les deux premières pages. Il **vérifie** ensuite que le titre de la notice trouvée correspond au texte du PDF, car un DOI cité en première page n'est pas celui de l'article.
 - **Sans correspondance** : le PDF est rangé, et des notices Crossref proches du titre sont proposées (`biblio attach`).
 - **Texte intégral** : il est extrait page par page et découpé en passages. Un PDF scanné, sans couche texte, n'est pas lu (pas d'OCR).
-- **PDF libre à l'ajout** : Biblio essaie PMC (via Europe PMC), puis OpenAlex, puis Unpaywall (si `contact_email` est renseigné), et garde le premier vrai PDF. Le refus d'un site n'empêche pas l'ajout de la notice : il est signalé.
-- **Limite constatée** : beaucoup d'éditeurs et Europe PMC refusent le téléchargement automatique (HTTP 403). Biblio ne contourne pas ces protections. Pour ces articles, on télécharge le PDF dans le navigateur et on le dépose dans la boîte d'entrée.
+- **PDF à l'ajout** : Biblio essaie, dans l'ordre et jusqu'au premier vrai PDF :
+  1. PMC (via Europe PMC) ;
+  2. **la page de l'éditeur**, comme Zotero : le DOI mène à la page de l'article, Biblio y lit le lien PDF que l'éditeur déclare (`citation_pdf_url`) et le télécharge dans la même session ;
+  3. OpenAlex ;
+  4. Unpaywall (si `contact_email` est renseigné).
+
+  Le refus d'un site n'empêche pas l'ajout de la notice : il est signalé, source par source.
+- **Sites qui refusent** (HTTP 403, par exemple JAMA ou Europe PMC) : Biblio ne contourne pas leurs protections. `biblio pdf <clé> --open` ouvre alors la page de l'article dans ton navigateur ; tu télécharges le PDF avec ta session (et ton accès institutionnel éventuel), puis tu le déposes dans la boîte d'entrée, ou tu le laisses dans les Téléchargements si leur surveillance est activée.
 
 **Boîte d'entrée** : tout PDF déposé dans `inbox/` (dossier de données) est importé dans les 5 secondes, puis retiré de la boîte. Un fichier refusé va dans `inbox/refusés/`.
+
+**Téléchargements (facultatif)** : avec `watch_downloads = true` dans `config.toml` (section `[inbox]`), Biblio examine les PDF qui arrivent dans `downloads_dir` (par défaut `~/Downloads`).
+- **Tri** : seuls les PDF reconnus comme des articles (DOI trouvé et vérifié) sont importés ; les autres (factures, formulaires…) sont laissés de côté.
+- **Tes fichiers** : ils ne sont ni déplacés ni supprimés.
+- **Historique** : les fichiers déjà présents avant l'activation sont ignorés.
+- **macOS** : il demandera la première fois l'autorisation d'accéder au dossier Téléchargements.
 
 **Fichiers bibliographiques** (BibTeX, RIS, MEDLINE/nbib, CSL-JSON : exports de Zotero, EndNote, Mendeley, PubMed…)
 - **Import hors ligne** : le format est détecté automatiquement.
@@ -170,7 +183,7 @@ curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:8765/api/v1/works/10.100
 | POST | `/api/v1/duplicates/merge` | Fusionner (`{"keep", "drop"}`) |
 | POST | `/api/v1/duplicates/dismiss` | Écarter (`{"a", "b"}`) |
 | POST | `/api/v1/notes/sync` | Réindexer les notes modifiées hors de Biblio |
-| POST | `/api/v1/inbox/scan` | Traiter la boîte d'entrée maintenant |
+| POST | `/api/v1/inbox/scan` | Traiter la boîte d'entrée (et les Téléchargements si activé) maintenant |
 | GET | `/api/v1/works?limit=&offset=&journal_status=` | Lister (filtre répétable sur le statut de revue) |
 | GET | `/api/v1/works/{ref}` | Lire (id, clé, DOI, PMID) |
 | GET | `/api/v1/works/{ref}/changes` | Journal des modifications |

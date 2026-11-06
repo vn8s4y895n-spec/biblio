@@ -191,9 +191,13 @@ def sync_notes(request: Request, conn: Conn):
     return notes.sync(conn, home(request))
 
 
-@router.post("/inbox/scan", summary="Importer maintenant les PDF de la boîte d'entrée")
+@router.post("/inbox/scan", summary="Importer maintenant les PDF de la boîte d'entrée (et des Téléchargements si activé)")
 def scan_inbox(request: Request, conn: Conn):
-    return importer.scan_inbox(conn, home(request), min_age=0)
+    config = request.app.state.config
+    results = importer.scan_inbox(conn, config.home, min_age=0)
+    if config.watch_downloads:
+        results += importer.scan_downloads(conn, config.downloads_dir, config.home, min_age=0)
+    return results
 
 
 @router.post("/shutdown", status_code=202, summary="Arrêter le serveur")
@@ -334,13 +338,16 @@ def get_work(ref: str, conn: Conn):
 
 
 def _background(config: Config) -> None:
-    """Toutes les 5 s : boîte d'entrée et notes modifiées hors de Biblio. Toutes les 6 h : liste des revues."""
+    """Toutes les 5 s : boîte d'entrée, Téléchargements (si activé) et notes modifiées hors de Biblio.
+    Toutes les 6 h : liste des revues."""
     # ponytail: boucle dans un thread ; passera par la file de tâches de la phase 5.
     next_journal_check = 0.0
     while True:
         conn = db.connect(config.db_path)
         try:
             importer.scan_inbox(conn, config.home)
+            if config.watch_downloads:
+                importer.scan_downloads(conn, config.downloads_dir, config.home)
             notes.sync(conn, config.home)
             if time.monotonic() >= next_journal_check:
                 next_journal_check = time.monotonic() + 6 * 3600

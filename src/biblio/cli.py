@@ -7,6 +7,7 @@ import re
 import subprocess
 import sys
 import time
+import webbrowser
 from pathlib import Path
 from typing import Annotated
 
@@ -263,16 +264,39 @@ def merge(
 
 
 @app.command()
-def pdf(ref: Annotated[str, typer.Argument(help="Clé de citation, id, DOI ou PMID")]) -> None:
-    """Affiche les PDF d'une notice ; en cherche un en accès libre s'il n'y en a pas."""
+def pdf(
+    ref: Annotated[str, typer.Argument(help="Clé de citation, id, DOI ou PMID")],
+    open_: Annotated[bool, typer.Option("--open", help="Ouvrir le PDF, ou à défaut la page de l'article dans le navigateur")] = False,
+) -> None:
+    """Affiche les PDF d'une notice ; en cherche un librement accessible s'il n'y en a pas.
+
+    Si aucun n'est récupérable automatiquement, `--open` ouvre la page de l'article dans ton navigateur : tu y
+    télécharges le PDF avec ta session, puis tu le déposes dans la boîte d'entrée (ou il est pris dans les
+    Téléchargements si leur surveillance est activée)."""
     found = _call("GET", f"/api/v1/works/{ref}/files").json()
     if not found:
-        found = [_call("POST", f"/api/v1/works/{ref}/pdf").json()]
-        typer.echo("✓ PDF libre trouvé et rattaché.")
+        response = client().post(f"/api/v1/works/{ref}/pdf")
+        if response.status_code == 200:
+            found = [response.json()]
+            typer.echo(f"✓ PDF trouvé et rattaché ({found[0]['source']}).")
+        else:
+            typer.secho(f"Aucun PDF récupérable automatiquement : {response.json().get('detail')}", fg="yellow")
     home = config.load().home
-    for f in found:
-        sha = f["sha256"]
-        typer.echo(f"{home / 'library' / sha[:2] / sha[2:4] / (sha + '.pdf')}")
+    paths = [home / "library" / f["sha256"][:2] / f["sha256"][2:4] / (f["sha256"] + ".pdf") for f in found]
+    for path in paths:
+        typer.echo(str(path))
+    if open_:
+        if paths:
+            webbrowser.open(paths[0].as_uri())
+        else:
+            ids = _call("GET", f"/api/v1/works/{ref}").json()["identifiers"]
+            page = (f"https://doi.org/{ids['doi']}" if "doi" in ids else
+                    f"https://europepmc.org/article/PMC/{ids['pmcid']}" if "pmcid" in ids else
+                    f"https://pubmed.ncbi.nlm.nih.gov/{ids['pmid']}/" if "pmid" in ids else None)  # fmt: skip
+            if page is None:
+                _fail("Aucun identifiant pour ouvrir la page de l'article")
+            typer.echo(f"Ouverture de {page} dans le navigateur.")
+            webbrowser.open(page)
 
 
 @app.command()

@@ -162,6 +162,8 @@ def _other_sources(request: httpx.Request) -> httpx.Response | None:
         return httpx.Response(200, text='<feed xmlns="http://www.w3.org/2005/Atom"></feed>')
     if url.host == "journal.example.org":
         return httpx.Response(200, text=ARTICLE_PAGE) if url.path == "/merino" else httpx.Response(404)
+    if url.host == "doi.org":  # page d'éditeur : absente sauf si un test en fournit une (SORBONNE["publisher"])
+        return SORBONNE["publisher"](request) if SORBONNE.get("publisher") else httpx.Response(404)
     return None
 
 
