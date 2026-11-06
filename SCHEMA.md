@@ -4,7 +4,7 @@ SQLite en mode WAL, clés étrangères actives. Les migrations sont dans `src/bi
 
 Ce document décrit le schéma **réellement en place**. Les tables prévues pour les phases suivantes sont dans [PLAN.md](PLAN.md).
 
-## `schema_migrations` (version actuelle : 5)
+## `schema_migrations` (version actuelle : 6)
 
 | Colonne | Type | Rôle |
 |---|---|---|
@@ -119,6 +119,14 @@ Le texte d'une note vit dans `notes/<citekey>.md`, avec un en-tête YAML (citeke
 
 `(work_a, work_b)` avec `work_a < work_b`, `reason` (`fingerprint`), `status` (`open`, `dismissed`), `created_at`. Une ligne est créée quand une nouvelle notice a la même empreinte (titre, année, premier auteur) qu'une notice existante sans partager d'identifiant. La fusion (`merge_works`) reprend identifiants, sujets, fichiers, note et historique dans la notice gardée, puis supprime l'autre.
 
+### Vecteurs sémantiques (migration 6)
+
+**Extension requise** : ces tables utilisent l'extension [sqlite-vec](https://github.com/asg017/sqlite-vec). Biblio la charge à chaque connexion. Un autre client SQLite peut lire les autres tables sans elle, mais ne peut pas supprimer de passages (des déclencheurs écrivent dans `passage_bits`).
+
+- `passage_bits` (table virtuelle `vec0`, `embedding bit[1024]`, `rowid` = `passages.id`) : vecteur binaire (signe de chaque dimension), pour la présélection rapide par distance de Hamming (400 candidats).
+- `passage_vectors` : `passage_id` (PK → passages, suppression en cascade), `model` (`BAAI/bge-m3`), `vector` (1024 × float16, normalisé), pour le classement exact par cosinus des candidats.
+- **Cohérence** : des déclencheurs suppriment les deux vecteurs quand un passage est supprimé ou que son texte change. Le passage repart alors dans la file d'indexation, qui n'est autre que la liste des passages sans vecteur.
+
 ### `watched_files` : fichiers déjà examinés dans les Téléchargements (migration 5)
 
 `(path, mtime, size)` (PK), `status` (`attached`, `duplicate`, `ignored` : pas un article reconnu, `refused` : pas un PDF lisible), `seen_at`. Un fichier modifié (autre date ou taille) est réexaminé. La date d'activation de la surveillance est dans `meta` (`downloads.since`).
@@ -192,6 +200,7 @@ Cache des recherches en ligne (un jour) et des réponses Unpaywall (sept jours).
 |---|---|
 | `journals.last_check` | Dernière vérification réussie de la liste en ligne |
 | `journals.last_error` | Dernière erreur de vérification (supprimée après une vérification réussie) |
+| `index.version` | Version de la méthode d'extraction du texte des PDF ; si elle change, les PDF sont réindexés au démarrage |
 | `downloads.since` | Début de la surveillance des Téléchargements (horodatage Unix) : les fichiers plus anciens sont ignorés |
 
 ## Exemples de requêtes

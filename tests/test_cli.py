@@ -129,3 +129,21 @@ def test_downloads_settings(tmp_path, monkeypatch):
     (tmp_path / "config.toml").write_text(text.replace('downloads_dir = "~/Downloads"', 'downloads_dir = "~/Desktop/pdf"'))
     loaded = config.load()
     assert loaded.watch_downloads and loaded.downloads_dir == Path.home() / "Desktop" / "pdf"
+
+
+def test_semantic_commands(cfg):
+    from biblio import core, db, semantic
+    from test_semantic import FakeEmbedder
+
+    out = runner.invoke(cli.app, ["semantic"])
+    assert "Modèle : BAAI/bge-m3" in out.output and "Passages indexés" in out.output
+    semantic.set_embedder(FakeEmbedder())
+    try:
+        conn = db.connect(cfg.db_path)
+        core.add_manual(conn, {"title": "Household transmission of ESBL Enterobacterales within families"})
+        while semantic.index_batch(conn, semantic.embedder()):
+            pass
+        out = runner.invoke(cli.app, ["find", "BLSE foyer"])
+        assert "household" in out.output.lower() and "≈" in out.output and "plein texte + sens" in out.output
+    finally:
+        semantic.set_embedder(None)

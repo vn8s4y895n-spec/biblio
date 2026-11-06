@@ -143,3 +143,15 @@ def test_phase4_routes(api):
     assert api.post("/api/v1/notes/sync").json()["updated"] == []
     assert api.post("/api/v1/inbox/scan").json() == []
     assert api.post("/api/v1/works/harris2018effect/pdf").status_code == 404  # a déjà un PDF
+
+
+def test_semantic_routes(api, monkeypatch):
+    from biblio import semantic
+
+    status = api.get("/api/v1/semantic").json()
+    assert status["model"] == "BAAI/bge-m3" and status["status"] in ("absent", "error")
+    started = []
+    monkeypatch.setattr(semantic, "start_download", started.append)
+    assert api.post("/api/v1/semantic/download").status_code == 202 and len(started) == 1
+    assert api.get("/api/v1/search/library", params={"q": "x", "engine": "semantic"}).status_code == 422
+    assert api.get("/api/v1/search/library", params={"q": "x"}).json()["engine"] == "lexical"

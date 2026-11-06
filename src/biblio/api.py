@@ -14,7 +14,7 @@ from fastapi import APIRouter, BackgroundTasks, Body, Depends, FastAPI, Header, 
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 
-from . import __version__, core, db, formats, importer, journals, library, notes, search
+from . import __version__, core, db, formats, importer, journals, library, notes, search, semantic
 from .config import Config
 from .sources import http
 from .sources.http import SourceError
@@ -164,11 +164,28 @@ def attach_file(sha256: str, body: AttachRequest, request: Request, conn: Conn, 
     return importer.attach_file(conn, home(request), sha256.lower(), body.identifier, body.work, client)
 
 
-@router.get("/search/library", summary="Recherche plein texte dans la bibliothèque")
-def search_library(conn: Conn, q: Annotated[str, Query(min_length=1)], limit: Annotated[int, Query(ge=1, le=200)] = 20):
-    """Cherche dans les métadonnées, résumés, notes et textes intégraux. Les extraits sont en HTML échappé, les
-    mots trouvés entourés de `<mark>`. `mode` : all (tous les mots), any (au moins un), advanced (syntaxe FTS5)."""
-    return library.search(conn, q, limit)
+@router.get("/search/library", summary="Recherche dans la bibliothèque (plein texte + sens)")
+def search_library(conn: Conn, q: Annotated[str, Query(min_length=1)], limit: Annotated[int, Query(ge=1, le=200)] = 20,
+                   engine: Literal["hybrid", "lexical", "semantic"] = "hybrid"):  # fmt: skip
+    """Cherche dans les métadonnées, résumés, notes et textes intégraux, en plein texte (BM25) et par le sens
+    (modèle local bge-m3, multilingue : une question en français trouve des passages en anglais). Les deux classements
+    sont fusionnés (RRF). Sans modèle chargé, `engine` vaut « lexical ». Extraits en HTML échappé, mots trouvés en
+    `<mark>` ; `match` indique quel moteur a trouvé chaque passage."""
+    return library.search(conn, q, limit, engine=engine)
+
+
+@router.get("/semantic", summary="État de la recherche sémantique (modèle, indexation)")
+def semantic_status(request: Request, conn: Conn):
+    return semantic.status(conn, request.app.state.config.models_dir)
+
+
+@router.post("/semantic/download", status_code=202, summary="Télécharger le modèle sémantique (~2,3 Go, une fois)")
+def semantic_download(request: Request, conn: Conn):
+    """Télécharge bge-m3 (version ONNX officielle, figée) dans le dossier des modèles, en arrière-plan.
+    Suivre l'avancement avec GET /semantic. L'indexation démarre dès que le modèle est prêt."""
+    models_dir = request.app.state.config.models_dir
+    semantic.start_download(models_dir)
+    return semantic.status(conn, models_dir)
 
 
 @router.get("/duplicates", summary="Doublons probables à fusionner ou écarter")
@@ -238,6 +255,7 @@ def search_online(
     journal: Annotated[str | None, Query(description="Nom, abréviation ou ISSN de revue (contient)")] = None,
     journal_status: Annotated[list[JournalStatus] | None, Query(description="Statuts de revue montrés (défaut : recommended)")] = None,
     all_journals: Annotated[bool, Query(description="Montrer toutes les revues (désactive le filtre de la liste)")] = False,
+    rerank: Annotated[bool, Query(description="Reclasser avec le modèle sémantique local s'il est chargé")] = True,
 ):
     """Interroge PubMed, Europe PMC, OpenAlex, Crossref et Semantic Scholar en parallèle, fusionne les doublons
     (DOI > PMID > PMCID > titre + année) et classe par fusion des rangs (RRF). Par défaut, seules les revues de la
@@ -246,7 +264,7 @@ def search_online(
         year_from=year_from, year_to=year_to, study_types=study_type or [], open_access=open_access,
         mesh=mesh or [], journal=journal, journal_status=[] if all_journals else (journal_status or ["recommended"]),
     )  # fmt: skip
-    return search.search(conn, q, source, per_source, limit, filters)
+    return search.search(conn, q, source, per_source, limit, filters, rerank)
 
 
 @router.get("/search/open-access", summary="Trouver la version libre et légale d'un article (PMC, Unpaywall)")
@@ -363,13 +381,17 @@ def _background(config: Config) -> None:
 
 
 def create_app(config: Config, background: bool = False) -> FastAPI:
-    """`background=True` (serveur réel) : boîte d'entrée, notes et liste des revues surveillées en arrière-plan."""
+    """`background=True` (serveur réel) : boîte d'entrée, notes et liste des revues surveillées en arrière-plan,
+    indexation sémantique dès que le modèle est téléchargé."""
     conn = db.connect(config.db_path)
     core.setup(conn, config.home)
     conn.close()
     http.configure(config.contact_email, config.api_keys, config.db_path)
     if background:
         threading.Thread(target=_background, args=(config,), daemon=True, name="background").start()
+        if config.semantic:  # charge le modèle s'il est téléchargé, puis indexe les passages au fil de l'eau
+            threading.Thread(target=semantic.run_indexer, args=(config.db_path, config.models_dir), daemon=True,
+                             name="semantic").start()  # fmt: skip
 
     app = FastAPI(
         title="Biblio",

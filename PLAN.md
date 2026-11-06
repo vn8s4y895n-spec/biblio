@@ -1,6 +1,6 @@
 # Biblio — Plan
 
-Statut : **plan validé le 2026-11-06. Phases 1 à 4 terminées** (2026-11-06). Prochaine étape : phase 5.
+Statut : **plan validé le 2026-11-06. Phases 1 à 5 terminées** (2026-11-06). Prochaine étape : phase 6.
 
 ## Objectif
 
@@ -313,7 +313,22 @@ Chaque phase se termine par : tests verts (aucun appel réseau, réponses enregi
        - pas de navigateur caché pour passer les protections anti-robots. Une extension de navigateur « Envoyer à Biblio » est envisageable en phase 10 ou 11 ;
      - les accents LaTeX de BibTeX (`{\'\i}`) sont recomposés correctement ;
      - OpenAlex indique déjà, pour chaque revue, sa présence dans la liste des doyens (`listed_in: doyens`), ce qui fournira une seconde source pour le statut de revue.
-5. **Sémantique et hybride.** File de tâches, bge-m3 (téléchargé au premier lancement), sqlite-vec, RRF, reclassement des résultats en ligne, **benchmark sur 10 000 notices** (objectif < 200 ms).
+5. ✅ **Sémantique et hybride.** File de tâches, bge-m3 (téléchargé au premier lancement), sqlite-vec, RRF, reclassement des résultats en ligne, **benchmark sur 10 000 notices** (objectif < 200 ms).
+   - *Bilan* : 137 tests verts, plus un test avec le vrai modèle. Benchmark sur 10 000 notices (30 000 passages, vecteurs aléatoires, vrai modèle pour la requête) : **hybride 29 ms en médiane**, sens seul 26 ms, plein texte seul 3 ms.
+   - *Démo réelle* :
+     - « études sur la transmission de BLSE en foyer familial » et « quel traitement pour une bactériémie à E. coli résistant à la ceftriaxone ? » trouvent les bons articles anglais (Baede 2017, MERINO) ;
+     - le reclassement des résultats en ligne ajoute moins d'une seconde.
+   - *Écarts au plan* :
+     - **ONNX Runtime au lieu de torch / sentence-transformers** : le dépôt officiel fournit le modèle en ONNX, ce qui évite ~700 Mo de dépendances ;
+     - **téléchargement du modèle à la demande** (`biblio semantic download`, puis un bouton dans l'interface) plutôt qu'automatique, vu ses 2,3 Go ;
+     - **pas de file de tâches générique** : la liste des passages sans vecteur sert de file, reprise automatiquement après un arrêt ;
+     - **pas de modèle de repli** (multilingual-e5-small) : la dimension 1024 est fixée dans le schéma ; à ajouter si le besoin se présente.
+   - *Constats et corrections* :
+     - les listes de références des PDF parasitaient la recherche : elles ne sont plus indexées (−28 % de passages sur la bibliothèque de démo) ;
+     - les mots outils d'une question (« de », « la ») trouvaient des noms d'auteurs : ils sont ignorés en plein texte ;
+     - les césures marquées par pdfium (U+FFFE) sont recollées ; les PDF sont réindexés automatiquement quand l'extraction change (`index.version`) ;
+     - une correspondance plein texte partielle pèse moitié moins que le sens. Le dosage des deux moteurs reste à affiner sur un usage réel : sur « les animaux de compagnie sont-ils un réservoir… », le sens seul classe le bon article en tête, l'hybride le met en troisième ;
+     - l'indexation tourne à ~5 passages longs par seconde sur le processeur. CoreML (accélération Apple) est disponible dans ONNX Runtime mais n'a pas encore été testé.
 6. **Interface Svelte, FR + EN.** Écran question → réponse → sources (réponse extraite, sans LLM pour l'instant), résumé Biblio, enregistrement des recherches, bibliothèque en trois panneaux, lecteur PDF, collections, tags, notes, clavier, thèmes, traductions FR/EN, **écran de réglages** (e-mail de contact et clés OpenAlex / Semantic Scholar / NCBI, à faire avec toi à ce moment-là). Fenêtre `pywebview`.
 7. **Citation, exports et envois.** CSL (Vancouver, APA, `.csl` ajoutés), BibTeX / RIS / CSL-JSON / Markdown, clés `auteurAnnéeMot`, `library.bib` synchronisé, **envoi direct dans Zotero**, **paquets `.biblio`** (création, aperçu, import, fusion).
 8. **Veille et suivi.** Recherches enregistrées, articles proches (OpenAlex / Semantic Scholar), preprint → publié, rétractations (Crossref / Retraction Watch).

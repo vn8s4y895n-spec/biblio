@@ -14,6 +14,7 @@ log = logging.getLogger("biblio")
 # Ordre de priorité à la fusion : la première source qui fournit un champ l'emporte (PubMed : MeSH, résumé structuré).
 SOURCES = {m.NAME: m for m in (pubmed, europepmc, openalex, crossref, semanticscholar)}
 RRF_K = 60  # constante de la fusion par rangs réciproques (valeur usuelle)
+RERANK_TOP = 50  # résultats reclassés par le modèle local (~1 s sur un Mac récent)
 
 
 @dataclass
@@ -108,9 +109,10 @@ def _matches(rec: dict, f: Filters) -> bool:
 
 
 def search(conn: sqlite3.Connection, text: str, sources: list[str] | None = None, per_source: int = 25,
-           limit: int = 50, filters: Filters | None = None) -> dict:  # fmt: skip
+           limit: int = 50, filters: Filters | None = None, rerank: bool = True) -> dict:  # fmt: skip
     """Recherche fédérée. Les filtres de date et de MeSH sont transmis aux sources qui les comprennent,
-    puis tous les filtres sont réappliqués sur les notices fusionnées."""
+    puis tous les filtres sont réappliqués sur les notices fusionnées. Si le modèle sémantique est chargé
+    (`rerank`), il ajoute son vote au classement (`reranked`, `semantic_score`)."""
     filters = filters or Filters()
     names = [n for n in SOURCES if n in (sources or SOURCES)]
     if unknown := set(sources or ()) - set(SOURCES):
@@ -138,13 +140,35 @@ def search(conn: sqlite3.Connection, text: str, sources: list[str] | None = None
         rec["in_library"] = conn.execute("SELECT citekey FROM works WHERE id = ?", (work_id,)).fetchone()[0] if work_id else None
         results.append(rec)
 
+    reranked = rerank and _semantic_rerank(text, results)
     return {
         "query": {"pubmed": text, "boolean": query.boolean, "plain": query.plain},
         "sources": statuses,
         "total": len(results),
         "hidden": hidden,
+        "reranked": reranked,
         "results": results[:limit],
     }
+
+
+def _semantic_rerank(text: str, results: list[dict]) -> bool:
+    """Ajoute au classement des sources un vote du modèle local : proximité de sens entre la question et le titre
+    + début du résumé (les RERANK_TOP premiers résultats). Renvoie False si le modèle n'est pas chargé."""
+    from . import semantic
+
+    model = semantic.embedder()
+    if model is None or not results:
+        return False
+    top = results[:RERANK_TOP]
+    texts = [f"{r['title']}. {(r.get('abstract') or '')[:400]}" for r in top]
+    similarities = semantic.similarity(model, text, texts)
+    order = sorted(range(len(top)), key=lambda i: -similarities[i])
+    for rank, i in enumerate(order, 1):
+        top[i]["semantic_score"] = round(similarities[i], 4)
+        top[i]["score"] = round(top[i]["score"] + 1 / (RRF_K + rank), 6)
+    top.sort(key=lambda r: (-r["score"], -len(r["sources"])))
+    results[:RERANK_TOP] = top
+    return True
 
 
 def open_access_candidates(doi: str | None = None, pmcid: str | None = None) -> list[dict]:

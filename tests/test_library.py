@@ -470,3 +470,21 @@ def test_watch_downloads(conn, cfg, tmp_path, network):
     assert importer.scan_downloads(conn, downloads, cfg.home, min_age=0) == []  # déjà examinés
     assert len(network) == calls
     assert importer.scan_downloads(conn, tmp_path / "absent", cfg.home) == []
+
+
+def test_reference_list_and_stopwords():
+    pages = ["Introduction text.", "Methods.", "Results and discussion.\nReferences\n1. De Rekeneire N. et al. 2011."]
+    assert library.without_references(pages) == ["Introduction text.", "Methods.", "Results and discussion.\n"]
+    early = ["References\nnot really the end", "Body text continues here", "More body"]  # titre en première moitié : gardé
+    assert library.without_references(early) == early
+    assert library.fts_query("études sur la transmission de BLSE en foyer") == '"études" AND "transmission" AND "BLSE" AND "foyer"'
+    assert library.fts_query("de la") == '"de" AND "la"'  # que des mots outils : on les garde
+
+
+def test_outdated_index_is_rebuilt(conn, cfg):
+    importer.import_pdf(conn, cfg.home, MERINO_PDF)
+    conn.execute("DELETE FROM passages WHERE origin = 'fulltext'")
+    db.set_meta(conn, "index.version", "1")
+    core.setup(conn, cfg.home)
+    assert conn.execute("SELECT count(*) FROM passages WHERE origin = 'fulltext'").fetchone()[0] > 0
+    assert db.get_meta(conn, "index.version") == library.INDEX_VERSION

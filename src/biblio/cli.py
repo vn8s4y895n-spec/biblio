@@ -195,18 +195,49 @@ def files() -> None:
 def find(
     query: Annotated[str, typer.Argument(help="Mots à chercher (syntaxe FTS5 acceptée : \"phrase\", OR, NOT, préfixe*)")],
     limit: Annotated[int, typer.Option(help="Nombre de notices")] = 10,
+    engine: Annotated[str, typer.Option(help="hybrid (plein texte + sens), lexical ou semantic")] = "hybrid",
 ) -> None:
-    """Recherche plein texte dans la bibliothèque : métadonnées, résumés, notes et PDF."""
-    data = _call("GET", "/api/v1/search/library", params={"q": query, "limit": limit}).json()
+    """Recherche dans la bibliothèque (notices, résumés, notes, PDF), en plein texte et par le sens.
+    Une question en langage courant, en français, trouve aussi des passages en anglais. ≈ : trouvé par le sens."""
+    data = _call("GET", "/api/v1/search/library", params={"q": query, "limit": limit, "engine": engine}).json()
     origins = {"metadata": "notice", "abstract": "résumé", "fulltext": "PDF", "note": "note"}
     for w in data["results"]:
         typer.echo(f"{STATUS_MARKS[w['journal_status']]} {w['citekey']:<28} {w['year'] or '':<5} {w['title'][:70]}")
         for p in w["passages"]:
-            where = origins[p["origin"]] + (f" p. {p['page']}" if p["page"] else "")
+            where = origins[p["origin"]] + (f" p. {p['page']}" if p["page"] else "") + (" ≈" if p["match"] == "semantic" else "")
             text = html.unescape(p["snippet"].replace("<mark>", "\x1b[1;33m").replace("</mark>", "\x1b[0m"))
             typer.echo(f"    [{where}] {text}")
-    mode = " (aucun résultat avec tous les mots : au moins un mot)" if data["mode"] == "any" else ""
-    typer.secho(f"{len(data['results'])} sur {data['total']} notice(s){mode}", dim=True)
+    mode = " (plein texte : au moins un des mots)" if data["mode"] == "any" else ""
+    engines = {"hybrid": "plein texte + sens", "lexical": "plein texte seul (modèle sémantique non chargé)", "semantic": "sens seul"}
+    typer.secho(f"{len(data['results'])} sur {data['total']} notice(s) · {engines[data['engine']]}{mode}", dim=True)
+
+
+semantic_app = typer.Typer(help="Recherche par le sens (modèle local bge-m3).", invoke_without_command=True)
+app.add_typer(semantic_app, name="semantic")
+
+
+def _semantic_summary(s: dict) -> None:
+    labels = {"absent": "non téléchargé (biblio semantic download)", "downloading": "téléchargement en cours",
+              "downloaded": "téléchargé, chargement au démarrage du serveur", "ready": "prêt", "error": "erreur"}  # fmt: skip
+    typer.echo(f"Modèle : {s['model']} — {labels.get(s['status'], s['status'])}")
+    if s["status"] == "downloading":
+        typer.echo(f"  {s['downloaded_bytes'] / 1e9:.2f} Go sur ~{s['expected_bytes'] / 1e9:.1f} Go")
+    if s["error"]:
+        typer.secho(f"  ⚠ {s['error']}", fg="yellow")
+    typer.echo(f"Passages indexés : {s['indexed']} sur {s['passages']} ({s['progress']:.0%})")
+
+
+@semantic_app.callback()
+def semantic_info(ctx: typer.Context) -> None:
+    """État du modèle et de l'indexation."""
+    if ctx.invoked_subcommand is None:
+        _semantic_summary(_call("GET", "/api/v1/semantic").json())
+
+
+@semantic_app.command("download")
+def semantic_download() -> None:
+    """Télécharge le modèle (~2,3 Go, une seule fois) ; l'indexation démarre ensuite en arrière-plan."""
+    _semantic_summary(_call("POST", "/api/v1/semantic/download").json())
 
 
 @app.command()

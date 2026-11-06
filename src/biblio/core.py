@@ -33,6 +33,7 @@ def setup(conn: sqlite3.Connection, home: Path) -> None:
     journals.install(conn, home)
     with db.transaction(conn):
         library.index_missing(conn)
+        library.reindex_if_outdated(conn, home)
 
 
 class InvalidIdentifier(ValueError):

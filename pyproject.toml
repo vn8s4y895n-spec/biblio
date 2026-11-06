@@ -8,7 +8,11 @@ dependencies = [
     "bibtexparser>=1.4,<2",
     "fastapi>=0.162.0",
     "httpx>=0.28.1",
+    "huggingface-hub>=2.4.0",
+    "onnxruntime>=1.31.1",
     "pypdfium2>=5.15.0",
+    "sqlite-vec>=0.1.9",
+    "tokenizers>=0.23.3",
     "typer>=0.28.0",
     "uvicorn>=0.54.0",
 ]

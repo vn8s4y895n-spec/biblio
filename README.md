@@ -1,7 +1,7 @@
 # Biblio
 
 Gestionnaire de bibliographie local, autonome et ouvert, pensé pour la recherche en santé.
-Le projet avance par phases : voir [PLAN.md](PLAN.md). Ce README décrit ce qui fonctionne **aujourd'hui** (phases 1 à 4).
+Le projet avance par phases : voir [PLAN.md](PLAN.md). Ce README décrit ce qui fonctionne **aujourd'hui** (phases 1 à 5).
 
 ## Installation (développement)
 
@@ -88,9 +88,27 @@ uv run biblio pdf harris2018effect --open          # l'ouvrir, ou ouvrir la page
 - **Liens** : les liens `[[clé]]` donnent les rétroliens (« citée par »).
 
 **Recherche locale** (`biblio find`)
-- **Portée** : notices, résumés, notes et textes intégraux, avec les extraits surlignés.
-- **Requête** : tous les mots sont exigés ; à défaut, au moins un. La syntaxe FTS5 est acceptée (`"phrase"`, `OR`, `NOT`, `préfixe*`).
-- **Vitesse** : moins de 200 ms sur 10 000 notices.
+- **Portée** : notices, résumés, notes et textes intégraux, avec les extraits surlignés. Les listes de références en fin d'article ne sont pas indexées.
+- **Deux moteurs fusionnés** (RRF) :
+  - **le plein texte** (BM25) : tous les mots exigés, à défaut au moins un ; les mots outils d'une question (« de », « la », « the »…) sont ignorés ; la syntaxe FTS5 est acceptée (`"phrase"`, `OR`, `NOT`, `préfixe*`) ;
+  - **le sens** : le modèle local bge-m3, multilingue. Une question en français (« études sur la transmission de BLSE en foyer familial ») trouve des passages en anglais. Un passage trouvé par le sens seul est marqué ≈.
+- **Choix du moteur** : `--engine lexical` (plein texte seul) ou `--engine semantic` (sens seul).
+- **Vitesse** : 29 ms en médiane sur 10 000 notices (30 000 passages), encodage de la question compris.
+
+### Recherche par le sens (modèle local)
+
+```bash
+uv run biblio semantic            # état du modèle et de l'indexation
+uv run biblio semantic download   # télécharger le modèle (~2,3 Go, une seule fois)
+```
+
+- **Modèle** : [bge-m3](https://huggingface.co/BAAI/bge-m3) (licence MIT), version ONNX officielle, à version figée. Il est exécuté sur la machine avec ONNX Runtime, sans PyTorch : **aucun texte n'est envoyé à un tiers**.
+- **Téléchargement** : il se fait à la demande, pas automatiquement, vu sa taille.
+- **Indexation** : une fois le modèle téléchargé, le serveur calcule en arrière-plan les vecteurs des passages (métadonnées et résumés d'abord), et reprend où il en était après un arrêt.
+  - **Vitesse** : environ 5 passages de texte intégral par seconde sur un Mac récent ; la première indexation d'une grosse bibliothèque prend donc plusieurs heures.
+  - **En attendant** : les passages non encore indexés restent trouvables en plein texte.
+- **Recherche en ligne** : le modèle reclasse aussi ses 50 premiers résultats (proximité entre la question et le titre + début du résumé), ce qui ajoute moins d'une seconde.
+- **Désactiver** : `enabled = false` dans la section `[semantic]` de `config.toml`. `models_dir` choisit le dossier du modèle.
 
 ### Recherche en ligne
 
@@ -178,7 +196,9 @@ curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:8765/api/v1/works/10.100
 | GET | `/api/v1/works/{ref}/files` | PDF d'une notice |
 | POST | `/api/v1/works/{ref}/pdf` | Chercher et rattacher le PDF libre |
 | GET / PUT | `/api/v1/works/{ref}/note` | Lire / écrire la note (`{"text"}`) |
-| GET | `/api/v1/search/library?q=` | Recherche plein texte locale |
+| GET | `/api/v1/search/library?q=&engine=` | Recherche locale (hybrid, lexical, semantic) |
+| GET | `/api/v1/semantic` | État du modèle et de l'indexation |
+| POST | `/api/v1/semantic/download` | Télécharger le modèle (arrière-plan) |
 | GET | `/api/v1/duplicates` | Doublons probables |
 | POST | `/api/v1/duplicates/merge` | Fusionner (`{"keep", "drop"}`) |
 | POST | `/api/v1/duplicates/dismiss` | Écarter (`{"a", "b"}`) |
@@ -219,4 +239,5 @@ Les tests n'accèdent jamais au réseau :
 - les réponses de Crossref et PubMed sont enregistrées dans `tests/fixtures/` (essai MERINO, JAMA 2018) ;
 - une recherche réelle auprès des 5 sources est enregistrée dans `tests/fixtures/search/`. La réponse de Semantic Scholar est écrite à la main d'après son format documenté, le service ayant refusé toutes les requêtes sans clé ;
 - le site de Sorbonne Université est simulé, avec des fichiers .xlsx générés par les tests ;
-- les PDF de test sont générés par les tests (`make_pdf` dans `tests/conftest.py`) : texte réel, titre, DOI en XMP.
+- les PDF de test sont générés par les tests (`make_pdf` dans `tests/conftest.py`) : texte réel, titre, DOI en XMP ;
+- la recherche par le sens est testée avec un modèle simulé (`FakeEmbedder`). Un test supplémentaire utilise le vrai modèle s'il est présent : `BIBLIO_TEST_MODELS=<dossier des modèles> uv run pytest`.

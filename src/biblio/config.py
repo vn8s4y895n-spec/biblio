@@ -26,6 +26,12 @@ semanticscholar_api_key = ""  # facultatif, gratuit sur demande : sans clé, Sem
 # des articles sont laissés de côté). Les fichiers du dossier ne sont jamais déplacés ni supprimés.
 watch_downloads = false
 downloads_dir = "~/Downloads"
+
+[semantic]
+# Recherche par le sens (modèle bge-m3, multilingue, exécuté localement : aucun texte n'est envoyé).
+# Le modèle (~2,3 Go) est téléchargé une fois au premier démarrage du serveur.
+enabled = true
+models_dir = ""   # vide : dossier « models » du dossier de données
 """
 
 
@@ -50,6 +56,12 @@ class Config:
     api_keys: dict[str, str]  # ncbi, openalex, semanticscholar
     watch_downloads: bool = False
     downloads_dir: Path = Path.home() / "Downloads"
+    semantic: bool = True
+    models_dir_setting: str = ""
+
+    @property
+    def models_dir(self) -> Path:
+        return Path(self.models_dir_setting).expanduser() if self.models_dir_setting else self.home / "models"
 
     @property
     def path(self) -> Path:
@@ -74,6 +86,7 @@ def load() -> Config:
         path.chmod(0o600)
     data = tomllib.loads(path.read_text(encoding="utf-8"))
     server, sources, inbox = data.get("server", {}), data.get("sources", {}), data.get("inbox", {})
+    semantic = data.get("semantic", {})
     return Config(
         home=root,
         host=server.get("host", "127.0.0.1"),
@@ -83,4 +96,6 @@ def load() -> Config:
         api_keys={name: sources.get(f"{name}_api_key", "") for name in ("ncbi", "openalex", "semanticscholar")},
         watch_downloads=bool(inbox.get("watch_downloads", False)),
         downloads_dir=Path(inbox.get("downloads_dir", "~/Downloads")).expanduser(),
+        semantic=bool(semantic.get("enabled", True)),
+        models_dir_setting=semantic.get("models_dir", ""),
     )
