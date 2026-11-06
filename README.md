@@ -1,7 +1,7 @@
 # Biblio
 
 Gestionnaire de bibliographie local, autonome et ouvert, pensé pour la recherche en santé.
-Le projet avance par phases : voir [PLAN.md](PLAN.md). Ce README décrit ce qui fonctionne **aujourd'hui** (phases 1 à 3).
+Le projet avance par phases : voir [PLAN.md](PLAN.md). Ce README décrit ce qui fonctionne **aujourd'hui** (phases 1 à 4).
 
 ## Installation (développement)
 
@@ -35,6 +35,49 @@ uv run biblio token                             # jeton de l'API
 - La CLI est un client de l'API REST. Si le serveur ne tourne pas, elle le démarre en arrière-plan (journal : `server.log` dans le dossier de données). Il reste actif jusqu'à `biblio stop`.
 - Un article est cherché sur **PubMed** (résumé structuré, MeSH, type d'étude) et complété par **Crossref** (ISSN papier, licence). Si une source est injoignable, l'import se fait avec l'autre et un avertissement s'affiche.
 - **Aucun doublon** : un même article ajouté par DOI, PMID ou URL renvoie la notice existante, éventuellement complétée.
+
+### Imports, PDF, notes
+
+```bash
+uv run biblio add PMC6143100 arXiv:2306.04338 https://www.nature.com/articles/s41467-026-75634-0
+uv run biblio add 10.1038/s41598-025-29778-6       # avec le PDF s'il est en accès libre (--no-pdf pour s'en passer)
+uv run biblio import article.pdf zotero.bib export.ris pubmed.nbib items.json
+uv run biblio files                                # PDF dont la notice n'a pas été trouvée
+uv run biblio attach 501f83bb 10.1001/jama.2018.12163   # saisie assistée : rattacher un PDF
+uv run biblio find "wastewater blaCTX-M household" # plein texte : notices, résumés, notes, PDF
+uv run biblio note harris2018effect --edit         # note Markdown (notes/<clé>.md, liens [[clé]])
+uv run biblio duplicates                           # doublons probables
+uv run biblio merge <garder> <supprimer>           # fusion (ou --dismiss : ce ne sont pas les mêmes)
+uv run biblio pdf harris2018effect                 # chemin du PDF, ou recherche d'un PDF libre
+```
+
+**Identifiants acceptés**
+- DOI, PMID, PMCID et arXiv, nus ou en URL : doi.org, PubMed, PMC, Europe PMC, arXiv, bioRxiv et medRxiv (la version et le format de l'URL sont retirés).
+- Toute autre page d'article : Biblio y lit les balises `citation_doi` ou `citation_pmid`.
+
+**PDF**
+- **Rangement** : par empreinte, dans `library/ab/cd/<sha256>.pdf`. Un même fichier n'est jamais copié deux fois.
+- **Repérage de la notice** : Biblio cherche le DOI dans les métadonnées XMP et du document, puis dans les deux premières pages. Il **vérifie** ensuite que le titre de la notice trouvée correspond au texte du PDF, car un DOI cité en première page n'est pas celui de l'article.
+- **Sans correspondance** : le PDF est rangé, et des notices Crossref proches du titre sont proposées (`biblio attach`).
+- **Texte intégral** : il est extrait page par page et découpé en passages. Un PDF scanné, sans couche texte, n'est pas lu (pas d'OCR).
+- **PDF libre à l'ajout** : Biblio essaie PMC (via Europe PMC), puis OpenAlex, puis Unpaywall (si `contact_email` est renseigné), et garde le premier vrai PDF. Le refus d'un site n'empêche pas l'ajout de la notice : il est signalé.
+- **Limite constatée** : beaucoup d'éditeurs et Europe PMC refusent le téléchargement automatique (HTTP 403). Biblio ne contourne pas ces protections. Pour ces articles, on télécharge le PDF dans le navigateur et on le dépose dans la boîte d'entrée.
+
+**Boîte d'entrée** : tout PDF déposé dans `inbox/` (dossier de données) est importé dans les 5 secondes, puis retiré de la boîte. Un fichier refusé va dans `inbox/refusés/`.
+
+**Fichiers bibliographiques** (BibTeX, RIS, MEDLINE/nbib, CSL-JSON : exports de Zotero, EndNote, Mendeley, PubMed…)
+- **Import hors ligne** : le format est détecté automatiquement.
+- **Notice déjà présente** : même identifiant, ou même titre, année et premier auteur sans identifiant. Elle est complétée, jamais dupliquée.
+- **Même titre avec un identifiant différent** : c'est un doublon probable. Il est signalé, à fusionner ou à écarter.
+
+**Notes** : elles sont rangées dans `notes/<clé>.md`, un dossier qui s'ouvre comme coffre Obsidian.
+- **Modifications** : celles faites hors de Biblio (Obsidian, autre éditeur) sont réindexées automatiquement.
+- **Liens** : les liens `[[clé]]` donnent les rétroliens (« citée par »).
+
+**Recherche locale** (`biblio find`)
+- **Portée** : notices, résumés, notes et textes intégraux, avec les extraits surlignés.
+- **Requête** : tous les mots sont exigés ; à défaut, au moins un. La syntaxe FTS5 est acceptée (`"phrase"`, `OR`, `NOT`, `préfixe*`).
+- **Vitesse** : moins de 200 ms sur 10 000 notices.
 
 ### Recherche en ligne
 
@@ -112,7 +155,22 @@ curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:8765/api/v1/works/10.100
 | Méthode | Route | Rôle |
 |---|---|---|
 | GET | `/api/v1/health` | État du serveur (public) |
-| POST | `/api/v1/works` | Ajouter par identifiant (201 créé, 200 déjà présent) |
+| POST | `/api/v1/works` | Ajouter par identifiant, avec PDF libre (`{"identifier", "pdf"}` ; 201 créé, 200 déjà présent) |
+| POST | `/api/v1/works/manual` | Saisie manuelle |
+| POST | `/api/v1/import?format=` | Importer un fichier BibTeX / RIS / nbib / CSL-JSON (corps brut) |
+| POST | `/api/v1/files?filename=` | Déposer un PDF (corps brut) |
+| GET | `/api/v1/files` | PDF en attente de notice |
+| GET | `/api/v1/files/{sha256}` | Télécharger un PDF |
+| POST | `/api/v1/files/{sha256}/attach` | Rattacher un PDF (`{"identifier"}` ou `{"work"}`) |
+| GET | `/api/v1/works/{ref}/files` | PDF d'une notice |
+| POST | `/api/v1/works/{ref}/pdf` | Chercher et rattacher le PDF libre |
+| GET / PUT | `/api/v1/works/{ref}/note` | Lire / écrire la note (`{"text"}`) |
+| GET | `/api/v1/search/library?q=` | Recherche plein texte locale |
+| GET | `/api/v1/duplicates` | Doublons probables |
+| POST | `/api/v1/duplicates/merge` | Fusionner (`{"keep", "drop"}`) |
+| POST | `/api/v1/duplicates/dismiss` | Écarter (`{"a", "b"}`) |
+| POST | `/api/v1/notes/sync` | Réindexer les notes modifiées hors de Biblio |
+| POST | `/api/v1/inbox/scan` | Traiter la boîte d'entrée maintenant |
 | GET | `/api/v1/works?limit=&offset=&journal_status=` | Lister (filtre répétable sur le statut de revue) |
 | GET | `/api/v1/works/{ref}` | Lire (id, clé, DOI, PMID) |
 | GET | `/api/v1/works/{ref}/changes` | Journal des modifications |
@@ -131,6 +189,7 @@ L'en-tête facultatif `X-Biblio-Client` (`api`, `cli`, `web`, `mcp`…) est insc
 Dossier de données : `~/Library/Application Support/Biblio` (macOS), `%APPDATA%\Biblio` (Windows), `~/.local/share/biblio` (Linux). La variable `BIBLIO_HOME` le remplace.
 
 - `config.toml` : créé au premier lancement (droits 600). Contient le port, le jeton de l'API et, à remplir, l'e-mail de contact demandé par Crossref et NCBI, ainsi qu'une clé NCBI facultative.
+- `library/` : les PDF (par empreinte). `notes/` : les notes Markdown. `inbox/` : la boîte d'entrée.
 - `biblio.sqlite` : la base (SQLite en mode WAL), documentée dans [SCHEMA.md](SCHEMA.md). **Ne la placez pas dans un dossier synchronisé** (iCloud Drive, OneDrive) : la synchro peut la corrompre.
 
 ## Sauvegarde
@@ -146,4 +205,5 @@ uv run pytest
 Les tests n'accèdent jamais au réseau :
 - les réponses de Crossref et PubMed sont enregistrées dans `tests/fixtures/` (essai MERINO, JAMA 2018) ;
 - une recherche réelle auprès des 5 sources est enregistrée dans `tests/fixtures/search/`. La réponse de Semantic Scholar est écrite à la main d'après son format documenté, le service ayant refusé toutes les requêtes sans clé ;
-- le site de Sorbonne Université est simulé, avec des fichiers .xlsx générés par les tests.
+- le site de Sorbonne Université est simulé, avec des fichiers .xlsx générés par les tests ;
+- les PDF de test sont générés par les tests (`make_pdf` dans `tests/conftest.py`) : texte réel, titre, DOI en XMP.

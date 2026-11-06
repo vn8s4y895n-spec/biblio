@@ -1,5 +1,6 @@
 """Interface en ligne de commande. C'est un client de l'API REST : elle n'accède jamais à la base directement."""
 
+import html
 import json
 import logging
 import re
@@ -119,16 +120,159 @@ def stop() -> None:
 
 
 @app.command()
-def add(identifiers: Annotated[list[str], typer.Argument(help="DOI, PMID ou URL doi.org / pubmed")]) -> None:
-    """Ajoute des articles par identifiant. Un article déjà présent n'est jamais dupliqué."""
+def add(
+    identifiers: Annotated[list[str], typer.Argument(help="DOI, PMID, PMCID, arXiv ou URL d'article")],
+    pdf: Annotated[bool, typer.Option("--pdf/--no-pdf", help="Télécharger le PDF s'il est en accès libre")] = True,
+) -> None:
+    """Ajoute des articles par identifiant, avec leur PDF libre. Un article déjà présent n'est jamais dupliqué."""
     for identifier in identifiers:
-        response = _call("POST", "/api/v1/works", json={"identifier": identifier})
-        data = response.json()
+        data = _call("POST", "/api/v1/works", json={"identifier": identifier, "pdf": pdf}).json()
         work = data["work"]
         mark, label = ("✓", "ajouté") if data["created"] else ("=", "déjà présent")
         typer.echo(f"{mark} {label} : [{work['citekey']}] {work['title']}")
+        if data["pdf"]:
+            typer.echo(f"  PDF libre rattaché ({data['pdf']['source']})")
         for warning in data["warnings"]:
             typer.secho(f"  ⚠ {warning}", fg="yellow")
+
+
+@app.command("import")
+def import_(
+    paths: Annotated[list[Path], typer.Argument(exists=True, dir_okay=False, help="PDF, .bib, .ris, .nbib ou .json")],
+) -> None:
+    """Importe des PDF (DOI repéré automatiquement) ou des fichiers bibliographiques (BibTeX, RIS, MEDLINE, CSL-JSON)."""
+    for path in paths:
+        if path.suffix.lower() == ".pdf":
+            r = _call("POST", "/api/v1/files", params={"filename": path.name}, content=path.read_bytes(),
+                      headers={"Content-Type": "application/pdf"}).json()  # fmt: skip
+            if r["status"] in ("attached", "duplicate"):
+                label = "rattaché" if r["status"] == "attached" else "déjà dans la bibliothèque"
+                typer.echo(f"✓ {path.name} : {label} → [{r['work']['citekey']}] {r['work']['title']}")
+            else:
+                typer.secho(f"? {path.name} : notice non trouvée automatiquement (fichier {r['sha256'][:12]})", fg="yellow")
+                for c in r["candidates"]:
+                    typer.echo(f"    {c['doi']}  {c['year'] or ''} {c['first_author'] or ''} · {c['title'][:80]}")
+                typer.echo(f"  → biblio attach {r['sha256'][:12]} <DOI ou PMID>")
+            continue
+        r = _call("POST", "/api/v1/import", content=path.read_bytes(), headers={"Content-Type": "text/plain"}).json()
+        typer.echo(f"✓ {path.name} ({r['format']}) : {r['read']} notices lues, {len(r['created'])} créées, "
+                   f"{len(r['completed'])} déjà présentes")  # fmt: skip
+        for e in r["errors"]:
+            typer.secho(f"  ⚠ {e['title']} : {e['error']}", fg="yellow")
+        if r["suspected_duplicates"]:
+            typer.secho(f"  {r['suspected_duplicates']} doublon(s) probable(s) : biblio duplicates", fg="yellow")
+
+
+@app.command()
+def attach(
+    file: Annotated[str, typer.Argument(help="Empreinte du PDF (ses premiers caractères suffisent)")],
+    ref: Annotated[str, typer.Argument(help="DOI, PMID… ou clé d'une notice existante")],
+) -> None:
+    """Rattache un PDF non reconnu à une notice (saisie assistée)."""
+    files = [f["sha256"] for f in _call("GET", "/api/v1/files").json() if f["sha256"].startswith(file.lower())]
+    if len(files) != 1:
+        _fail("Empreinte inconnue ou ambiguë (voir les fichiers en attente : biblio files)")
+    body = {"identifier": ref} if _looks_like_identifier(ref) else {"work": ref}
+    work = _call("POST", f"/api/v1/files/{files[0]}/attach", json=body).json()
+    typer.echo(f"✓ rattaché à [{work['citekey']}] {work['title']}")
+
+
+def _looks_like_identifier(text: str) -> bool:
+    return bool(re.search(r"10\.\d{4,9}/|^\s*(pmid:?\s*)?\d+\s*$|^PMC\d+|arxiv|^https?://", text, re.I))
+
+
+@app.command()
+def files() -> None:
+    """Liste les PDF rangés qui attendent une notice."""
+    pending = _call("GET", "/api/v1/files").json()
+    for f in pending:
+        typer.echo(f"{f['sha256'][:12]}  {f['pages'] or '?'} p.  {f['original_name'] or ''}  ({f['added_at']})")
+    typer.secho(f"{len(pending)} PDF en attente de notice", dim=True)
+
+
+@app.command()
+def find(
+    query: Annotated[str, typer.Argument(help="Mots à chercher (syntaxe FTS5 acceptée : \"phrase\", OR, NOT, préfixe*)")],
+    limit: Annotated[int, typer.Option(help="Nombre de notices")] = 10,
+) -> None:
+    """Recherche plein texte dans la bibliothèque : métadonnées, résumés, notes et PDF."""
+    data = _call("GET", "/api/v1/search/library", params={"q": query, "limit": limit}).json()
+    origins = {"metadata": "notice", "abstract": "résumé", "fulltext": "PDF", "note": "note"}
+    for w in data["results"]:
+        typer.echo(f"{STATUS_MARKS[w['journal_status']]} {w['citekey']:<28} {w['year'] or '':<5} {w['title'][:70]}")
+        for p in w["passages"]:
+            where = origins[p["origin"]] + (f" p. {p['page']}" if p["page"] else "")
+            text = html.unescape(p["snippet"].replace("<mark>", "\x1b[1;33m").replace("</mark>", "\x1b[0m"))
+            typer.echo(f"    [{where}] {text}")
+    mode = " (aucun résultat avec tous les mots : au moins un mot)" if data["mode"] == "any" else ""
+    typer.secho(f"{len(data['results'])} sur {data['total']} notice(s){mode}", dim=True)
+
+
+@app.command()
+def note(
+    ref: Annotated[str, typer.Argument(help="Clé de citation, id, DOI ou PMID")],
+    edit: Annotated[bool, typer.Option("--edit", help="Ouvrir la note dans l'éditeur ($EDITOR)")] = False,
+    text: Annotated[str | None, typer.Option("--set", help="Remplacer le texte de la note")] = None,
+) -> None:
+    """Affiche ou modifie la note Markdown d'une notice (fichier notes/<clé>.md, ouvrable dans Obsidian)."""
+    current = _call("GET", f"/api/v1/works/{ref}/note").json()
+    if edit:
+        text = typer.edit(current["text"], extension=".md")
+        if text is None:
+            typer.echo("Note inchangée.")
+            return
+    if text is not None:
+        current = _call("PUT", f"/api/v1/works/{ref}/note", json={"text": text}).json()
+        typer.echo("✓ Note enregistrée.")
+    typer.secho(current["path"], dim=True)
+    if current["text"]:
+        typer.echo(current["text"].rstrip())
+    if current["links"]:
+        typer.echo(f"→ cite : {', '.join(current['links'])}")
+    if current["backlinks"]:
+        typer.echo(f"← citée par : {', '.join(current['backlinks'])}")
+
+
+@app.command()
+def duplicates() -> None:
+    """Liste les doublons probables (même titre, année, premier auteur, sans identifiant commun)."""
+    pairs = _call("GET", "/api/v1/duplicates").json()
+    for pair in pairs:
+        a, b = pair["works"]
+        typer.echo(f"[{a['citekey']}] ⇄ [{b['citekey']}]  {a['title'][:70]}")
+        for w in (a, b):
+            ids = ", ".join(f"{k}:{v}" for k, v in w["identifiers"].items()) or "aucun identifiant"
+            typer.echo(f"    {w['citekey']} : {ids}")
+    typer.secho(f"{len(pairs)} paire(s). Fusionner : biblio merge <garder> <supprimer> ; écarter : biblio merge --dismiss A B",
+                dim=True)  # fmt: skip
+
+
+@app.command()
+def merge(
+    keep: Annotated[str, typer.Argument(help="Notice conservée")],
+    drop: Annotated[str, typer.Argument(help="Notice fusionnée puis supprimée")],
+    dismiss: Annotated[bool, typer.Option("--dismiss", help="Ce ne sont pas des doublons : écarter la paire")] = False,
+) -> None:
+    """Fusionne deux notices (identifiants, PDF, note et champs manquants repris), ou écarte un faux doublon."""
+    if dismiss:
+        _call("POST", "/api/v1/duplicates/dismiss", json={"a": keep, "b": drop})
+        typer.echo("✓ Paire écartée.")
+        return
+    work = _call("POST", "/api/v1/duplicates/merge", json={"keep": keep, "drop": drop}).json()
+    typer.echo(f"✓ Fusionné dans [{work['citekey']}] {work['title']}")
+
+
+@app.command()
+def pdf(ref: Annotated[str, typer.Argument(help="Clé de citation, id, DOI ou PMID")]) -> None:
+    """Affiche les PDF d'une notice ; en cherche un en accès libre s'il n'y en a pas."""
+    found = _call("GET", f"/api/v1/works/{ref}/files").json()
+    if not found:
+        found = [_call("POST", f"/api/v1/works/{ref}/pdf").json()]
+        typer.echo("✓ PDF libre trouvé et rattaché.")
+    home = config.load().home
+    for f in found:
+        sha = f["sha256"]
+        typer.echo(f"{home / 'library' / sha[:2] / sha[2:4] / (sha + '.pdf')}")
 
 
 @app.command()

@@ -1,6 +1,6 @@
 # Biblio — Plan
 
-Statut : **plan validé le 2026-11-06. Phases 1 à 3 terminées** (2026-11-06). Prochaine étape : phase 4.
+Statut : **plan validé le 2026-11-06. Phases 1 à 4 terminées** (2026-11-06). Prochaine étape : phase 5.
 
 ## Objectif
 
@@ -296,9 +296,20 @@ Chaque phase se termine par : tests verts (aucun appel réseau, réponses enregi
      - **Unpaywall exige un e-mail de contact** (`contact_email`) ;
      - Crossref en texte libre remonte surtout des thèses et des posters, écartés par le filtre des revues ;
      - le filtre par ISSN s'appuie aussi sur la liste des revues, car PubMed ne donne souvent qu'un des deux ISSN.
-4. **Import et stockage.** PDF par empreinte, extraction du DOI, saisie assistée, BibTeX / RIS / CSL-JSON / nbib, arXiv / bioRxiv / medRxiv / URL, extraction du texte et découpage en passages, FTS5, notes Markdown, boîte d'entrée, fusion des doublons.
+4. ✅ **Import et stockage.** PDF par empreinte, extraction du DOI, saisie assistée, BibTeX / RIS / CSL-JSON / nbib, arXiv / bioRxiv / medRxiv / URL, extraction du texte et découpage en passages, FTS5, notes Markdown, boîte d'entrée, fusion des doublons.
+   - *Bilan* : 116 tests verts, sans réseau (PDF générés par les tests). Démo réelle : les ajouts par PMCID, arXiv et URL d'éditeur fonctionnent, un PDF libre a été téléchargé et indexé (Scientific Reports, via OpenAlex), la recherche plein texte trouve le passage page 10 en 0,4 s, la boîte d'entrée reconnaît un PDF déjà présent, et un BibTeX réimporté ne crée aucun doublon.
+   - *Écarts au plan* :
+     - un seul index plein texte (`passages_fts`) au lieu de deux ;
+     - RIS et MEDLINE sont lus par un petit lecteur commun (sans `rispy`) ;
+     - le DOI trouvé dans un PDF est vérifié contre le titre avant tout rattachement ;
+     - une notice sans identifiant réimportée (même titre, année, premier auteur) complète l'existante au lieu d'être recréée ;
+     - la boîte d'entrée est surveillée par le serveur (dossier `inbox/` des données) et non par un `biblio watch` côté client, l'usage étant personnel.
+   - *Constats* :
+     - **le téléchargement automatique des PDF libres est souvent refusé** (HTTP 403) par Europe PMC et par des éditeurs (JAMA). Biblio ne contourne pas ces protections : il essaie la source suivante, puis signale l'échec, et le PDF se dépose alors à la main dans la boîte d'entrée. L'ancien service OA de PMC (`oa.fcgi`) ne répond plus, et je n'ai pas trouvé de documentation officielle de son remplaçant (le service cloud de PMC) : à vérifier quand il sera documenté ;
+     - les accents LaTeX de BibTeX (`{\'\i}`) sont recomposés correctement ;
+     - OpenAlex indique déjà, pour chaque revue, sa présence dans la liste des doyens (`listed_in: doyens`), ce qui fournira une seconde source pour le statut de revue.
 5. **Sémantique et hybride.** File de tâches, bge-m3 (téléchargé au premier lancement), sqlite-vec, RRF, reclassement des résultats en ligne, **benchmark sur 10 000 notices** (objectif < 200 ms).
-6. **Interface Svelte, FR + EN.** Écran question → réponse → sources (réponse extraite, sans LLM pour l'instant), résumé Biblio, enregistrement des recherches, bibliothèque en trois panneaux, lecteur PDF, collections, tags, notes, clavier, thèmes, traductions FR/EN. Fenêtre `pywebview`.
+6. **Interface Svelte, FR + EN.** Écran question → réponse → sources (réponse extraite, sans LLM pour l'instant), résumé Biblio, enregistrement des recherches, bibliothèque en trois panneaux, lecteur PDF, collections, tags, notes, clavier, thèmes, traductions FR/EN, **écran de réglages** (e-mail de contact et clés OpenAlex / Semantic Scholar / NCBI, à faire avec toi à ce moment-là). Fenêtre `pywebview`.
 7. **Citation, exports et envois.** CSL (Vancouver, APA, `.csl` ajoutés), BibTeX / RIS / CSL-JSON / Markdown, clés `auteurAnnéeMot`, `library.bib` synchronisé, **envoi direct dans Zotero**, **paquets `.biblio`** (création, aperçu, import, fusion).
 8. **Veille et suivi.** Recherches enregistrées, articles proches (OpenAlex / Semantic Scholar), preprint → publié, rétractations (Crossref / Retraction Watch).
 9. **IA.** Module LLM interchangeable, question → requête PubMed, réponse rédigée avec citations vérifiées, résumé rédigé, adaptateurs des moteurs IA externes (selon les API disponibles, voir les risques).

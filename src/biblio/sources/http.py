@@ -123,6 +123,26 @@ def get(url: str, params: dict | None = None, ttl: int | None = None, headers: d
     return response
 
 
+def download(url: str, max_bytes: int) -> bytes:
+    """Télécharge un fichier (PDF en accès libre), en refusant au-delà de `max_bytes`."""
+    host = httpx.URL(url).host
+    agent = f"Biblio/{__version__}" + (f" (mailto:{contact_email})" if contact_email else "")
+    _wait_turn(host)
+    try:
+        with httpx.Client(transport=transport, timeout=60, follow_redirects=True, headers={"User-Agent": agent}) as client:
+            with client.stream("GET", url) as response:
+                if response.status_code >= 400:
+                    raise SourceError(f"{host} : HTTP {response.status_code}")
+                data = bytearray()
+                for block in response.iter_bytes():
+                    data += block
+                    if len(data) > max_bytes:
+                        raise SourceError(f"{host} : fichier trop volumineux")
+    except httpx.HTTPError as exc:
+        raise SourceError(f"{host} : {exc}") from exc
+    return bytes(data)
+
+
 def clean(text: str | None) -> str | None:
     """Retire les balises (HTML, JATS, y compris encodées « &lt;i&gt; ») et normalise les espaces."""
     if not text:

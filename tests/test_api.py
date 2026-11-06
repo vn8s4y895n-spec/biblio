@@ -104,4 +104,42 @@ def test_search_online_route(api):
 def test_open_access_route(api):
     assert api.get("/api/v1/search/open-access", params={"pmcid": "PMC3244693"}).json()["source"] == "pmc"
     assert api.get("/api/v1/search/open-access").status_code == 422
-    assert api.get("/api/v1/search/open-access", params={"doi": "10.1016/j.cmi.2016.08.021"}).status_code == 502  # pas d'e-mail
+    # Inconnu d'OpenAlex, et Unpaywall n'est pas interrogé sans e-mail de contact.
+    assert api.get("/api/v1/search/open-access", params={"doi": "10.1016/j.cmi.2016.08.021"}).status_code == 404
+
+
+def test_phase4_routes(api):
+    from conftest import MERINO_PDF
+    from test_library import BIBTEX
+
+    added = api.post("/api/v1/works", json={"identifier": MERINO_DOI})
+    assert added.status_code == 201 and added.json()["pdf"]["source"] == "pmc"
+    files = api.get("/api/v1/works/harris2018effect/files").json()
+    pdf = api.get(f"/api/v1/files/{files[0]['sha256']}")
+    assert pdf.status_code == 200 and pdf.headers["content-type"] == "application/pdf" and pdf.content == MERINO_PDF
+    assert api.get("/api/v1/files/" + "0" * 64).status_code == 404
+    assert api.get("/api/v1/files/../config.toml").status_code == 404
+    assert api.post("/api/v1/files", content=MERINO_PDF).json()["status"] == "duplicate"
+    assert api.post("/api/v1/files", content=b"pas un pdf").status_code == 422
+    assert api.post("/api/v1/files", content=b"").status_code == 422
+
+    report = api.post("/api/v1/import", content=BIBTEX).json()
+    assert report["format"] == "bibtex" and report["completed"] == ["harris2018effect"]
+    assert api.post("/api/v1/import", content=b"texte quelconque").status_code == 422
+
+    hits = api.get("/api/v1/search/library", params={"q": "meropenem mortality"}).json()
+    assert hits["results"][0]["citekey"] == "harris2018effect"
+
+    put = api.put("/api/v1/works/harris2018effect/note", json={"text": "Voir [[model2021]]"}, headers={"X-Biblio-Client": "web"})
+    assert put.json()["links"] == ["model2021"]
+    assert api.get(f"/api/v1/works/{MERINO_DOI}/note").json()["text"] == "Voir [[model2021]]"
+    assert api.get("/api/v1/works/harris2018effect/changes").json()[-1]["client"] == "web"
+
+    manual = api.post("/api/v1/works/manual", json={"title": "Note de service CLIN 2026", "authors": ["Martin, Léa"]})
+    assert manual.status_code == 201
+    assert api.post("/api/v1/works/manual", json={"authors": []}).status_code == 422
+    assert api.get("/api/v1/duplicates").json() == []
+    assert api.post("/api/v1/duplicates/merge", json={"keep": "harris2018effect", "drop": "harris2018effect"}).status_code == 422
+    assert api.post("/api/v1/notes/sync").json()["updated"] == []
+    assert api.post("/api/v1/inbox/scan").json() == []
+    assert api.post("/api/v1/works/harris2018effect/pdf").status_code == 404  # a déjà un PDF

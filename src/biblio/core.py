@@ -12,8 +12,8 @@ import unicodedata
 from collections.abc import Callable
 from pathlib import Path
 
-from . import db, journals
-from .sources import crossref, pubmed
+from . import db, journals, library
+from .sources import arxiv, crossref, http, pubmed
 from .sources.http import SourceError
 
 FIELDS = (
@@ -28,9 +28,11 @@ STOPWORDS = set(
 
 
 def setup(conn: sqlite3.Connection, home: Path) -> None:
-    """Prépare la base : migrations, vue de statut des revues, liste des revues livrée."""
+    """Prépare la base : migrations, vue de statut des revues, liste des revues livrée, index plein texte."""
     db.migrate(conn)
     journals.install(conn, home)
+    with db.transaction(conn):
+        library.index_missing(conn)
 
 
 class InvalidIdentifier(ValueError):
@@ -45,13 +47,27 @@ class NotFound(LookupError):
 
 
 def parse_identifier(text: str) -> tuple[str, str]:
-    """Reconnaît un DOI ou un PMID, nu ou sous forme d'URL. Renvoie (schéma, valeur normalisée)."""
+    """Reconnaît un DOI, PMID, PMCID ou identifiant arXiv, nu ou sous forme d'URL (doi.org, PubMed, PMC,
+    Europe PMC, arXiv, bioRxiv, medRxiv). Toute autre URL est renvoyée telle quelle (schéma « url »), pour être
+    résolue en lisant la page. Renvoie (schéma, valeur normalisée)."""
     t = text.strip()
-    if m := re.search(r"10\.\d{4,9}/\S+", t):
-        return "doi", m.group(0).rstrip(".,;").lower()
-    if m := re.fullmatch(r"(?:pmid:?\s*|https?://pubmed\.ncbi\.nlm\.nih\.gov/)?(\d{1,9})/?", t, re.I):
+    if m := re.search(r"(?:arxiv:\s*|arxiv\.org/(?:abs|pdf)/)(\d{4}\.\d{4,5})(?:v\d+)?", t, re.I):
+        return "arxiv", m.group(1)
+    if m := re.search(r"10\.\d{4,9}/[^\s?#]+", t):
+        doi = m.group(0).rstrip(".,;").lower()
+        if doi.startswith("10.1101/"):  # bioRxiv / medRxiv : l'URL ajoute la version et le format
+            doi = re.sub(r"(v\d+)?(\.full(-text)?|\.abstract|\.full\.pdf|\.pdf)?/?$", "", doi)
+        return "doi", doi
+    if m := re.search(r"\bPMC\d{4,9}\b", t, re.I):
+        return "pmcid", m.group(0).upper()
+    if m := re.fullmatch(
+        r"(?:pmid:?\s*|https?://pubmed\.ncbi\.nlm\.nih\.gov/|https?://europepmc\.org/(?:abstract|article)/MED/)?(\d{1,9})/?",
+        t, re.I,
+    ):  # fmt: skip
         return "pmid", m.group(1)
-    raise InvalidIdentifier(f"Identifiant non reconnu : « {text} » (attendu : DOI ou PMID)")
+    if re.match(r"https?://[^\s/]+\.[^\s/]+", t):
+        return "url", t
+    raise InvalidIdentifier(f"Identifiant non reconnu : « {text} » (attendu : DOI, PMID, PMCID, arXiv ou URL)")
 
 
 def find_by_identifiers(conn: sqlite3.Connection, identifiers: dict[str, str]) -> int | None:
@@ -122,15 +138,48 @@ def _attempt(warnings: list[str], fn: Callable, *args):
         return None
 
 
+def identifier_from_page(url: str) -> tuple[str, str]:
+    """Lit une page web d'article et y cherche son identifiant (balises citation_doi, citation_pmid, DC)."""
+    response = http.get(url)
+    if response is None:
+        raise NotFound(f"Page introuvable : {url}")
+    page = response.text[:2_000_000]
+    for name in ("citation_doi", "dc.identifier", "prism.doi", "citation_pmid"):
+        for meta in re.findall(rf"<meta[^>]+name=[\"']{re.escape(name)}[\"'][^>]*>", page, re.I):
+            if m := re.search(r"content=[\"']([^\"']+)", meta):
+                try:
+                    found = parse_identifier(("pmid:" if name == "citation_pmid" else "") + m.group(1))
+                except InvalidIdentifier:
+                    continue
+                if found[0] != "url":
+                    return found
+    raise NotFound(f"Aucun DOI ni PMID trouvé sur la page {url}")
+
+
 def fetch(scheme: str, value: str) -> tuple[dict, list[str]]:
     """Notice complète depuis PubMed (prioritaire : MeSH, résumé structuré) complétée par Crossref.
+    arXiv a sa propre source ; un PMCID est converti en PMID ; une URL est d'abord lue pour y trouver l'identifiant.
 
     Une source injoignable n'empêche pas l'import si l'autre répond : l'incident est renvoyé en avertissement.
     """
+    if scheme == "url":
+        return fetch(*identifier_from_page(value))
+    if scheme == "arxiv":
+        rec = arxiv.fetch(value)
+        if rec is None:
+            raise NotFound(f"Aucune notice arXiv {value}")
+        return rec, []
     warnings: list[str] = []
+    if scheme == "pmcid":
+        pmid = pubmed.find_pmid(f"{value}[pmcid]")
+        if pmid is None:
+            raise NotFound(f"Aucune notice PubMed pour {value}")
+        rec, warnings = fetch("pmid", pmid)
+        rec["identifiers"].setdefault("pmcid", value)
+        return rec, warnings
     if scheme == "doi":
         cr = _attempt(warnings, crossref.fetch, value)
-        pmid = _attempt(warnings, pubmed.find_pmid_by_doi, value)
+        pmid = _attempt(warnings, pubmed.find_pmid, f"{value}[doi]")
         pm = _attempt(warnings, pubmed.fetch, pmid) if pmid else None
     else:
         pm = _attempt(warnings, pubmed.fetch, value)
@@ -178,7 +227,8 @@ def _insert_subjects(conn: sqlite3.Connection, work_id: int, subjects: list[dict
 
 def _insert(conn: sqlite3.Connection, rec: dict, client: str) -> int:
     cols = ["citekey", "fingerprint", *FIELDS]
-    values = [unique_citekey(conn, citekey_base(rec)), fingerprint(rec), *(rec.get(f) for f in FIELDS)]
+    print_key = fingerprint(rec)
+    values = [unique_citekey(conn, citekey_base(rec)), print_key, *(rec.get(f) for f in FIELDS)]
     work_id = conn.execute(
         f"INSERT INTO works ({', '.join(cols)}) VALUES ({', '.join('?' * len(cols))})", values
     ).lastrowid
@@ -189,6 +239,13 @@ def _insert(conn: sqlite3.Connection, rec: dict, client: str) -> int:
     _insert_authors(conn, work_id, rec["authors"])
     _insert_subjects(conn, work_id, rec["subjects"])
     _log(conn, work_id, client, "create", new=rec)
+    # Même titre, même année, même premier auteur, mais aucun identifiant commun : doublon probable, à confirmer.
+    conn.execute(
+        "INSERT OR IGNORE INTO dedup_candidates (work_a, work_b, reason)"
+        " SELECT min(id, ?), max(id, ?), 'fingerprint' FROM works WHERE fingerprint = ? AND id <> ?",
+        (work_id, work_id, print_key, work_id),
+    )
+    library.index_work(conn, work_id)
     return work_id
 
 
@@ -217,32 +274,115 @@ def _complete(conn: sqlite3.Connection, work_id: int, rec: dict, client: str) ->
         changed = True
     if changed:
         conn.execute("UPDATE works SET updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = ?", (work_id,))
+        library.index_work(conn, work_id)
+
+
+def add_record(conn: sqlite3.Connection, rec: dict, client: str = "api") -> tuple[int, bool]:
+    """Enregistre une notice (format interne). Si l'un de ses identifiants est déjà connu, la notice existante
+    est complétée au lieu d'être dupliquée. Renvoie (id, créée ?)."""
+    rec = {"authors": [], "subjects": [], "identifiers": {}, **rec}
+    if not (rec.get("title") or "").strip():
+        raise ValueError("Une notice doit avoir un titre")
+    try:
+        with db.transaction(conn):
+            work_id = find_by_identifiers(conn, rec["identifiers"])
+            if work_id is None and not rec["identifiers"]:
+                # Sans identifiant, même titre + année + premier auteur : c'est la même notice (ré-import d'un
+                # fichier). Avec un identifiant nouveau, la notice est créée et le doublon seulement signalé.
+                row = conn.execute("SELECT id FROM works WHERE fingerprint = ? ORDER BY id LIMIT 1", (fingerprint(rec),)).fetchone()
+                work_id = row[0] if row else None
+            if work_id:
+                _complete(conn, work_id, rec, client)
+                return work_id, False
+            return _insert(conn, rec, client), True
+    except sqlite3.IntegrityError:
+        # Import concurrent du même article : l'autre l'a inséré entre-temps.
+        if work_id := find_by_identifiers(conn, rec["identifiers"]):
+            return work_id, False
+        raise
 
 
 def add_by_identifier(conn: sqlite3.Connection, text: str, client: str = "api") -> tuple[dict, bool, list[str]]:
-    """Importe un article par DOI ou PMID. Renvoie (notice, créée ?, avertissements).
+    """Importe un article par DOI, PMID, PMCID, arXiv ou URL. Renvoie (notice, créée ?, avertissements).
 
     Si l'article est déjà présent (sous n'importe lequel de ses identifiants), aucune notice n'est créée :
     la notice existante est complétée avec les informations nouvelles.
     """
     scheme, value = parse_identifier(text)
-    if work_id := find_by_identifiers(conn, {scheme: value}):
+    if scheme != "url" and (work_id := find_by_identifiers(conn, {scheme: value})):
         return get_work(conn, work_id), False, []
     rec, warnings = fetch(scheme, value)
-    rec["identifiers"].setdefault(scheme, value)
-    try:
-        with db.transaction(conn):
-            if work_id := find_by_identifiers(conn, rec["identifiers"]):
-                _complete(conn, work_id, rec, client)
-                created = False
-            else:
-                work_id, created = _insert(conn, rec, client), True
-    except sqlite3.IntegrityError:
-        # Import concurrent du même article : l'autre l'a inséré entre-temps.
-        work_id, created = find_by_identifiers(conn, rec["identifiers"]), False
-        if work_id is None:
-            raise
+    if scheme != "url":
+        rec["identifiers"].setdefault(scheme, value)
+    work_id, created = add_record(conn, rec, client)
     return get_work(conn, work_id), created, warnings
+
+
+def add_manual(conn: sqlite3.Connection, data: dict, client: str = "api") -> tuple[dict, bool]:
+    """Saisie manuelle (article sans identifiant, ou PDF non reconnu). `authors` : liste de « Nom, Prénom »."""
+    rec = {field: data.get(field) for field in FIELDS}
+    rec["csl_type"] = rec["csl_type"] or "article-journal"
+    rec["authors"] = []
+    for name in data.get("authors") or []:
+        family, _, given = name.partition(",")
+        rec["authors"].append({"family": family.strip(), "given": given.strip() or None, "orcid": None})
+    rec["identifiers"] = {}
+    for text in data.get("identifiers") or []:
+        scheme, value = parse_identifier(text)
+        rec["identifiers"][scheme] = value
+    rec["subjects"] = [{"scheme": "keyword", "term": k, "ui": None, "major": False} for k in data.get("keywords") or []]
+    work_id, created = add_record(conn, rec, client)
+    return get_work(conn, work_id), created
+
+
+# --- Doublons ------------------------------------------------------------------------
+
+
+def duplicates(conn: sqlite3.Connection) -> list[dict]:
+    """Paires de notices probablement identiques (même titre, année, premier auteur), à fusionner ou écarter."""
+    pairs = conn.execute("SELECT work_a, work_b, reason, created_at FROM dedup_candidates WHERE status = 'open' ORDER BY created_at")
+    return [{"reason": r["reason"], "created_at": r["created_at"],
+             "works": [get_work(conn, r["work_a"]), get_work(conn, r["work_b"])]} for r in pairs.fetchall()]  # fmt: skip
+
+
+def dismiss_duplicate(conn: sqlite3.Connection, a: str | int, b: str | int) -> None:
+    ids = sorted((resolve(conn, a), resolve(conn, b)))
+    if not conn.execute("UPDATE dedup_candidates SET status = 'dismissed' WHERE work_a = ? AND work_b = ?", ids).rowcount:
+        raise NotFound("Cette paire n'est pas signalée comme doublon")
+
+
+def merge_works(conn: sqlite3.Connection, home: Path, keep: str | int, drop: str | int, client: str = "api") -> dict:
+    """Fusionne `drop` dans `keep` : champs vides complétés, identifiants, sujets, fichiers et note repris,
+    journal des modifications conservé. La notice `drop` est supprimée ; sa clé de citation ne sert plus."""
+    from . import notes  # import local : notes importe ce module
+
+    keep_id, drop_id = resolve(conn, keep), resolve(conn, drop)
+    if keep_id == drop_id:
+        raise ValueError("Une notice ne peut pas être fusionnée avec elle-même")
+    old = get_work(conn, drop_id)
+    with db.transaction(conn):
+        row = conn.execute("SELECT * FROM works WHERE id = ?", (keep_id,)).fetchone()
+        for field in FIELDS:
+            if row[field] in (None, "") and old[field] not in (None, ""):
+                conn.execute(f"UPDATE works SET {field} = ? WHERE id = ?", (old[field], keep_id))
+        for column in ("read_status", "rating"):
+            if row[column] is None and old[column] is not None:
+                conn.execute(f"UPDATE works SET {column} = ? WHERE id = ?", (old[column], keep_id))
+        conn.execute("UPDATE OR IGNORE identifiers SET work_id = ? WHERE work_id = ?", (keep_id, drop_id))
+        if not conn.execute("SELECT 1 FROM work_authors WHERE work_id = ?", (keep_id,)).fetchone():
+            conn.execute("UPDATE work_authors SET work_id = ? WHERE work_id = ?", (keep_id, drop_id))
+        conn.execute("INSERT OR IGNORE INTO work_subjects SELECT ?, subject_id, major FROM work_subjects WHERE work_id = ?", (keep_id, drop_id))
+        moved = [r[0] for r in conn.execute("SELECT sha256 FROM work_files WHERE work_id = ?", (drop_id,))]
+        conn.execute("UPDATE OR IGNORE work_files SET work_id = ? WHERE work_id = ?", (keep_id, drop_id))
+        notes.absorb(conn, home, keep_id, drop_id)
+        conn.execute("UPDATE changes SET work_id = ? WHERE work_id = ?", (keep_id, drop_id))
+        _log(conn, keep_id, client, "merge", None, old, None)
+        conn.execute("DELETE FROM works WHERE id = ?", (drop_id,))
+        conn.execute("UPDATE works SET updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = ?", (keep_id,))
+        library.index_work(conn, keep_id)
+        for sha in moved:
+            library.index_fulltext(conn, home, sha)
+    return get_work(conn, keep_id)
 
 
 # --- Lecture -------------------------------------------------------------------------

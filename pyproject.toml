@@ -5,8 +5,10 @@ description = "Gestionnaire de bibliographie local, autonome et ouvert"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "bibtexparser>=1.4,<2",
     "fastapi>=0.162.0",
     "httpx>=0.28.1",
+    "pypdfium2>=5.15.0",
     "typer>=0.28.0",
     "uvicorn>=0.54.0",
 ]

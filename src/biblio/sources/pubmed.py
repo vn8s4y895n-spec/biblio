@@ -40,8 +40,9 @@ def _params(**params) -> dict:
     return params
 
 
-def find_pmid_by_doi(doi: str) -> str | None:
-    response = http.get(EUTILS + "esearch.fcgi", _params(db="pubmed", retmode="json", term=f"{doi}[doi]"))
+def find_pmid(term: str) -> str | None:
+    """PMID unique correspondant à une requête exacte (« 10.1001/…[doi] », « PMC123[pmcid] »), sinon None."""
+    response = http.get(EUTILS + "esearch.fcgi", _params(db="pubmed", retmode="json", term=term))
     ids = response.json()["esearchresult"]["idlist"] if response else []
     return ids[0] if len(ids) == 1 else None
 

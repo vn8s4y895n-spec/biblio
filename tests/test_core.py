@@ -22,7 +22,7 @@ def test_parse_identifier(text, expected):
     assert core.parse_identifier(text) == expected
 
 
-@pytest.mark.parametrize("text", ["", "bonjour", "PMC6143100", "10.12/x"])
+@pytest.mark.parametrize("text", ["", "bonjour", "PMC12", "10.12/x", "ftp://exemple"])
 def test_parse_identifier_rejects(text):
     with pytest.raises(core.InvalidIdentifier):
         core.parse_identifier(text)

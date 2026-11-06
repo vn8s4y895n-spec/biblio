@@ -77,3 +77,28 @@ def test_search_command(cfg):
 def test_oa_command(cfg):
     out = runner.invoke(cli.app, ["oa", "PMC3244693"])
     assert "europepmc.org/articles/PMC3244693?pdf=render" in out.output
+
+
+def test_import_find_note_commands(cfg, tmp_path):
+    from conftest import MERINO_PDF, make_pdf
+    from test_library import RIS
+
+    (tmp_path / "merino.pdf").write_bytes(MERINO_PDF)
+    (tmp_path / "biblio.ris").write_text(RIS)
+    (tmp_path / "inconnu.pdf").write_bytes(make_pdf(["Household acquisition and transmission of ESBL Enterobacterales study"]))
+    out = runner.invoke(cli.app, ["import", str(tmp_path / "merino.pdf"), str(tmp_path / "biblio.ris"), str(tmp_path / "inconnu.pdf")])
+    assert out.exit_code == 0, out.output
+    assert "merino.pdf : rattaché → [harris2018effect]" in out.output and "(ris) : 2 notices lues, 2 créées" in out.output
+    assert "inconnu.pdf : notice non trouvée" in out.output and "biblio attach" in out.output
+    assert "1 PDF en attente" in runner.invoke(cli.app, ["files"]).output
+    sha = runner.invoke(cli.app, ["files"]).output.split()[0]
+    out = runner.invoke(cli.app, ["attach", sha, "harris2018effect"])
+    assert "rattaché à [harris2018effect]" in out.output, out.output
+
+    out = runner.invoke(cli.app, ["find", "mortality meropenem"])
+    assert "harris2018effect" in out.output and "[PDF p." in out.output
+    out = runner.invoke(cli.app, ["note", "harris2018effect", "--set", "Cf. [[martischang2020household]]"])
+    assert "Note enregistrée" in out.output and "→ cite : martischang2020household" in out.output
+    assert "← citée par : harris2018effect" in runner.invoke(cli.app, ["note", "martischang2020household"]).output
+    assert "0 paire(s)" in runner.invoke(cli.app, ["duplicates"]).output
+    assert "library/" in runner.invoke(cli.app, ["pdf", "harris2018effect"]).output

@@ -20,6 +20,20 @@ def search(q: Query) -> list[dict]:
     return [parse(w) for w in response.json()["results"] if w.get("title")] if response else []
 
 
+def find_pdf(doi: str) -> dict | None:
+    """Meilleure version libre connue d'OpenAlex (qui intègre les données d'Unpaywall), sans e-mail requis."""
+    params = {"api_key": key} if (key := http.api_keys.get("openalex")) else {}
+    response = http.get(f"{API}/doi:{doi}", params, ttl=7 * 24 * 3600)
+    work = response.json() if response else {}
+    # La « meilleure » version libre n'a pas toujours de lien PDF : les autres versions connues (dépôts) en ont parfois.
+    locations = [work.get("best_oa_location") or {}] + [loc for loc in work.get("locations") or [] if loc.get("is_oa")]
+    best = next((loc for loc in locations if loc.get("pdf_url")), None)
+    if best is None:
+        return None
+    return {"pdf_url": best["pdf_url"], "landing_url": best.get("landing_page_url"), "license": best.get("license"),
+            "version": best.get("version"), "host_type": None, "source": "openalex"}  # fmt: skip
+
+
 def _abstract(index: dict | None) -> str | None:
     """OpenAlex fournit le résumé en index inversé {mot: [positions]}."""
     if not index:

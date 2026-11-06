@@ -4,7 +4,7 @@ SQLite en mode WAL, clés étrangères actives. Les migrations sont dans `src/bi
 
 Ce document décrit le schéma **réellement en place**. Les tables prévues pour les phases suivantes sont dans [PLAN.md](PLAN.md).
 
-## `schema_migrations` (version actuelle : 3)
+## `schema_migrations` (version actuelle : 4)
 
 | Colonne | Type | Rôle |
 |---|---|---|
@@ -78,6 +78,46 @@ Les auteurs sont stockés par article, sans table d'auteurs commune. Fusionner l
 | op | `create`, `update` |
 | field | Champ modifié (`abstract`, `identifiers.pmid`, `authors`…), NULL pour `create` |
 | old_json, new_json | Valeurs avant et après, en JSON (notice complète pour `create`) |
+
+Les identifiants peuvent aussi être `arxiv`, `url` (saisie manuelle d'une ressource web) et `s2` / `openalex`.
+
+## Fichiers, passages, notes, doublons (migration 4)
+
+### `files` : un PDF, rangé dans `library/<sha[0:2]>/<sha[2:4]>/<sha256>.pdf`
+
+| Colonne | Rôle |
+|---|---|
+| sha256 | Empreinte du contenu (PK) : un même PDF n'est stocké qu'une fois |
+| size, mime, pages | |
+| original_name | Nom du fichier déposé, ou fin de l'URL de téléchargement |
+| added_at | |
+| text_status | `pending`, `done`, `empty` (PDF scanné sans texte), `error` |
+
+### `work_files` : rattachement d'un PDF à une notice
+
+`work_id`, `sha256`, `role` (`main`), `source_url` (adresse de la version libre téléchargée, NULL si déposé), `added_at`. Un PDF sans ligne ici attend une saisie assistée.
+
+### `passages` et `passages_fts` : unités de recherche
+
+| Colonne | Rôle |
+|---|---|
+| id, work_id | |
+| origin | `metadata` (titre, auteurs, revue, année, MeSH), `abstract` (une section par passage), `fulltext`, `note` |
+| sha256, page | Pour `fulltext` : fichier et page d'origine (à partir de 1) |
+| ord | Ordre dans l'origine |
+| text | ~1 200 caractères au plus, coupés aux limites de phrases |
+
+`passages_fts` est l'index plein texte FTS5 (BM25) de `passages.text`, tenu à jour par des déclencheurs. Le tokenizer est `porter unicode61 remove_diacritics 2` : accents ignorés, racinisation anglaise. Une seule table d'index couvre métadonnées, résumés, notes et textes intégraux, au lieu des deux prévues au plan.
+
+### `notes` et `note_links`
+
+Le texte d'une note vit dans `notes/<citekey>.md`, avec un en-tête YAML (citekey, title, year, doi) ; la base n'en garde que l'index :
+- `notes` : `work_id` (PK), `path` (relatif à `notes/`), `content_sha` (empreinte, pour repérer une modification extérieure), `updated_at` ;
+- `note_links` : `(work_id, target_citekey)`, un lien `[[clé]]` écrit dans la note de `work_id`. Les rétroliens sont la lecture inverse.
+
+### `dedup_candidates` : doublons probables
+
+`(work_a, work_b)` avec `work_a < work_b`, `reason` (`fingerprint`), `status` (`open`, `dismissed`), `created_at`. Une ligne est créée quand une nouvelle notice a la même empreinte (titre, année, premier auteur) qu'une notice existante sans partager d'identifiant. La fusion (`merge_works`) reprend identifiants, sujets, fichiers, note et historique dans la notice gardée, puis supprime l'autre.
 
 ## Liste des revues recommandées (migration 2)
 

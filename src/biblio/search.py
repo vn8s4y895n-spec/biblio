@@ -147,13 +147,28 @@ def search(conn: sqlite3.Connection, text: str, sources: list[str] | None = None
     }
 
 
-def find_open_access(doi: str | None = None, pmcid: str | None = None) -> dict | None:
-    """Version libre et légale d'un article : PMC (via Europe PMC), sinon Unpaywall."""
+def open_access_candidates(doi: str | None = None, pmcid: str | None = None) -> list[dict]:
+    """Versions libres et légales connues d'un article, de la plus sûre à la moins sûre : PMC (via Europe PMC),
+    OpenAlex, Unpaywall (seulement si un e-mail de contact est configuré). Une source injoignable est passée."""
+    if not (doi or pmcid):
+        raise ValueError("Indiquer un DOI ou un PMCID")
+    found = []
     if pmcid:
         pmcid = pmcid.upper()
-        return {"pdf_url": f"https://europepmc.org/articles/{pmcid}?pdf=render",
-                "landing_url": f"https://europepmc.org/article/PMC/{pmcid}", "license": None,
-                "version": "publishedVersion", "host_type": "repository", "source": "pmc"}  # fmt: skip
-    if doi:
-        return unpaywall.find(doi)
-    raise ValueError("Indiquer un DOI ou un PMCID")
+        found.append({"pdf_url": f"https://europepmc.org/articles/{pmcid}?pdf=render",
+                      "landing_url": f"https://europepmc.org/article/PMC/{pmcid}", "license": None,
+                      "version": "publishedVersion", "host_type": "repository", "source": "pmc"})  # fmt: skip
+    lookups = [openalex.find_pdf] + ([unpaywall.find] if http.contact_email else [])
+    for lookup in lookups if doi else []:
+        try:
+            if (hit := lookup(doi)) and hit.get("pdf_url") and hit["pdf_url"] not in {f["pdf_url"] for f in found}:
+                found.append(hit)
+        except http.SourceError as exc:
+            log.info("Accès libre : %s", exc)
+    return found
+
+
+def find_open_access(doi: str | None = None, pmcid: str | None = None) -> dict | None:
+    """Meilleure version libre et légale connue, ou None."""
+    candidates = open_access_candidates(doi, pmcid)
+    return candidates[0] if candidates else None

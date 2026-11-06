@@ -169,8 +169,7 @@ def test_429_is_retried_once(monkeypatch):
 
 def test_open_access(monkeypatch):
     assert search.find_open_access(pmcid="pmc3244693")["pdf_url"] == "https://europepmc.org/articles/PMC3244693?pdf=render"
-    with pytest.raises(http.SourceError, match="e-mail"):
-        search.find_open_access(doi="10.1016/j.cmi.2016.08.021")
+    assert search.find_open_access(doi="10.1016/j.cmi.2016.08.021") is None  # sans e-mail, pas d'Unpaywall
     monkeypatch.setattr(http, "contact_email", "test@example.org")
     found = search.find_open_access(doi="10.1016/j.cmi.2016.08.021")
     assert found["pdf_url"] == "https://repository.example/haverkate.pdf" and found["version"] == "acceptedVersion"
