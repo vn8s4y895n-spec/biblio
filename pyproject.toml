@@ -1,0 +1,27 @@
+[project]
+name = "biblio"
+version = "0.1.0"
+description = "Gestionnaire de bibliographie local, autonome et ouvert"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi>=0.162.0",
+    "httpx>=0.28.1",
+    "typer>=0.28.0",
+    "uvicorn>=0.54.0",
+]
+
+[project.scripts]
+biblio = "biblio:main"
+
+[build-system]
+requires = ["uv_build>=0.13.7,<0.14.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.2.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
