@@ -9,3 +9,6 @@ wheels/
 # Virtual environments
 .venv
 .venv.nosync
+
+# Graphe graphify (généré)
+graphify-out/
