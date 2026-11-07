@@ -97,7 +97,7 @@
       synthesis = null;
       if (aiEnabled && out.sources.length) write(ticket);
       selected = 0;
-      if (location.hash.startsWith("#/search/")) history.replaceState(null, "", "#/");
+      if (location.hash.startsWith("#/search/")) window.history.replaceState(null, "", "#/");
     } catch (e) {
       if (ticket === runs) error = e.message;
     } finally {
@@ -148,7 +148,7 @@
       },
     });
     savedInfo = s;
-    history.replaceState(null, "", `#/search/${s.id}`);
+    window.history.replaceState(null, "", `#/search/${s.id}`);
     toast($t("ask.saved"), "ok");
     refreshSaved();
   }
@@ -178,9 +178,12 @@
     if (result.sources[i].in_library) sendToZotero({ works: [result.sources[i].in_library] });
   }
 
+  // Veille : la recherche est enregistrée au besoin, puis relancée chaque semaine (nouveaux articles dans Veille).
   async function follow(on) {
+    if (!savedInfo) await save();
     savedInfo = await api(`/searches/${savedInfo.id}/watch`, { method: "PUT", body: { days: on ? 7 : null } });
-    toast(on ? $t("watch.followed") : $t("watch.unfollowed"), "ok");
+    toast(on ? $t("watch.followed") : $t("watch.unfollowed"), "ok", 6000);
+    refreshSaved();
   }
 
   function sendPackage() {
@@ -342,11 +345,11 @@
 
       <div class="row wrap">
         <button onclick={save} disabled={!!savedInfo || !result.sources.length}>{savedInfo ? `✓ ${$t("ask.saved_short")}` : $t("ask.save")}</button>
-        {#if savedInfo && savedInfo.scope === "online"}
-          <label class="row small follow">
-            <input type="checkbox" checked={!!savedInfo.watch_days} onchange={(e) => follow(e.target.checked)} />
-            {$t("watch.follow")}
-          </label>
+        {#if result.scope === "online" && (!savedInfo || savedInfo.scope === "online")}
+          <button class:primary={!savedInfo?.watch_days} disabled={!result.sources.length && !savedInfo}
+            title={$t("watch.follow_help")} onclick={() => follow(!savedInfo?.watch_days)}>
+            {savedInfo?.watch_days ? `🔔 ${$t("watch.following")}` : `🔔 ${$t("watch.follow_button")}`}
+          </button>
         {/if}
         {#if savedInfo}
           <button onclick={sendPackage} title={$t("package.search_help")}>{$t("package.send_search")}</button>

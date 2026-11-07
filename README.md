@@ -75,7 +75,7 @@ uv run biblio app --browser    # même interface dans le navigateur
 - **Glisser-déposer** n'importe où : PDF, ou fichiers .bib, .ris, .nbib, .json.
 - **Citer, exporter, envoyer** : la fiche affiche la référence dans le style choisi (Vancouver par défaut) ; boutons et sélection multiple pour exporter (BibTeX, RIS, CSL-JSON, liste Markdown), envoyer dans Zotero ou créer un paquet `.biblio`. Une recherche enregistrée s'envoie aussi en paquet. Un paquet `.biblio` déposé sur la fenêtre s'ouvre en aperçu avant import.
 - **Veille** (onglet de l'en-tête, avec le nombre d'alertes non lues) :
-  - **recherches suivies** : une recherche enregistrée se suit (chaque jour, semaine ou mois) ; seuls les articles jamais vus sont signalés, avec un bouton d'ajout ;
+  - **recherches suivies** : sur l'écran Question, le bouton « 🔔 Suivre en veille » enregistre la recherche et la relance chaque semaine (fréquence modifiable dans Veille : jour, semaine, mois) ; seuls les articles jamais vus sont signalés, avec un bouton d'ajout ;
   - **articles de la bibliothèque**, vérifiés chaque semaine : rétractation, expression de préoccupation, correction (Crossref, qui intègre les données de Retraction Watch), et version publiée d'un preprint (Crossref, et l'API de bioRxiv / medRxiv, qui ne déclarent pas ce lien à Crossref). Un preprint se remplace d'un clic par sa version publiée (fusion ; son DOI reste connu sous `preprint-doi`) ;
   - un article rétracté porte un badge « ⚠ Rétracté », un bandeau dans sa fiche, et un filtre dans la bibliothèque.
 - **Articles proches** (fiche) : articles du même sujet et articles récents qui le citent (OpenAlex).

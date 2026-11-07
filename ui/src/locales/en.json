@@ -347,7 +347,6 @@
     "imported": "Package imported: {created} added, {completed} completed, {pdfs} PDFs, {notes} notes"
   },
   "watch": {
-    "follow": "Follow (weekly)",
     "followed": "Search followed: new articles will show in Watch",
     "unfollowed": "Search no longer followed",
     "retracted": "Retracted",
@@ -387,7 +386,10 @@
     "no_searches": "No saved searches. Save a search from the Ask screen, then choose its frequency here.",
     "last_run": "run on {date}",
     "run_now": "Run now",
-    "read_notice": "read the notice"
+    "read_notice": "read the notice",
+    "follow_button": "Watch",
+    "following": "Watched · stop",
+    "follow_help": "Rerun this search every week: new articles will show in Watch (the search is saved along the way)"
   },
   "ai": {
     "answer": "Answer written by AI",

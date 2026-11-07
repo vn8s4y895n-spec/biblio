@@ -347,7 +347,6 @@
     "imported": "Paquet importé : {created} ajoutés, {completed} complétés, {pdfs} PDF, {notes} notes"
   },
   "watch": {
-    "follow": "Suivre (chaque semaine)",
     "followed": "Recherche suivie : les nouveaux articles seront signalés dans Veille",
     "unfollowed": "Recherche plus suivie",
     "retracted": "Rétracté",
@@ -387,7 +386,10 @@
     "no_searches": "Aucune recherche enregistrée. Enregistre une recherche depuis l'écran Question, puis choisis sa fréquence ici.",
     "last_run": "relancée le {date}",
     "run_now": "Relancer",
-    "read_notice": "lire l'avis"
+    "read_notice": "lire l'avis",
+    "follow_button": "Suivre en veille",
+    "following": "Suivie en veille · arrêter",
+    "follow_help": "Relancer cette recherche chaque semaine : les nouveaux articles apparaîtront dans Veille (la recherche est enregistrée au passage)"
   },
   "ai": {
     "answer": "Réponse rédigée par l'IA",
