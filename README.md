@@ -65,7 +65,10 @@ uv run biblio app --browser    # même interface dans le navigateur
 - **Enregistrer la recherche** garde la question, la réponse et les sources ; les recherches enregistrées s'affichent en dessous.
 - **Bibliothèque** en trois panneaux redimensionnables : filtres (statut de lecture, favoris, collections, tags, statut de revue), liste (recherche plein texte et par le sens, sélection multiple, glisser une notice sur une collection), fiche (statut de lecture, favori, note étoilée, tags, collections, résumé, MeSH, **lecteur PDF**, **note Markdown**).
   - **Vue par défaut, « Sans statut »** : les articles à trier, c'est-à-dire sans statut de lecture et rangés dans aucune collection (un tag ne compte pas). Un article rangé ou lu en sort, sauf s'il est **favori** (♥) : les favoris y restent, et sont en tête de toutes les listes.
-  - **Sélection multiple** : statut de lecture (à lire, à relire, lu, sans statut), favori, collection ou tag, export, Zotero, paquet.
+  - **Sélection multiple** : statut de lecture (à lire, à relire, lu, sans statut), favori, ajouter à une collection ou un tag, **déplacer vers** une collection (l'article quitte les autres), **retirer de la collection** affichée, export, Zotero, paquet.
+  - **Liste** : tri (ajout récent, année, auteur, titre, note ; les favoris restent en tête), **affichage compact** (☰, une ligne par article), **filtres** combinables avec la vue choisie (années, type d'étude, avec ou sans PDF).
+  - **Colonne de gauche** : effectif de chaque vue ; collections en arborescence repliable (« Parent / Enfant »).
+  - **Clavier** : `f` favori, `1` à lire, `2` à relire, `3` lu, `0` sans statut (sur l'article ouvert, ou sur la sélection).
 - **Glisser-déposer** n'importe où : PDF, ou fichiers .bib, .ris, .nbib, .json.
 - **Citer, exporter, envoyer** : la fiche affiche la référence dans le style choisi (Vancouver par défaut) ; boutons et sélection multiple pour exporter (BibTeX, RIS, CSL-JSON, liste Markdown), envoyer dans Zotero ou créer un paquet `.biblio`. Une recherche enregistrée s'envoie aussi en paquet. Un paquet `.biblio` déposé sur la fenêtre s'ouvre en aperçu avant import.
 - **Veille** (onglet de l'en-tête, avec le nombre d'alertes non lues) :
@@ -314,6 +317,7 @@ curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:8765/api/v1/works/10.100
 | GET / POST | `/api/v1/styles` | Styles disponibles / ajouter un .csl (corps brut, `?filename=`) |
 | POST | `/api/v1/export` | Exporter (`{"works"` ou `"label", "format": "bibtex"\|"ris"\|"csljson"\|"markdown", "style"}` ; vide : toute la bibliothèque) |
 | GET / POST | `/api/v1/zotero` | Zotero ouvert ? / envoyer (`{"works"` ou `"label", "pdf"}` ; 503 si Zotero est fermé) |
+| GET | `/api/v1/library/counts` | Effectifs des vues (sans statut, à lire, à relire, lu, favoris, tout), années et types d'étude présents |
 | POST | `/api/v1/import/zotero-rdf` | Importer un export Zotero RDF : `{"path"}` du fichier `.rdf` (notices, PDF, notes, tags, collections) |
 | POST | `/api/v1/packages` | Créer un paquet .biblio (`{"works"` ou `"label", "title", "searches"}`) |
 | POST | `/api/v1/packages/preview` | Aperçu d'un paquet (corps brut) |

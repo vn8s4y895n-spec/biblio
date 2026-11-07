@@ -130,6 +130,7 @@ class LabelRename(BaseModel):
 class LabelWorks(BaseModel):
     works: list[str]  # id, clé, DOI ou PMID
     remove: bool = False
+    move: bool = False  # collection : retirer d'abord les notices de leurs autres collections
 
 
 class AskRequest(BaseModel):
@@ -559,6 +560,8 @@ def delete_label(label_id: int, conn: Conn):
 
 @router.post("/labels/{label_id}/works", summary="Ranger des notices dans une collection / un tag (ou les en retirer)")
 def label_works(label_id: int, body: LabelWorks, conn: Conn, client: Client):
+    if body.move:
+        organize.leave_collections(conn, body.works, client, keep=label_id)
     return {"changed": organize.set_label(conn, label_id, body.works, not body.remove, client)}
 
 
@@ -694,9 +697,20 @@ def list_works(
     favorite: Annotated[bool, Query(description="Seulement les favoris")] = False,
     inbox: Annotated[bool, Query(description="Vue « Sans statut » : sans statut de lecture et pas encore rangés dans "
                                              "une collection, plus les favoris")] = False,  # fmt: skip
+    sort: Literal[tuple(core.SORTS)] = "added",  # type: ignore[valid-type]
+    year_from: int | None = None,
+    year_to: int | None = None,
+    study_type: Annotated[list[str] | None, Query(description="Type d'étude (répétable)")] = None,
+    has_pdf: Annotated[bool | None, Query(description="true : avec PDF ; false : sans PDF")] = None,
 ):
-    """Les favoris d'abord, puis les plus récents."""
-    return core.list_works(conn, limit, offset, journal_status, label, read_status, retracted, favorite, inbox)
+    """Les favoris d'abord, puis selon `sort`."""
+    return core.list_works(conn, limit, offset, journal_status, label, read_status, retracted, favorite, inbox, sort,
+                           year_from, year_to, study_type, has_pdf)  # fmt: skip
+
+
+@router.get("/library/counts", summary="Effectifs des vues de la bibliothèque, années et types d'étude présents")
+def library_counts(conn: Conn):
+    return core.library_counts(conn)
 
 
 SourceName = Literal[tuple(search.SOURCES)]  # type: ignore[valid-type]

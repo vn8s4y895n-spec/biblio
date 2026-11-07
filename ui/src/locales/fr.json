@@ -26,7 +26,9 @@
     "search": "chercher",
     "navigate": "notice suivante / précédente",
     "select": "sélectionner",
-    "cite": "copier la citation"
+    "cite": "copier la citation",
+    "favorite": "favori",
+    "status": "à lire / à relire / lu / sans statut"
   },
   "ask": {
     "placeholder": "Pose ta question, en français ou en anglais (ou en syntaxe PubMed)…",
@@ -158,7 +160,25 @@
     "unfavorite": "Retirer des favoris",
     "set_status": "Statut de lecture…",
     "inbox_help": "Articles à trier : sans statut de lecture et rangés dans aucune collection. Les favoris y restent toujours, en tête.",
-    "inbox_empty": "Tout est trié : chaque article a un statut de lecture ou une collection. Les favoris s'affichent ici."
+    "inbox_empty": "Tout est trié : chaque article a un statut de lecture ou une collection. Les favoris s'affichent ici.",
+    "sort": "Trier",
+    "sort_added": "Ajout récent",
+    "sort_year": "Année",
+    "sort_author": "Auteur",
+    "sort_title": "Titre",
+    "sort_rating": "Note",
+    "filters": "Filtres",
+    "compact": "Affichage compact (une ligne par article)",
+    "years": "Années",
+    "study_type": "Type d'étude",
+    "any_study": "Tous types d'étude",
+    "pdf_any": "Avec ou sans PDF",
+    "pdf_yes": "Avec PDF",
+    "pdf_no": "Sans PDF",
+    "clear_filters": "Effacer",
+    "fold": "Replier ou déplier",
+    "move_to": "Déplacer vers…",
+    "remove_from": "Retirer de la collection"
   },
   "detail": {
     "record": "Notice",

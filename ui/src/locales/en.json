@@ -26,7 +26,9 @@
     "search": "search",
     "navigate": "next / previous item",
     "select": "select",
-    "cite": "copy citation"
+    "cite": "copy citation",
+    "favorite": "favorite",
+    "status": "to read / to reread / read / no status"
   },
   "ask": {
     "placeholder": "Ask your question, in English or French (or in PubMed syntax)…",
@@ -158,7 +160,25 @@
     "unfavorite": "Remove from favorites",
     "set_status": "Reading status…",
     "inbox_help": "Articles to sort: no reading status and in no collection. Favorites always stay here, at the top.",
-    "inbox_empty": "Everything is sorted: each article has a reading status or a collection. Favorites show here."
+    "inbox_empty": "Everything is sorted: each article has a reading status or a collection. Favorites show here.",
+    "sort": "Sort",
+    "sort_added": "Recently added",
+    "sort_year": "Year",
+    "sort_author": "Author",
+    "sort_title": "Title",
+    "sort_rating": "Rating",
+    "filters": "Filters",
+    "compact": "Compact view (one line per article)",
+    "years": "Years",
+    "study_type": "Study type",
+    "any_study": "All study types",
+    "pdf_any": "With or without PDF",
+    "pdf_yes": "With PDF",
+    "pdf_no": "Without PDF",
+    "clear_filters": "Clear",
+    "fold": "Collapse or expand",
+    "move_to": "Move to…",
+    "remove_from": "Remove from collection"
   },
   "detail": {
     "record": "Record",

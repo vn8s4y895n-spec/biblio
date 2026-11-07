@@ -73,6 +73,12 @@ def set_label(conn: sqlite3.Connection, label_id: int, refs: list[str | int], on
     return changed
 
 
+def leave_collections(conn: sqlite3.Connection, refs: list[str | int], client: str, keep: int | None = None) -> None:
+    """Retire des notices de toutes leurs collections (sauf `keep`) : « déplacer vers » une autre collection."""
+    for row in conn.execute("SELECT id FROM labels WHERE kind = 'collection' AND id IS NOT ?", (keep,)).fetchall():
+        set_label(conn, row[0], refs, False, client)
+
+
 def update_work(conn: sqlite3.Connection, ref: str | int, changes: dict, client: str) -> dict:
     """Statut de lecture, note (1 à 5) et favori ; None efface le statut ou la note."""
     work_id = core.resolve(conn, ref)

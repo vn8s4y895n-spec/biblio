@@ -447,12 +447,34 @@ def get_work(conn: sqlite3.Connection, ref: str | int) -> dict:
     return work
 
 
+SORTS = {"added": "w.created_at DESC", "year": "w.year IS NULL, w.year DESC, w.created_at DESC",
+         "author": "first_author IS NULL, first_author COLLATE NOCASE, w.year", "title": "w.title COLLATE NOCASE",
+         "rating": "w.rating IS NULL, w.rating DESC, w.created_at DESC"}  # fmt: skip
+
+
+def library_counts(conn: sqlite3.Connection) -> dict:
+    """Effectifs de la colonne de gauche, et les années et types d'étude présents (pour les filtres)."""
+    filed = ("EXISTS (SELECT 1 FROM work_labels wl JOIN labels l ON l.id = wl.label_id"
+             " WHERE wl.work_id = w.id AND l.kind = 'collection')")  # fmt: skip
+    row = conn.execute(f"""SELECT count(*) AS all_, sum(favorite = 1 OR (read_status IS NULL AND NOT {filed})) AS inbox,
+               sum(read_status = 'to_read') AS to_read, sum(read_status = 'to_reread') AS to_reread,
+               sum(read_status = 'read') AS read, sum(favorite) AS favorite, min(year) AS year_min, max(year) AS year_max
+        FROM works w""").fetchone()  # fmt: skip
+    types = conn.execute("SELECT study_type, count(*) FROM works WHERE study_type IS NOT NULL GROUP BY study_type ORDER BY 2 DESC")
+    return {"all": row["all_"], **{k: row[k] or 0 for k in ("inbox", "to_read", "to_reread", "read", "favorite")},
+            "years": [row["year_min"], row["year_max"]], "study_types": [{"value": t, "count": n} for t, n in types]}  # fmt: skip
+
+
 def list_works(conn: sqlite3.Connection, limit: int = 50, offset: int = 0, journal_status: list[str] | None = None,
                label: int | None = None, read_status: str | None = None, retracted: bool = False,
-               favorite: bool = False, inbox: bool = False) -> dict:  # fmt: skip
+               favorite: bool = False, inbox: bool = False, sort: str = "added", year_from: int | None = None,
+               year_to: int | None = None, study_types: list[str] | None = None, has_pdf: bool | None = None) -> dict:  # fmt: skip
     """Favoris d'abord, puis les notices les plus récentes ; filtres : statut de revue (voir journals.STATUSES),
     collection ou tag (`label`), statut de lecture (`unread` : sans statut), favoris. `inbox` : les notices à trier
-    (sans statut de lecture et rangées dans aucune collection), plus les favoris."""
+    (sans statut de lecture et rangées dans aucune collection), plus les favoris. `sort` : added (ajout), year,
+    author, title ou rating ; les favoris restent en tête. Filtres combinables : années, types d'étude, avec PDF."""
+    if sort not in SORTS:
+        raise ValueError(f"Tri inconnu : {sort}")
     if unknown := set(journal_status or ()) - set(journals.STATUSES):
         raise ValueError(f"Statut de revue inconnu : {', '.join(sorted(unknown))}")
     where, params = [], []
@@ -469,6 +491,17 @@ def list_works(conn: sqlite3.Connection, limit: int = 50, offset: int = 0, journ
         params.append(read_status)
     if favorite:
         where.append("w.favorite = 1")
+    if year_from is not None:
+        where.append("w.year >= ?")
+        params.append(year_from)
+    if year_to is not None:
+        where.append("w.year <= ?")
+        params.append(year_to)
+    if study_types:
+        where.append(f"w.study_type IN ({', '.join('?' * len(study_types))})")
+        params += study_types
+    if has_pdf is not None:
+        where.append(f"{'' if has_pdf else 'NOT '}EXISTS (SELECT 1 FROM work_files WHERE work_id = w.id)")
     if inbox:
         where.append("(w.favorite = 1 OR (w.read_status IS NULL AND NOT EXISTS (SELECT 1 FROM work_labels wl"
                      " JOIN labels l ON l.id = wl.label_id WHERE wl.work_id = w.id AND l.kind = 'collection')))")
@@ -482,7 +515,7 @@ def list_works(conn: sqlite3.Connection, limit: int = 50, offset: int = 0, journ
                    (SELECT family FROM work_authors WHERE work_id = w.id AND position = 0) AS first_author,
                    (SELECT value FROM identifiers WHERE work_id = w.id AND scheme = 'doi') AS doi,
                    EXISTS (SELECT 1 FROM work_files WHERE work_id = w.id) AS has_pdf, {flagged} AS retracted
-            {base} ORDER BY w.favorite DESC, w.created_at DESC, w.id DESC LIMIT ? OFFSET ?""",
+            {base} ORDER BY w.favorite DESC, {SORTS[sort]}, w.id DESC LIMIT ? OFFSET ?""",
         [*params, limit, offset],
     )
     total = conn.execute(f"SELECT count(*) {base}", params).fetchone()[0]

@@ -21,12 +21,24 @@
   let newLabel = $state(null); // kind en cours de création
   let newName = $state("");
   let searchBox;
+  let counts = $state(null); // effectifs de la colonne de gauche, années et types d'étude présents
+  // Préférences d'affichage, gardées d'une session à l'autre.
+  let sort = $state(load("biblio.sort", "added"));
+  let compact = $state(load("biblio.compact", false));
+  let collapsed = $state(new Set(load("biblio.collapsed", []))); // collections repliées (chemin)
+  let showFilters = $state(false);
+  let detailVersion = $state(0); // la fiche ouverte se recharge après un changement fait depuis la liste
+  let extra = $state({ yearFrom: "", yearTo: "", studyType: "", pdf: "" }); // filtres combinables
 
   // Largeurs des panneaux, gardées d'une session à l'autre.
   let widths = $state(load("biblio.widths", [220, 420]));
   function load(key, fallback) {
     try { return JSON.parse(localStorage.getItem(key)) ?? fallback; } catch { return fallback; }
   }
+  function keep(key, value) {
+    try { localStorage.setItem(key, JSON.stringify(value)); } catch {}
+  }
+  const activeFilters = $derived(Object.values(extra).filter(Boolean).length);
 
   const current = $derived(decodeURIComponent(route.match(/^\/library\/(.+)/)?.[1] ?? ""));
   const collections = $derived(labels.filter((l) => l.kind === "collection"));
@@ -37,13 +49,13 @@
 
   $effect(() => {
     version; // rafraîchir après un import (glisser-déposer)
-    filter; q;
+    filter; q; sort; extra.yearFrom; extra.yearTo; extra.studyType; extra.pdf;
     const timer = setTimeout(() => refresh(), q ? 220 : 0);
     return () => clearTimeout(timer);
   });
 
   async function refreshLabels() {
-    labels = await api("/labels");
+    [labels, counts] = await Promise.all([api("/labels"), api("/library/counts")]);
   }
 
   async function refresh(more = false) {
@@ -54,7 +66,11 @@
         items = out.results;
         total = out.total;
       } else {
-        const params = { limit: PAGE, offset: more ? items.length : 0 };
+        const params = { limit: PAGE, offset: more ? items.length : 0, sort };
+        if (extra.yearFrom) params.year_from = extra.yearFrom;
+        if (extra.yearTo) params.year_to = extra.yearTo;
+        if (extra.studyType) params.study_type = extra.studyType;
+        if (extra.pdf) params.has_pdf = extra.pdf === "yes";
         if (filter.type === "inbox") params.inbox = true;
         if (filter.type === "favorite") params.favorite = true;
         if (filter.type === "read_status") params.read_status = filter.value;
@@ -64,6 +80,7 @@
         const out = await api("/works", { params });
         items = more ? [...items, ...out.items] : out.items;
         total = out.total;
+        if (!more) api("/library/counts").then((c) => (counts = c));
       }
     } catch (e) {
       toast(e.message, "error");
@@ -112,15 +129,59 @@
     refresh();
   }
 
-  // Statut de lecture ou favori des notices cochées ("" : sans statut).
-  async function batchUpdate(changes) {
-    for (const id of checked) await api(`/works/${id}`, { method: "PATCH", body: changes });
-    toast($t("library.batch_done", { n: checked.size }), "ok");
+  // Statut de lecture ou favori des notices cochées, ou de celle ouverte (raccourcis clavier).
+  async function batchUpdate(changes, ids = [...checked]) {
+    for (const id of ids) await api(`/works/${id}`, { method: "PATCH", body: changes });
+    toast($t("library.batch_done", { n: ids.length }), "ok", 2000);
+    detailVersion++;
     refresh();
+  }
+
+  // Déplacer vers une collection (sortie des autres), ou retirer de la collection affichée.
+  async function batchMove(id) {
+    if (!id) return;
+    const out = await api(`/labels/${id}/works`, { method: "POST", body: { works: [...checked].map(String), move: true } });
+    toast($t("library.batch_done", { n: out.changed || checked.size }), "ok");
+    checked = new Set();
+    detailVersion++;
+    refreshLabels();
+    refresh();
+  }
+
+  async function batchRemove() {
+    await api(`/labels/${filter.value}/works`, { method: "POST", body: { works: [...checked].map(String), remove: true } });
+    toast($t("library.batch_done", { n: checked.size }), "ok");
+    checked = new Set();
+    detailVersion++;
+    refreshLabels();
+    refresh();
+  }
+
+  // Collections en arborescence : « Parent / Enfant » (nom donné par l'import Zotero ou à la main).
+  const tree = $derived.by(() => {
+    const root = { children: new Map() };
+    for (const label of collections) {
+      let node = root;
+      label.name.split(" / ").forEach((part, i, parts) => {
+        const path = parts.slice(0, i + 1).join(" / ");
+        if (!node.children.has(part)) node.children.set(part, { name: part, path, children: new Map(), label: null });
+        node = node.children.get(part);
+      });
+      node.label = label;
+    }
+    return root;
+  });
+
+  function fold(path) {
+    const next = new Set(collapsed);
+    next.has(path) ? next.delete(path) : next.add(path);
+    collapsed = next;
+    keep("biblio.collapsed", [...next]);
   }
 
   async function toggleFavorite(work) {
     await api(`/works/${work.id}`, { method: "PATCH", body: { favorite: !work.favorite } });
+    detailVersion++;
     refresh();
   }
 
@@ -164,6 +225,12 @@
       if (e.key === "j") open(items[Math.min(currentIndex + 1, items.length - 1)]);
       else if (e.key === "k") open(items[Math.max(currentIndex - 1, 0)]);
       else if (e.key === "x" && currentIndex >= 0) toggle(items[currentIndex].id);
+      else if (currentIndex >= 0 || checked.size) {
+        const ids = checked.size ? [...checked] : [items[currentIndex].id];
+        const STATUS = { 0: null, 1: "to_read", 2: "to_reread", 3: "read" };
+        if (e.key in STATUS) batchUpdate({ read_status: STATUS[e.key] }, ids);
+        else if (e.key === "f") batchUpdate({ favorite: !items.filter((w) => ids.includes(w.id)).every((w) => w.favorite) }, ids);
+      }
     }
   }
 
@@ -175,14 +242,40 @@
 
 <svelte:window onkeydown={onKey} />
 
+{#snippet labelRow(label, text, depth, node = null)}
+  <div class="labelrow" role="listitem" style="padding-left: {depth * 12}px" ondragover={(e) => e.preventDefault()} ondrop={(e) => dropOn(e, label)}>
+    {#if node?.children.size}
+      <button class="ghost tw" aria-label={$t("library.fold")} onclick={() => fold(node.path)}>{collapsed.has(node.path) ? "▸" : "▾"}</button>
+    {/if}
+    <button class="item grow" class:on={isOn({ type: "label", value: label.id })} onclick={() => choose({ type: "label", value: label.id })}>
+      <span class="grow name">{text}</span><span class="faint small">{label.count}</span>
+    </button>
+    <button class="ghost small del" title={$t("common.delete")} onclick={() => removeLabel(label)}>✕</button>
+  </div>
+{/snippet}
+
+{#snippet branch(node, depth)}
+  {#if node.label}
+    {@render labelRow(node.label, node.name, depth, node)}
+  {:else}
+    <div class="labelrow" style="padding-left: {depth * 12}px">
+      <button class="ghost tw" aria-label={$t("library.fold")} onclick={() => fold(node.path)}>{collapsed.has(node.path) ? "▸" : "▾"}</button>
+      <span class="item grow faint name">{node.name}</span>
+    </div>
+  {/if}
+  {#if !collapsed.has(node.path)}
+    {#each node.children.values() as child (child.path)}{@render branch(child, depth + 1)}{/each}
+  {/if}
+{/snippet}
+
 <div class="library" style="grid-template-columns: {widths[0]}px 5px {widths[1]}px 5px minmax(0, 1fr)">
   <nav class="filters scroll">
-    <button class="item" class:on={isOn({ type: "inbox" })} title={$t("library.inbox_help")} onclick={() => choose({ type: "inbox" })}>{$t("library.unread")}</button>
+    <button class="item" class:on={isOn({ type: "inbox" })} title={$t("library.inbox_help")} onclick={() => choose({ type: "inbox" })}><span class="grow">{$t("library.unread")}</span><span class="faint small">{counts?.inbox ?? ""}</span></button>
     {#each [["to_read", "read.to_read"], ["to_reread", "read.to_reread"], ["read", "read.read"]] as [value, key]}
-      <button class="item" class:on={isOn({ type: "read_status", value })} onclick={() => choose({ type: "read_status", value })}>{$t(key)}</button>
+      <button class="item" class:on={isOn({ type: "read_status", value })} onclick={() => choose({ type: "read_status", value })}><span class="grow">{$t(key)}</span><span class="faint small">{counts?.[value] ?? ""}</span></button>
     {/each}
-    <button class="item" class:on={isOn({ type: "favorite" })} onclick={() => choose({ type: "favorite" })}>♥ {$t("library.favorites")}</button>
-    <button class="item" class:on={isOn({ type: "all" })} onclick={() => choose({ type: "all" })}>{$t("library.all")}</button>
+    <button class="item" class:on={isOn({ type: "favorite" })} onclick={() => choose({ type: "favorite" })}><span class="grow">♥ {$t("library.favorites")}</span><span class="faint small">{counts?.favorite ?? ""}</span></button>
+    <button class="item" class:on={isOn({ type: "all" })} onclick={() => choose({ type: "all" })}><span class="grow">{$t("library.all")}</span><span class="faint small">{counts?.all ?? ""}</span></button>
 
     {#each [["collection", collections, "library.collections"], ["tag", tags, "library.tags"]] as [kind, list, title]}
       <div class="group row">
@@ -198,16 +291,12 @@
           <input type="text" class="new" bind:value={newName} use:focus placeholder={$t("library.name")} onblur={createLabel} />
         </form>
       {/if}
-      {#each list as label (label.id)}
-        <div class="labelrow" role="listitem" ondragover={(e) => e.preventDefault()} ondrop={(e) => dropOn(e, label)}>
-          <button class="item grow" class:on={isOn({ type: "label", value: label.id })} onclick={() => choose({ type: "label", value: label.id })}>
-            <span class="grow name">{kind === "tag" ? "#" : ""}{label.name}</span><span class="faint small">{label.count}</span>
-          </button>
-          <button class="ghost small del" title={$t("common.delete")} onclick={() => removeLabel(label)}>✕</button>
-        </div>
+      {#if kind === "collection"}
+        {#each tree.children.values() as node (node.path)}{@render branch(node, 0)}{/each}
       {:else}
-        {#if newLabel !== kind}<p class="small faint hint">{$t(`library.no_${kind}`)}</p>{/if}
-      {/each}
+        {#each list as label (label.id)}{@render labelRow(label, "#" + label.name, 0)}{/each}
+      {/if}
+      {#if !list.length && newLabel !== kind}<p class="small faint hint">{$t(`library.no_${kind}`)}</p>{/if}
     {/each}
 
     <div class="group"><span class="eyebrow">{$t("library.journals")}</span></div>
@@ -226,8 +315,36 @@
         <input type="checkbox" aria-label={$t("library.select_all")} title={$t("library.select_all")}
           checked={items.length > 0 && items.every((w) => checked.has(w.id))}
           onchange={(e) => (checked = e.target.checked ? new Set(items.map((w) => w.id)) : new Set())} />
-        {loading ? "…" : $t("library.count", { n: $fmt.number(total) })}
+        <span class="grow">{loading ? "…" : $t("library.count", { n: $fmt.number(total) })}</span>
+        {#if !q}
+          <select class="mini" value={sort} aria-label={$t("library.sort")} onchange={(e) => { sort = e.target.value; keep("biblio.sort", sort); }}>
+            {#each ["added", "year", "author", "title", "rating"] as s}<option value={s}>{$t(`library.sort_${s}`)}</option>{/each}
+          </select>
+          <button class="ghost small" class:on={showFilters || activeFilters} onclick={() => (showFilters = !showFilters)}>
+            {$t("library.filters")}{activeFilters ? ` (${activeFilters})` : ""}
+          </button>
+        {/if}
+        <button class="ghost small" class:on={compact} title={$t("library.compact")} aria-pressed={compact}
+          onclick={() => { compact = !compact; keep("biblio.compact", compact); }}>☰</button>
       </div>
+      {#if showFilters && !q}
+        <div class="row wrap small extra">
+          <label class="row">{$t("library.years")}
+            <input class="year" type="number" placeholder={counts?.years?.[0] ?? ""} bind:value={extra.yearFrom} /> –
+            <input class="year" type="number" placeholder={counts?.years?.[1] ?? ""} bind:value={extra.yearTo} />
+          </label>
+          <select class="mini" bind:value={extra.studyType} aria-label={$t("library.study_type")}>
+            <option value="">{$t("library.any_study")}</option>
+            {#each counts?.study_types ?? [] as st}<option value={st.value}>{$t(`study.${st.value}`, {}, st.value)} ({st.count})</option>{/each}
+          </select>
+          <select class="mini" bind:value={extra.pdf} aria-label="PDF">
+            <option value="">{$t("library.pdf_any")}</option>
+            <option value="yes">{$t("library.pdf_yes")}</option>
+            <option value="no">{$t("library.pdf_no")}</option>
+          </select>
+          {#if activeFilters}<button class="ghost small" onclick={() => (extra = { yearFrom: "", yearTo: "", studyType: "", pdf: "" })}>{$t("library.clear_filters")}</button>{/if}
+        </div>
+      {/if}
     </div>
     {#if checked.size}
       <div class="batch row wrap">
@@ -241,6 +358,13 @@
           {#each ["to_read", "to_reread", "read"] as s}<option value={s}>{$t(`read.${s}`)}</option>{/each}
           <option value="">{$t("library.unread")}</option>
         </select>
+        <select onchange={(e) => { batchMove(Number(e.target.value)); e.target.value = ""; }}>
+          <option value="">{$t("library.move_to")}</option>
+          {#each collections as label}<option value={label.id}>{label.name}</option>{/each}
+        </select>
+        {#if filter.type === "label" && collections.some((c) => c.id === filter.value)}
+          <button class="small" onclick={batchRemove}>{$t("library.remove_from")}</button>
+        {/if}
         <button class="small" onclick={() => batchUpdate({ favorite: !items.filter((w) => checked.has(w.id)).every((w) => w.favorite) })}>♥ {$t("library.favorite")}</button>
         <select onchange={(e) => { exportWorks({ works: [...checked].map(String) }, e.target.value); e.target.value = ""; }}>
           <option value="">{$t("export.title")}…</option>
@@ -253,7 +377,7 @@
     {/if}
     <ul class="scroll">
       {#each items as work (work.id)}
-        <li class:on={work.citekey === current} draggable="true" ondragstart={(e) => drag(e, work)}>
+        <li class:on={work.citekey === current} class:compact draggable="true" ondragstart={(e) => drag(e, work)}>
           <span class="side">
             <input type="checkbox" checked={checked.has(work.id)} onchange={() => toggle(work.id)} aria-label={$t("library.select")} />
             <button class="ghost fav" class:on={work.favorite} title={$t(work.favorite ? "library.unfavorite" : "library.favorite")}
@@ -265,7 +389,7 @@
             {#if work.passages?.length}
               <span class="small snippet">{@html work.passages[0].snippet}</span>
             {/if}
-            <span class="row badges">
+            <span class="row badges" class:hidden={compact}>
               <Badges rec={work} compact />
               {#if work.read_status}<span class="chip">{$t(`read.${work.read_status}`)}</span>{/if}
               {#if work.rating}<span class="faint small">{"★".repeat(work.rating)}</span>{/if}
@@ -285,7 +409,7 @@
 
   <section class="detail">
     {#if current}
-      {#key current}
+      {#key `${current}:${detailVersion}`}
         <WorkDetail ref={current} {labels} {aiEnabled} onlabels={refreshLabels} onchange={() => refresh()} />
       {/key}
     {:else}
@@ -294,7 +418,8 @@
         <p class="small faint">{$t("library.drop_hint")}</p>
         <p class="small faint">
           <span class="kbd">/</span> {$t("keys.search")} · <span class="kbd">j</span> <span class="kbd">k</span> {$t("keys.navigate")} ·
-          <span class="kbd">x</span> {$t("keys.select")}
+          <span class="kbd">x</span> {$t("keys.select")} ·
+          <span class="kbd">f</span> {$t("keys.favorite")} · <span class="kbd">1</span> <span class="kbd">2</span> <span class="kbd">3</span> <span class="kbd">0</span> {$t("keys.status")}
         </p>
       </div>
     {/if}
@@ -332,6 +457,20 @@
   li { display: flex; align-items: flex-start; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--border); }
   li.on { background: var(--accent-soft); }
   li input { margin-top: 4px; }
+  li.compact { padding: 5px 12px; align-items: center; }
+  li.compact .t { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  li.compact .row-btn { gap: 0; }
+  li.compact .row-btn > .small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 11.5px; }
+  li.compact .side { flex-direction: row; gap: 6px; }
+  li.compact input { margin-top: 0; }
+  .hidden { display: none; }
+  .mini { padding: 1px 4px; font-size: 12px; }
+  .extra { margin-top: 6px; gap: 8px; }
+  .extra .year { width: 64px; padding: 1px 4px; }
+  .count .on { color: var(--accent); }
+  .item { display: flex; gap: 6px; }
+  .tw { padding: 0 2px; width: 18px; font-size: 12px; color: var(--muted); flex: none; }
+  .group .ghost { margin-left: 4px; }
   .side { display: flex; flex-direction: column; align-items: center; gap: 2px; }
   .fav { padding: 0 2px; font-size: 14px; line-height: 1; color: var(--faint); opacity: 0.35; }
   .fav:hover { opacity: 1; }

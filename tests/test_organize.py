@@ -227,3 +227,28 @@ def test_favorites_and_inbox(api, network):
     assert [w["id"] for w in api.get("/api/v1/works", params={"favorite": True}).json()["items"]] == [merino["id"]]
     api.patch(f"/api/v1/works/{merino['id']}", json={"favorite": False})
     assert inbox() == []
+
+
+def test_sort_filters_counts_and_move(api, network):
+    from conftest import MERINO_DOI
+
+    merino = api.post("/api/v1/works", json={"identifier": MERINO_DOI}).json()["work"]  # JAMA 2018, avec étude
+    old = api.post("/api/v1/works/manual", json={"title": "Zeta, une vieille étude", "year": 1999, "authors": ["Abel, A"]}).json()["work"]
+    ids = lambda **p: [w["id"] for w in api.get("/api/v1/works", params=p).json()["items"]]  # noqa: E731
+    assert ids(sort="year") == [merino["id"], old["id"]] and ids(sort="author") == [old["id"], merino["id"]]
+    assert ids(sort="title") == [merino["id"], old["id"]]
+    assert ids(year_from=2000) == [merino["id"]] and ids(year_to=2000) == [old["id"]]
+    assert ids(has_pdf=True) == [merino["id"]] and ids(has_pdf=False) == [old["id"]]  # PDF libre de MERINO (simulé)
+    assert api.get("/api/v1/works", params={"sort": "nope"}).status_code == 422
+    api.patch(f"/api/v1/works/{old['id']}", json={"read_status": "to_read", "favorite": True})
+    counts = api.get("/api/v1/library/counts").json()
+    assert counts | {"study_types": None} == {"all": 2, "inbox": 2, "to_read": 1, "to_reread": 0, "read": 0, "favorite": 1,
+                                              "years": [1999, 2018], "study_types": None}  # fmt: skip
+    a = api.post("/api/v1/labels", json={"kind": "collection", "name": "A"}).json()
+    b = api.post("/api/v1/labels", json={"kind": "collection", "name": "B"}).json()
+    tag = api.post("/api/v1/labels", json={"kind": "tag", "name": "t"}).json()
+    for label in (a, tag):
+        api.post(f"/api/v1/labels/{label['id']}/works", json={"works": [str(merino["id"])]})
+    api.post(f"/api/v1/labels/{b['id']}/works", json={"works": [str(merino["id"])], "move": True})
+    names = sorted(lb["name"] for lb in api.get(f"/api/v1/works/{merino['id']}").json()["labels"])
+    assert names == ["B", "t"]  # sortie de A, le tag reste
