@@ -168,6 +168,7 @@ uv run biblio import these.biblio                   # chez le destinataire
 - **Styles** : Vancouver des bibliothèques universitaires de médecine (par défaut) et APA 7, fournis ; tout style indépendant de <https://www.zotero.org/styles> s'ajoute. Le style NLM d'origine n'est pas fourni : citeproc-py le rend mal (espaces perdus).
 - **`library.bib`** : toute la bibliothèque en BibTeX, dans le dossier de données, réécrite dès qu'une notice change (pour LaTeX, Pandoc, Obsidian). Les auteurs collectifs (« MERINO Trial Investigators and … ») sont protégés par des accolades.
 - **Zotero** : par son serveur local (`127.0.0.1:23119`, celui de son extension de navigateur), sans compte ni clé. Zotero doit être ouvert ; les notices arrivent dans la collection sélectionnée dans Zotero, avec leurs tags, leur note et leur PDF.
+- **Import depuis Zotero** : glisser des articles ou une collection depuis Zotero vers la fenêtre de Biblio (import sans collection), ou sur une collection de Biblio (ils y sont rangés). Bibliothèque → « ↓ Zotero » importe une collection choisie dans la liste. Avec l'« API locale » de Zotero (Zotero → Réglages → Avancé → « Autoriser d'autres applications de cet ordinateur à communiquer avec Zotero »), Biblio reprend la notice exacte, les PDF rangés dans Zotero et les tags ; sans elle, les articles glissés sont ajoutés en ligne par leur DOI ou PMID (une collection glissée demande l'API locale : Zotero ne transmet que son numéro interne). Un article déjà présent est complété, jamais dupliqué.
 - **Paquets `.biblio`** : un fichier ZIP (`manifest.json`, `works.json`, `searches.json`, `files/<sha256>.pdf`) avec les notices, PDF, notes, tags, collections, questions d'origine et recherches enregistrées. Le statut de lecture et les étoiles restent personnels. À l'import : un article déjà présent est complété (jamais dupliqué), une note différente est ajoutée à la suite, un PDF dont l'empreinte ne correspond pas est refusé.
 
 ### Recherche par le sens (modèle local)
@@ -307,6 +308,8 @@ curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:8765/api/v1/works/10.100
 | GET / POST | `/api/v1/styles` | Styles disponibles / ajouter un .csl (corps brut, `?filename=`) |
 | POST | `/api/v1/export` | Exporter (`{"works"` ou `"label", "format": "bibtex"\|"ris"\|"csljson"\|"markdown", "style"}` ; vide : toute la bibliothèque) |
 | GET / POST | `/api/v1/zotero` | Zotero ouvert ? / envoyer (`{"works"` ou `"label", "pdf"}` ; 503 si Zotero est fermé) |
+| GET | `/api/v1/zotero/collections` | Collections de Zotero (API locale de Zotero ; 503 et marche à suivre si elle est coupée) |
+| POST | `/api/v1/zotero/import` | Importer depuis Zotero : `{"text"}` (articles glissés) ou `{"collection": clé \| "selected"}`, et `"label"` (collection de Biblio) |
 | POST | `/api/v1/packages` | Créer un paquet .biblio (`{"works"` ou `"label", "title", "searches"}`) |
 | POST | `/api/v1/packages/preview` | Aperçu d'un paquet (corps brut) |
 | POST | `/api/v1/packages/import` | Importer un paquet (corps brut) |

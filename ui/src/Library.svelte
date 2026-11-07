@@ -2,7 +2,7 @@
   import { onMount } from "svelte";
   import WorkDetail from "./WorkDetail.svelte";
   import Badges from "./lib/Badges.svelte";
-  import { EXPORTS, exportWorks, makePackage, sendToZotero } from "./lib/actions.js";
+  import { EXPORTS, exportWorks, importFromZotero, isFromOutside, makePackage, sendToZotero } from "./lib/actions.js";
   import { api } from "./lib/api.js";
   import { fmt, t } from "./lib/i18n.js";
   import { toast } from "./lib/toast.js";
@@ -117,12 +117,50 @@
 
   // Glisser une notice sur une collection ou un tag de la colonne de gauche.
   async function dropOn(e, label) {
+    if (isFromOutside(e.dataTransfer)) { // depuis Zotero : rangé dans cette collection (un fichier PDF : import simple)
+      if (e.dataTransfer.files.length || label.kind !== "collection") return;
+      e.preventDefault();
+      e.handledByLabel = true; // la fenêtre (App) ne refait pas l'import
+      if (await importFromZotero(e.dataTransfer, label.id)) { refresh(); refreshLabels(); }
+      return;
+    }
     e.preventDefault();
     const ids = e.dataTransfer.getData("text/x-biblio-works");
     if (!ids) return;
     const out = await api(`/labels/${label.id}/works`, { method: "POST", body: { works: ids.split(",") } });
     toast($t("library.added_to", { n: out.changed, name: label.name }), "ok");
     refreshLabels();
+  }
+
+  // Importer une collection Zotero choisie dans la liste (si la glisser depuis Zotero ne passe pas).
+  let zoteroList = $state(null); // null : fermé ; [] : chargement ; sinon les collections
+  let sameName = $state(true);
+  let importingKey = $state(null);
+
+  async function openZotero() {
+    zoteroList = [];
+    try {
+      zoteroList = await api("/zotero/collections");
+    } catch (e) {
+      zoteroList = null;
+      toast(e.message, "error", 12_000);
+    }
+  }
+
+  async function importZotero(c) {
+    importingKey = c.key;
+    try {
+      const label = sameName ? (await api("/labels", { method: "POST", body: { kind: "collection", name: c.name } })).id : null;
+      const out = await api("/zotero/import", { method: "POST", body: { collection: c.key, label } });
+      toast($t("zotero.imported", { created: out.created.length, completed: out.completed.length, pdfs: out.pdfs }), "ok", 8000);
+      zoteroList = null;
+      refresh();
+      refreshLabels();
+    } catch (e) {
+      toast(e.message, "error", 12_000);
+    } finally {
+      importingKey = null;
+    }
   }
 
   function drag(e, work) {
@@ -174,6 +212,9 @@
     {#each [["collection", collections, "library.collections"], ["tag", tags, "library.tags"]] as [kind, list, title]}
       <div class="group row">
         <span class="eyebrow grow">{$t(title)}</span>
+        {#if kind === "collection"}
+          <button class="ghost small" title={$t("zotero.import_title")} onclick={openZotero}>{$t("zotero.import_button")}</button>
+        {/if}
         <button class="ghost small" title={$t("library.new")} onclick={() => { newLabel = kind; newName = ""; }}>＋</button>
       </div>
       {#if newLabel === kind}
@@ -275,7 +316,33 @@
   </section>
 </div>
 
+{#if zoteroList}
+  <div class="backdrop" role="presentation" onclick={(e) => { if (e.target === e.currentTarget) zoteroList = null; }}>
+    <div class="modal card" role="dialog" aria-modal="true" aria-labelledby="zotero-title">
+      <h2 id="zotero-title">{$t("zotero.import_title")}</h2>
+      <p class="small muted">{$t("zotero.import_help")}</p>
+      <label class="row small"><input type="checkbox" bind:checked={sameName} /> {$t("zotero.same_name")}</label>
+      <div class="zlist scroll">
+        {#if !zoteroList.length}<p class="muted small">…</p>{/if}
+        {#each zoteroList as c (c.key)}
+          <button class="item zrow" style="padding-left: {10 + c.level * 16}px" disabled={!!importingKey} onclick={() => importZotero(c)}>
+            <span class="grow name">{c.name}</span>
+            <span class="faint small">{importingKey === c.key ? "…" : c.count}</span>
+          </button>
+        {/each}
+      </div>
+      <div class="row"><span class="grow"></span><button onclick={() => (zoteroList = null)}>{$t("common.close")}</button></div>
+    </div>
+  </div>
+{/if}
+
 <style>
+  .backdrop { position: fixed; inset: 0; background: rgb(0 0 0 / 0.35); display: grid; place-items: center; z-index: 55; }
+  .modal { width: min(520px, 92vw); max-height: 80vh; display: flex; flex-direction: column; gap: 10px; padding: 20px 22px; }
+  .modal h2 { margin: 0; font-size: 18px; }
+  .modal p { margin: 0; }
+  .zlist { min-height: 80px; max-height: 50vh; border: 1px solid var(--border); border-radius: 8px; padding: 4px; }
+  .zrow { width: 100%; display: flex; gap: 8px; }
   .library { display: grid; height: 100%; min-height: 0; }
   .library > * { min-height: 0; min-width: 0; }
   .splitter { cursor: col-resize; background: var(--border); background-clip: content-box; padding: 0 2px; }

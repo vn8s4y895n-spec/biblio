@@ -4,6 +4,7 @@
   import Library from "./Library.svelte";
   import Settings from "./Settings.svelte";
   import Watch from "./Watch.svelte";
+  import { importFromZotero, isFromOutside } from "./lib/actions.js";
   import { api, token } from "./lib/api.js";
   import { lang, systemLang, t } from "./lib/i18n.js";
   import { toast, toasts } from "./lib/toast.js";
@@ -80,8 +81,13 @@
 
   // Glisser-déposer : PDF → bibliothèque ; .bib, .ris, .nbib, .json → import de références.
   async function drop(event) {
-    event.preventDefault();
     dragging = false;
+    if (!isFromOutside(event.dataTransfer) || event.handledByLabel) return; // déposé sur une collection : déjà importé
+    event.preventDefault();
+    if (!event.dataTransfer.files.length) { // glissé depuis Zotero (articles ou collection), sans fichier
+      if (await importFromZotero(event.dataTransfer)) libraryVersion++;
+      return;
+    }
     for (const file of event.dataTransfer?.files ?? []) {
       try {
         if (file.name.toLowerCase().endsWith(".biblio")) {
@@ -119,7 +125,7 @@
 </script>
 
 <svelte:window
-  ondragover={(e) => { if (e.dataTransfer?.types.includes("Files")) { e.preventDefault(); dragging = true; } }}
+  ondragover={(e) => { if (isFromOutside(e.dataTransfer)) { e.preventDefault(); dragging = true; } }}
   ondragleave={(e) => { if (!e.relatedTarget) dragging = false; }}
   ondrop={drop}
 />
