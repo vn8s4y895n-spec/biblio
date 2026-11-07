@@ -21,7 +21,7 @@ FIELDS = (
     "issn_print", "issn_e", "nlmid", "year", "issued", "volume", "issue", "pages", "language", "license",
 )  # fmt: skip
 RETRACTED = ("retraction", "removal", "withdrawal")  # avis Crossref qui retirent un article
-CLIENTS = {"api", "cli", "web", "mcp", "inbox", "worker", "package", "zotero"}
+CLIENTS = {"api", "cli", "web", "mcp", "inbox", "worker", "package"}
 
 STOPWORDS = set(
     "a an and are as at by de des du en et for from in into is la le les of on or the to un une vs with".split()

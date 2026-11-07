@@ -581,28 +581,6 @@ def zotero_send(body: ZoteroRequest, request: Request, conn: Conn):
     return zotero.send(conn, home(request), selected(conn, body), body.pdf)
 
 
-class ZoteroImport(BaseModel):
-    text: str | None = None  # articles glissés depuis Zotero (texte de sa copie rapide)
-    collection: str | None = None  # clé d'une collection Zotero ; "selected" : celle sélectionnée dans Zotero
-    label: int | None = None  # collection de Biblio où ranger les articles (sinon : import sans collection)
-
-
-@router.get("/zotero/collections", summary="Collections de Zotero (API locale de Zotero, à activer dans Zotero)")
-def zotero_collections():
-    return zotero.collections()
-
-
-@router.post("/zotero/import", summary="Importer depuis Zotero : articles glissés, ou une collection entière")
-def zotero_import(body: ZoteroImport, request: Request, conn: Conn):
-    """Notices, PDF rangés dans Zotero et tags (API locale de Zotero) ; sans l'API locale, les articles glissés sont
-    ajoutés en ligne par leur DOI ou PMID. `unmatched` : références glissées qui n'ont pas pu être retrouvées."""
-    if body.text and body.text.strip():
-        return zotero.import_dropped(conn, home(request), body.text, body.label)
-    if body.collection:
-        return zotero.import_collection(conn, home(request), None if body.collection == "selected" else body.collection, body.label)
-    raise HTTPException(422, "Rien à importer : glisser des articles ou une collection depuis Zotero")
-
-
 @router.post("/packages", summary="Créer un paquet .biblio (notices, PDF, notes, tags, questions, recherches)")
 def create_package(body: PackageRequest, request: Request, conn: Conn):
     # Une recherche enregistrée seule : ses articles déjà dans la bibliothèque, pas toute la bibliothèque.

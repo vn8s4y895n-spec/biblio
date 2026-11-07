@@ -17,8 +17,7 @@
   "common": {
     "cancel": "Cancel",
     "delete": "Delete",
-    "decimal": ".",
-    "close": "Close"
+    "decimal": "."
   },
   "keys": {
     "question": "ask a question",
@@ -261,15 +260,7 @@
     "title": "Export"
   },
   "zotero": {
-    "sent": "{n} sent to Zotero ({pdfs} PDFs) → {where}",
-    "importing": "Importing from Zotero…",
-    "imported": "Zotero: {created} added, {completed} completed, {pdfs} PDFs",
-    "unmatched": "{n} dragged reference(s) without a DOI or PMID that could be found: not imported",
-    "enable_api": "To also import Zotero's PDFs and tags, and whole collections: in Zotero, Settings → Advanced → “Allow other applications on this computer to communicate with Zotero”.",
-    "import_button": "↓ Zotero",
-    "import_title": "Import a Zotero collection",
-    "import_help": "Records, PDFs stored in Zotero and tags. You can also drag items or a collection from Zotero onto Biblio, or onto a Biblio collection.",
-    "same_name": "File them in a Biblio collection with the same name (otherwise: no collection)"
+    "sent": "{n} sent to Zotero ({pdfs} PDFs) → {where}"
   },
   "package": {
     "make": ".biblio package",

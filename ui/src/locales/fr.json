@@ -17,8 +17,7 @@
   "common": {
     "cancel": "Annuler",
     "delete": "Supprimer",
-    "decimal": ",",
-    "close": "Fermer"
+    "decimal": ","
   },
   "keys": {
     "question": "poser une question",
@@ -261,15 +260,7 @@
     "title": "Exporter"
   },
   "zotero": {
-    "sent": "{n} envoyés dans Zotero ({pdfs} PDF) → {where}",
-    "importing": "Import depuis Zotero…",
-    "imported": "Zotero : {created} ajoutés, {completed} complétés, {pdfs} PDF",
-    "unmatched": "{n} référence(s) glissée(s) sans DOI ni PMID retrouvable : non importée(s)",
-    "enable_api": "Pour importer aussi les PDF et les tags de Zotero, et des collections entières : dans Zotero, Réglages → Avancé → « Autoriser d'autres applications de cet ordinateur à communiquer avec Zotero ».",
-    "import_button": "↓ Zotero",
-    "import_title": "Importer une collection Zotero",
-    "import_help": "Notices, PDF rangés dans Zotero et tags. Tu peux aussi glisser des articles ou une collection depuis Zotero vers Biblio, ou sur une collection de Biblio.",
-    "same_name": "Ranger dans une collection Biblio du même nom (sinon : sans collection)"
+    "sent": "{n} envoyés dans Zotero ({pdfs} PDF) → {where}"
   },
   "package": {
     "make": "Paquet .biblio",
