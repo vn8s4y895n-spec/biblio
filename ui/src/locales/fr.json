@@ -242,7 +242,7 @@
     "stored_in": "Enregistré dans {path}",
     "import": "Import automatique",
     "watch_downloads": "Surveiller les Téléchargements",
-    "watch_downloads_help": "Les PDF d'articles téléchargés sont importés ; les fichiers ne sont jamais déplacés ni supprimés.",
+    "watch_downloads_help": "Les PDF d'articles téléchargés sont importés (une facture ou un formulaire n'est ni gardé ni touché).",
     "downloads_dir": "Dossier surveillé",
     "inbox_help": "Tout PDF déposé dans {path} est aussi importé.",
     "semantic": "Recherche par le sens",
@@ -273,7 +273,9 @@
     "zotero_help": "Zotero doit être ouvert ; les articles arrivent dans la collection sélectionnée dans Zotero.",
     "zotero_on": "ouvert · {where}",
     "zotero_off": "fermé",
-    "check": "Vérifier"
+    "check": "Vérifier",
+    "downloads_cleanup": "Mettre à la Corbeille les PDF importés",
+    "downloads_cleanup_help": "Une fois la copie rangée dans Biblio, le PDF quitte Téléchargements pour la Corbeille (récupérable tant qu'elle n'est pas vidée)."
   },
   "cite": {
     "copy": "Copier la citation",

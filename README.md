@@ -135,7 +135,7 @@ uv run biblio pdf harris2018effect --open          # l'ouvrir, ou ouvrir la page
 
 **Téléchargements (facultatif)** : avec `watch_downloads = true` dans `config.toml` (section `[inbox]`), Biblio examine les PDF qui arrivent dans `downloads_dir` (par défaut `~/Downloads`).
 - **Tri** : seuls les PDF reconnus comme des articles (DOI trouvé et vérifié) sont importés ; les autres (factures, formulaires…) sont laissés de côté.
-- **Tes fichiers** : ils ne sont ni déplacés ni supprimés.
+- **Rangement** (`downloads_cleanup`, activé par défaut ; Réglages → Import) : un PDF importé part à la **Corbeille** une fois sa copie rangée dans Biblio, et seulement si le fichier n'a pas changé entre-temps. Jamais d'effacement définitif : il se récupère dans la Corbeille. Une facture ou un PDF non reconnu n'est jamais touché.
 - **Historique** : les fichiers déjà présents avant l'activation sont ignorés.
 - **macOS** : il demandera la première fois l'autorisation d'accéder au dossier Téléchargements.
 

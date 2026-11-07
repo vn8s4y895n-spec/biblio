@@ -242,7 +242,7 @@
     "stored_in": "Saved in {path}",
     "import": "Automatic import",
     "watch_downloads": "Watch Downloads",
-    "watch_downloads_help": "Downloaded article PDFs are imported; files are never moved or deleted.",
+    "watch_downloads_help": "Downloaded article PDFs are imported (an invoice or a form is neither kept nor touched).",
     "downloads_dir": "Watched folder",
     "inbox_help": "Any PDF dropped in {path} is imported too.",
     "semantic": "Search by meaning",
@@ -273,7 +273,9 @@
     "zotero_help": "Zotero must be open; articles go into the collection selected in Zotero.",
     "zotero_on": "open · {where}",
     "zotero_off": "closed",
-    "check": "Check"
+    "check": "Check",
+    "downloads_cleanup": "Move imported PDFs to the Trash",
+    "downloads_cleanup_help": "Once the copy is stored in Biblio, the PDF leaves Downloads for the Trash (recoverable until the Trash is emptied)."
   },
   "cite": {
     "copy": "Copy citation",

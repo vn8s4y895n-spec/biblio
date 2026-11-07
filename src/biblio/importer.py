@@ -189,10 +189,28 @@ def scan_inbox(conn: sqlite3.Connection, home: Path, min_age: float = 2.0) -> li
     return results
 
 
-def scan_downloads(conn: sqlite3.Connection, folder: Path, home: Path, min_age: float = 2.0) -> list[dict]:
+def _trash_if_stored(path: Path, key: tuple, home: Path, sha: str) -> bool:
+    """Met le fichier à la Corbeille si la copie rangée dans Biblio existe et si le fichier n'a pas changé depuis sa
+    lecture (même date, même taille). Un échec laisse le fichier en place."""
+    from send2trash import TrashPermissionError, send2trash
+
+    stat = path.stat()
+    if (str(path), stat.st_mtime, stat.st_size) != key or not library.pdf_path(home, sha).is_file():
+        return False
+    try:
+        send2trash(path)
+    except (OSError, TrashPermissionError) as exc:
+        log.warning("Téléchargements : %s non mis à la Corbeille (%s)", path.name, exc)
+        return False
+    log.info("Téléchargements : %s mis à la Corbeille (rangé dans Biblio)", path.name)
+    return True
+
+
+def scan_downloads(conn: sqlite3.Connection, folder: Path, home: Path, min_age: float = 2.0, cleanup: bool = False) -> list[dict]:
     """Importe les PDF d'articles arrivés dans un dossier surveillé (Téléchargements) depuis l'activation de la
-    surveillance. Les fichiers ne sont ni déplacés ni supprimés ; un PDF qui n'est pas reconnu comme un article
-    (facture, formulaire…) n'est pas gardé. Chaque fichier n'est examiné qu'une fois."""
+    surveillance. Un PDF qui n'est pas reconnu comme un article (facture, formulaire…) n'est ni gardé ni touché.
+    `cleanup` : un PDF dont la copie est rangée dans Biblio est mis à la Corbeille (jamais effacé définitivement).
+    Chaque fichier n'est examiné qu'une fois."""
     since = db.get_meta(conn, "downloads.since")
     if since is None:  # premier passage : on ne reprend pas l'historique du dossier
         since = str(time.time())
@@ -213,5 +231,7 @@ def scan_downloads(conn: sqlite3.Connection, folder: Path, home: Path, min_age: 
             result = {"status": "refused", "error": str(exc)}
         conn.execute("INSERT OR REPLACE INTO watched_files (path, mtime, size, status) VALUES (?, ?, ?, ?)", (*key, result["status"]))
         log.info("Téléchargements : %s → %s", path.name, result["status"])
+        if cleanup and result["status"] in ("attached", "duplicate"):
+            result["trashed"] = _trash_if_stored(path, key, home, result["sha256"])
         results.append({"file": path.name, **result})
     return results

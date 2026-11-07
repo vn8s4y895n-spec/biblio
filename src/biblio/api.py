@@ -165,6 +165,7 @@ class Settings(BaseModel):
     semanticscholar_api_key: str | None = None
     watch_downloads: bool | None = None
     downloads_dir: str | None = None
+    downloads_cleanup: bool | None = None
     semantic: bool | None = None
     language: Literal["", "fr", "en"] | None = None
     theme: Literal["system", "light", "dark"] | None = None
@@ -222,7 +223,7 @@ def style_of(request: Request, style: str | None = None) -> str:
 def settings_of(cfg: Config) -> dict:
     return {
         "contact_email": cfg.contact_email, **{f"{k}_api_key": v for k, v in cfg.api_keys.items()},
-        "watch_downloads": cfg.watch_downloads, "downloads_dir": str(cfg.downloads_dir), "semantic": cfg.semantic,
+        "watch_downloads": cfg.watch_downloads, "downloads_dir": str(cfg.downloads_dir), "downloads_cleanup": cfg.downloads_cleanup, "semantic": cfg.semantic,
         "language": cfg.language, "theme": cfg.theme, "citation_style": cfg.citation_style or exports.DEFAULT_STYLE,
         "llm_enabled": cfg.llm_enabled, "llm_provider": cfg.llm_provider, "llm_base_url": cfg.llm_base_url,
         "llm_model": cfg.llm_model, "llm_key_set": bool(llm.get_key(cfg.llm_provider)),
@@ -372,7 +373,7 @@ def scan_inbox(request: Request, conn: Conn):
     config = request.app.state.config
     results = importer.scan_inbox(conn, config.home, min_age=0)
     if config.watch_downloads:
-        results += importer.scan_downloads(conn, config.downloads_dir, config.home, min_age=0)
+        results += importer.scan_downloads(conn, config.downloads_dir, config.home, min_age=0, cleanup=config.downloads_cleanup)
     return results
 
 
@@ -997,7 +998,7 @@ def _background(app: FastAPI) -> None:
         try:
             importer.scan_inbox(conn, config.home)
             if config.watch_downloads:
-                importer.scan_downloads(conn, config.downloads_dir, config.home)
+                importer.scan_downloads(conn, config.downloads_dir, config.home, cleanup=config.downloads_cleanup)
             notes.sync(conn, config.home)
             exports.sync_library_bib(conn, config.home)
             if time.monotonic() >= next_watch:  # chaque heure : veille selon échéance, sauvegarde du jour

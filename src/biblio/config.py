@@ -24,9 +24,11 @@ semanticscholar_api_key = {semanticscholar}  # facultatif, gratuit sur demande :
 
 [inbox]
 # Importer automatiquement les PDF d'articles téléchargés dans ce dossier (ceux qui ne sont pas reconnus comme
-# des articles sont laissés de côté). Les fichiers du dossier ne sont jamais déplacés ni supprimés.
+# des articles sont laissés de côté).
 watch_downloads = {watch_downloads}
 downloads_dir = {downloads_dir}
+# Mettre à la Corbeille un PDF importé, une fois sa copie rangée dans Biblio (récupérable depuis la Corbeille).
+downloads_cleanup = {downloads_cleanup}
 
 [semantic]
 # Recherche par le sens (modèle bge-m3, multilingue, exécuté localement : aucun texte n'est envoyé).
@@ -73,6 +75,7 @@ class Config:
     api_keys: dict[str, str]  # ncbi, openalex, semanticscholar
     watch_downloads: bool = False
     downloads_dir: Path = Path.home() / "Downloads"
+    downloads_cleanup: bool = True  # PDF importé depuis Téléchargements : mis à la Corbeille
     semantic: bool = True
     models_dir_setting: str = ""
     language: str = ""
@@ -110,7 +113,8 @@ def save(cfg: Config) -> None:
     text = TEMPLATE.format(
         host=value(cfg.host), port=cfg.port, token=value(cfg.token), contact_email=value(cfg.contact_email),
         **{name: value(cfg.api_keys.get(name, "")) for name in API_KEYS},
-        watch_downloads=value(cfg.watch_downloads), downloads_dir=value(downloads), semantic=value(cfg.semantic),
+        watch_downloads=value(cfg.watch_downloads), downloads_dir=value(downloads),
+        downloads_cleanup=value(cfg.downloads_cleanup), semantic=value(cfg.semantic),
         models_dir=value(cfg.models_dir_setting), language=value(cfg.language), theme=value(cfg.theme),
         citation_style=value(cfg.citation_style), llm_enabled=value(cfg.llm_enabled),
         llm_provider=value(cfg.llm_provider), llm_base_url=value(cfg.llm_base_url), llm_model=value(cfg.llm_model),
@@ -140,6 +144,7 @@ def load() -> Config:
         api_keys={name: sources.get(f"{name}_api_key", "") for name in API_KEYS},
         watch_downloads=bool(inbox.get("watch_downloads", False)),
         downloads_dir=Path(inbox.get("downloads_dir", "~/Downloads")).expanduser(),
+        downloads_cleanup=bool(inbox.get("downloads_cleanup", True)),
         semantic=bool(semantic.get("enabled", True)),
         models_dir_setting=semantic.get("models_dir", ""),
         language=ui.get("language", ""),

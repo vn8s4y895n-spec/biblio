@@ -218,6 +218,10 @@
         <span>{$t("settings.watch_downloads")}<small class="faint">{$t("settings.watch_downloads_help")}</small></span>
         <input type="checkbox" bind:checked={form.watch_downloads} onchange={() => save("watch_downloads")} />
       </label>
+      <label class="field toggle">
+        <span>{$t("settings.downloads_cleanup")}<small class="faint">{$t("settings.downloads_cleanup_help")}</small></span>
+        <input type="checkbox" bind:checked={form.downloads_cleanup} onchange={() => save("downloads_cleanup")} disabled={!form.watch_downloads} />
+      </label>
       <label class="field">
         <span>{$t("settings.downloads_dir")}</span>
         <input type="text" bind:value={form.downloads_dir} onchange={() => save("downloads_dir")} disabled={!form.watch_downloads} />

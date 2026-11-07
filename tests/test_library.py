@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import httpx
 import pytest
 from conftest import MERINO_DOI, MERINO_PDF, MERINO_PMID, MERINO_TITLE, fake_sources, make_pdf
@@ -488,3 +490,25 @@ def test_outdated_index_is_rebuilt(conn, cfg):
     core.setup(conn, cfg.home)
     assert conn.execute("SELECT count(*) FROM passages WHERE origin = 'fulltext'").fetchone()[0] > 0
     assert db.get_meta(conn, "index.version") == library.INDEX_VERSION
+
+
+def test_downloads_cleanup_moves_only_stored_articles_to_trash(conn, cfg, tmp_path, network, monkeypatch):
+    """Corbeille simulée : les tests ne touchent jamais à la vraie Corbeille."""
+    import os
+    import time
+
+    import send2trash
+
+    trashed = []
+    monkeypatch.setattr(send2trash, "send2trash", lambda path: (trashed.append(Path(path).name), Path(path).unlink()))
+    downloads = tmp_path / "Téléchargements"
+    downloads.mkdir()
+    db.set_meta(conn, "downloads.since", str(time.time() - 100))
+    for name, data in [("merino.pdf", MERINO_PDF), ("merino (1).pdf", MERINO_PDF), ("facture.pdf", make_pdf(["Facture n° 42"]))]:
+        (downloads / name).write_bytes(data)
+        os.utime(downloads / name, (time.time() - 50, time.time() - 50))
+    results = {r["file"]: (r["status"], r.get("trashed")) for r in importer.scan_downloads(conn, downloads, cfg.home, min_age=0, cleanup=True)}
+    assert results == {"merino (1).pdf": ("attached", True), "merino.pdf": ("duplicate", True), "facture.pdf": ("ignored", None)}
+    assert sorted(trashed) == ["merino (1).pdf", "merino.pdf"]
+    assert [p.name for p in downloads.iterdir()] == ["facture.pdf"]  # une facture n'est jamais touchée
+    assert len(list((cfg.home / "library").rglob("*.pdf"))) == 1  # la copie est bien rangée dans Biblio

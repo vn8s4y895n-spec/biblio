@@ -9,7 +9,7 @@ from biblio import __version__
 datas = collect_data_files("biblio") + collect_data_files("citeproc") + collect_data_files("sqlite_vec")
 binaries = collect_dynamic_libs("sqlite_vec")
 hiddenimports = (collect_submodules("biblio") + collect_submodules("uvicorn") + collect_submodules("mcp")
-                 + collect_submodules("keyring.backends") + ["webview.platforms.cocoa" if sys.platform == "darwin"
+                 + collect_submodules("keyring.backends") + collect_submodules("send2trash") + ["webview.platforms.cocoa" if sys.platform == "darwin"
                                                               else "webview.platforms.winforms"])
 icon = "build.nosync/Biblio.icns" if sys.platform == "darwin" else "icon.png"  # Windows : converti par Pillow
 
