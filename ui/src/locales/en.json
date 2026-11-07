@@ -2,7 +2,11 @@
   "app": {
     "no_token": "Open Biblio from the app (or run the command below): this page needs the access token.",
     "update": "↑ Biblio {version} available",
-    "update_help": "Download the new version, then replace the application (your library is kept)"
+    "update_help": "Download the new version, then replace the application (your library is kept)",
+    "update_install_help": "Install the new version: Biblio downloads it, checks it and restarts (your library is kept)",
+    "update_confirm": "Install Biblio {version}? Biblio will close and reopen by itself in about a minute. Your library is not touched.",
+    "update_downloading": "Downloading the update…",
+    "update_restarting": "Update ready: Biblio is restarting."
   },
   "nav": {
     "ask": "Ask",

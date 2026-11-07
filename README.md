@@ -8,9 +8,9 @@ Pour utiliser Biblio : télécharger la dernière version dans [Releases](https:
 
 ### Publier une nouvelle version
 
-1. Changer le numéro dans `pyproject.toml` et `src/biblio/__init__.py` (ex. `0.2.0`), commiter, pousser sur `main`.
-2. Sur GitHub : **Releases → Draft a new release**, étiquette `v0.2.0` (la même que le code), notes de version, **Publish**.
-3. GitHub Actions lance les tests, construit le `.dmg` et l'installeur Windows et les joint à la version (une dizaine de minutes). Les utilisateurs voient alors « Biblio 0.2.0 disponible ».
+1. Envoyer les changements sur `main` (GitHub Desktop : **Push origin**).
+2. Sur GitHub : **Releases → Draft a new release**, nouvelle étiquette plus grande que la précédente (ex. `v0.2.0`), notes de version, **Publish**. Le numéro de version du code est pris dans l'étiquette : rien à changer à la main.
+3. GitHub Actions lance les tests, construit le `.dmg` et l'installeur Windows et les joint à la version (une dizaine de minutes). Les utilisateurs voient alors « Biblio 0.2.0 disponible » ; un clic l'installe (Mac : téléchargement vérifié par SHA-256, remplacement de l'application, relance ; Windows : installeur silencieux). Une version dont la construction a échoué n'est pas proposée.
 
 Licence : [GPL-3.0](LICENSE).
 

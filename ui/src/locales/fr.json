@@ -2,7 +2,11 @@
   "app": {
     "no_token": "Ouvre Biblio depuis l'application (ou lance la commande ci-dessous) : cette page a besoin du jeton d'accès.",
     "update": "↑ Biblio {version} disponible",
-    "update_help": "Télécharger la nouvelle version, puis remplacer l'application (ta bibliothèque est gardée)"
+    "update_help": "Télécharger la nouvelle version, puis remplacer l'application (ta bibliothèque est gardée)",
+    "update_install_help": "Installer la nouvelle version : Biblio la télécharge, la vérifie et redémarre (ta bibliothèque est gardée)",
+    "update_confirm": "Installer Biblio {version} ? Biblio va se fermer puis se rouvrir tout seul dans une minute environ. Ta bibliothèque n'est pas touchée.",
+    "update_downloading": "Téléchargement de la mise à jour…",
+    "update_restarting": "Mise à jour prête : Biblio va redémarrer."
   },
   "nav": {
     "ask": "Question",

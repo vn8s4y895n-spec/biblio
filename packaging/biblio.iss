@@ -9,6 +9,9 @@ OutputDir=..\dist
 OutputBaseFilename=Biblio-{#Version}-setup
 ChangesAssociations=yes
 UninstallDisplayIcon={app}\Biblio.exe
+; Mise à jour depuis Biblio (installeur lancé en /SILENT) : fermer Biblio, puis le relancer (section [Run]).
+CloseApplications=force
+RestartApplications=no
 
 [Files]
 Source: "..\dist\Biblio\*"; DestDir: "{app}"; Flags: recursesubdirs
@@ -25,4 +28,4 @@ Root: HKCU; Subkey: "Software\Classes\Biblio.Package\DefaultIcon"; ValueType: st
 Root: HKCU; Subkey: "Software\Classes\Biblio.Package\shell\open\command"; ValueType: string; ValueData: """{app}\Biblio.exe"" ""%1"""
 
 [Run]
-Filename: "{app}\Biblio.exe"; Description: "Ouvrir Biblio"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\Biblio.exe"; Description: "Ouvrir Biblio"; Flags: nowait postinstall

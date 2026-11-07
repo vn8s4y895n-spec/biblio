@@ -901,6 +901,15 @@ def check_update():
     return updates.check()
 
 
+@router.post("/update/install", summary="Installer la nouvelle version (Biblio redémarre de lui-même)")
+def install_update(request: Request):
+    """Téléchargement vérifié (SHA-256), remplacement de l'application, relance. 422 si ce n'est pas possible ici
+    (Biblio lancé depuis le code source…) : l'interface propose alors le téléchargement."""
+    from . import updates
+
+    return updates.install(home(request))
+
+
 @router.get("/connectors", summary="Connecteurs : configurations MCP à copier, état de Zotero et du modèle de langue")
 def connectors(request: Request):
     from . import mcp_server  # import local : le SDK MCP n'est chargé que pour l'écran Connecteurs

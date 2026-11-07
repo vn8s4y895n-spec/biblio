@@ -21,6 +21,24 @@
   );
   let unseen = $state(0); // alertes de veille non lues
   let update = $state(null); // nouvelle version publiée sur GitHub
+  let installing = $state(false);
+
+  // Mise à jour en un clic (app installée) ; sinon, page de téléchargement.
+  async function installUpdate() {
+    if (!update.installable) {
+      open(update.download ?? update.url, "_blank");
+      return;
+    }
+    if (!confirm($t("app.update_confirm", { version: update.latest }))) return;
+    installing = true;
+    try {
+      await api("/update/install", { method: "POST" });
+      toast($t("app.update_restarting"), "ok", 60_000);
+    } catch (e) {
+      installing = false;
+      toast(e.message, "error", 10_000);
+    }
+  }
 
   async function refreshAlerts() {
     try { unseen = (await api("/alerts", { params: { unseen_only: true } })).unseen; } catch {}
@@ -123,9 +141,9 @@
       </nav>
       <div class="grow"></div>
       {#if update?.available}
-        <a class="update" href={update.download ?? update.url} target="_blank" rel="noreferrer" title={$t("app.update_help")}>
-          {$t("app.update", { version: update.latest })}
-        </a>
+        <button class="update" disabled={installing} onclick={installUpdate} title={$t(update.installable ? "app.update_install_help" : "app.update_help")}>
+          {installing ? $t("app.update_downloading") : $t("app.update", { version: update.latest })}
+        </button>
       {/if}
       <div class="lang" role="group" aria-label={$t("settings.language")}>
         {#each ["fr", "en"] as code}
@@ -194,7 +212,7 @@
 </div>
 
 <style>
-  .update { font-size: 12.5px; font-weight: 600; color: var(--accent); background: var(--accent-soft); padding: 4px 10px; border-radius: 999px; text-decoration: none; }
+  .update { border: none; cursor: pointer; font-size: 12.5px; font-weight: 600; color: var(--accent); background: var(--accent-soft); padding: 4px 10px; border-radius: 999px; text-decoration: none; }
   .shell { display: flex; flex-direction: column; height: 100%; }
   header {
     display: flex; align-items: center; gap: 18px; padding: 0 18px; height: 50px; flex: none;

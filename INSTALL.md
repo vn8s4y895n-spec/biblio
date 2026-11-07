@@ -29,7 +29,7 @@ Télécharge la dernière version : https://github.com/vn8s4y895n-spec/biblio/re
 
 ### Mettre à jour
 
-Quand une nouvelle version est publiée, Biblio l'affiche en haut de sa fenêtre (« Biblio x.y disponible ») : clique dessus pour la télécharger. Remplace l'application par la nouvelle version (Mac : glisser la nouvelle dans Applications ; Windows : lancer le nouvel installeur). Ta bibliothèque n'est pas dans l'application : elle est gardée telle quelle et mise à niveau automatiquement au premier lancement. Une sauvegarde est faite chaque jour (Réglages → Connecteurs → Sauvegardes).
+Quand une nouvelle version est publiée, Biblio l'affiche en haut de sa fenêtre (« Biblio x.y disponible »). Clique dessus puis confirme : Biblio la télécharge, la vérifie, se ferme et se rouvre à jour, en une minute environ. Si ce n'est pas possible (dossier Applications protégé, par exemple), le clic ouvre la page de téléchargement : remplace alors l'application à la main. Ta bibliothèque n'est pas dans l'application : elle est gardée telle quelle et mise à niveau automatiquement au premier lancement. Une sauvegarde est faite chaque jour (Réglages → Connecteurs → Sauvegardes).
 
 ### Où sont mes données ?
 
@@ -62,7 +62,7 @@ Download the latest version: https://github.com/vn8s4y895n-spec/biblio/releases/
 
 ### Updating
 
-When a new version is published, Biblio shows it at the top of its window (“Biblio x.y available”): click it to download. Replace the application with the new version (Mac: drag the new one into Applications; Windows: run the new installer). Your library is not inside the application: it is kept as is and upgraded automatically on first launch. A backup is made every day (Settings → Connectors → Backups).
+When a new version is published, Biblio shows it at the top of its window (“Biblio x.y available”). Click it and confirm: Biblio downloads it, checks it, closes and reopens up to date, in about a minute. If that is not possible (protected Applications folder, for instance), the click opens the download page: replace the application by hand. Your library is not inside the application: it is kept as is and upgraded automatically on first launch. A backup is made every day (Settings → Connectors → Backups).
 
 ### Where is my data?
 

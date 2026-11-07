@@ -283,9 +283,27 @@ def test_update_check(api, monkeypatch):
     monkeypatch.setattr(updates.sys, "platform", "darwin")
     out = api.get("/api/v1/update").json()
     assert out["available"] and out["latest"] == "9.1.0" and out["download"].endswith(".dmg")
+    assert out["installable"] is False  # lancé depuis le code source : pas d'installation en un clic
+    assert api.post("/api/v1/update/install").status_code == 422
     monkeypatch.setattr(sources.http, "cache_path", None)  # la réponse est gardée un jour : ici, on la refait
+    releases["assets"] = []  # construction échouée : version sans fichier, pas proposée
+    assert updates.check()["available"] is False
     releases["tag_name"] = "v0.0.9"
     assert updates.check()["available"] is False
     status["code"] = 404
-    assert updates.check() == {"current": updates.__version__, "latest": None, "available": False,
-                               "url": f"https://github.com/{updates.REPOSITORY}/releases"}  # fmt: skip
+    assert updates.check()["latest"] is None
+
+
+def test_update_download_is_verified(tmp_path, monkeypatch):
+    import hashlib
+
+    from biblio import sources, updates
+
+    monkeypatch.setattr(sources.http, "transport", httpx.MockTransport(lambda r: httpx.Response(200, content=b"dmg")))
+    asset = {"name": "Biblio-9.1.0.dmg", "browser_download_url": "https://example.org/Biblio.dmg"}
+    with pytest.raises(ValueError, match="SHA-256"):
+        updates._download({**asset, "digest": "sha256:" + "0" * 64}, tmp_path)
+    with pytest.raises(ValueError, match="SHA-256"):
+        updates._download(asset, tmp_path)  # sans empreinte publiée : refusé
+    ok = updates._download({**asset, "digest": "sha256:" + hashlib.sha256(b"dmg").hexdigest()}, tmp_path)
+    assert ok.read_bytes() == b"dmg"
