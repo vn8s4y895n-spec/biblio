@@ -23,7 +23,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from . import (__version__, ai, ask, backup, config, core, db, exports, formats, importer, journals, library, notes,
-               organize, llm, packages, search, semantic, watch, webhooks, zotero)
+               organize, llm, packages, search, semantic, trace, watch, webhooks, zotero)
 from .config import Config
 from .sources import http
 from .sources.http import SourceError
@@ -391,12 +391,52 @@ def ask_question(body: AskRequest, conn: Conn):
     """`scope` : online (bases en ligne, filtre des revues recommandées par défaut) ou library. `answer` : phrases
     choisies dans les sources, chacune avec le numéro de sa source (1…). Chaque source a son `summary` (conclusion
     des auteurs) et son `sample_size` quand le résumé les donne."""
+    return _ask(body, conn)
+
+
+def _ask(body: AskRequest, conn: sqlite3.Connection) -> dict:
     organize.remember_question(conn, body.question, body.scope)
     if body.scope == "library":
         return ask.ask_library(conn, body.question, body.limit)
     filters = search.Filters(year_from=body.year_from, year_to=body.year_to, study_types=body.study_type,
                              open_access=body.open_access, journal_status=[] if body.all_journals else ["recommended"])  # fmt: skip
     return ask.ask_online(conn, body.question, filters, body.limit, body.query)
+
+
+@router.post("/ask/stream", summary="Poser une question en suivant son déroulé (SSE)")
+def ask_stream(body: AskRequest, request: Request):
+    """Comme POST /ask, mais les étapes arrivent au fil de l'eau : `{"step": {"kind", …}}` (mots-clés et
+    traductions, requête de l'IA, chaque requête envoyée aux bases, résultats par base, fusion, filtres), puis
+    `{"result": …}` (la réponse de POST /ask) ou `{"error": "…"}`."""
+    import json as _json
+    import queue
+
+    events: queue.Queue = queue.Queue()
+    db_path = request.app.state.config.db_path
+
+    def work():
+        trace.listen(lambda step: events.put({"step": step}))
+        conn = db.connect(db_path)
+        try:
+            events.put({"result": _ask(body, conn)})
+        except (ValueError, core.NotFound, SourceError, llm.LLMError) as exc:
+            events.put({"error": str(exc)})
+        except Exception as exc:  # erreur imprévue : la montrer plutôt que laisser l'écran en attente
+            log.exception("Recherche : erreur inattendue")
+            events.put({"error": f"Erreur inattendue : {exc}"})
+        finally:
+            conn.close()
+
+    threading.Thread(target=work, daemon=True, name="ask").start()
+
+    def stream():
+        while True:
+            event = events.get()
+            yield f"data: {_json.dumps(event, ensure_ascii=False, default=str)}\n\n"
+            if "step" not in event:
+                return
+
+    return StreamingResponse(stream(), media_type="text/event-stream", headers={"Cache-Control": "no-cache"})
 
 
 class ForgetRequest(BaseModel):

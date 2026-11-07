@@ -93,8 +93,9 @@ def _translate(word: str) -> str:
     return word
 
 
-def keywords(text: str) -> list[str]:
-    """Termes de recherche d'une question : espèces entre guillemets, mots outils retirés, termes traduits."""
+def keywords(text: str, translated: list | None = None) -> list[str]:
+    """Termes de recherche d'une question : espèces entre guillemets, mots outils retirés, termes traduits.
+    `translated` (facultatif) reçoit les traductions faites, en paires (mot de la question, terme anglais)."""
     terms: list[str] = []
     text = SPECIES.sub(lambda m: f" {_species(m)} ", text.replace("’", "'"))
     for token in re.findall(r'"[^"]+"|[\w][\w-]*', text):
@@ -104,6 +105,8 @@ def keywords(text: str) -> list[str]:
             if plain(token) in STOPWORDS or len(token) < 2 or token.isdigit():
                 continue
             term = _translate(token)
+            if translated is not None and term.lower() != token.lower():
+                translated.append((token, term))
             term = f'"{term}"' if " " in term else term
         if term.lower() not in (t.lower() for t in terms):
             terms.append(term)

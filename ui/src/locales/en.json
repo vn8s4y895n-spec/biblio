@@ -396,5 +396,34 @@
     "backup_done": "Backup created: {name}",
     "export_full": "Full export (.zip)",
     "restore_help": "To restore: quit Biblio, then in a terminal run “biblio restore <archive>”. Current data is set aside, never erased."
+  },
+  "trace": {
+    "running": "Searching…",
+    "summary": "Trace · {sources} databases · {requests} requests · {time} s",
+    "keywords": "Keywords:",
+    "syntax": "PubMed query as typed:",
+    "user_query": "Query edited by hand:",
+    "ai_start": "The AI ({model}) is writing the PubMed query…",
+    "ai_plan": "AI query:",
+    "ai_error": "The AI did not answer, using keywords instead:",
+    "query": "Sent to {n} databases:",
+    "plain": "to databases without PubMed syntax:",
+    "cached": "cached",
+    "source": "{n} results in {time} s",
+    "merge": "{found} results, {merged} after merging duplicates, {kept} kept",
+    "hidden": "{n} hidden ({status})",
+    "rerank": "Re-ranked by meaning: the first {n}",
+    "fallback": "AI query too narrow ({found} results, fewer than {minimum}): keywords",
+    "relax": "Too few results ({found}, fewer than {minimum}): relaxed query (one term may be missing)",
+    "topic_concepts": "Topic filter: {removed} removed (each source must cover the query's concepts, all but one), {kept} kept",
+    "topic_keywords": "Topic filter: {removed} removed (under {need}% of the keywords), {kept} kept",
+    "library": "Library: {n} records found ({engine})",
+    "engine": {
+      "hybrid": "full text + meaning",
+      "lexical": "full text",
+      "semantic": "meaning"
+    },
+    "answer": "Answer built from the first {n} sources",
+    "interrupted": "The search was interrupted"
   }
 }

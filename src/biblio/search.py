@@ -1,12 +1,13 @@
 """Recherche en ligne fédérée : interroge les sources en parallèle, fusionne les doublons, filtre et classe."""
 
+import contextvars
 import logging
 import sqlite3
 import time
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 
-from . import core, journals
+from . import core, journals, trace
 from .sources import Query, crossref, europepmc, http, openalex, pubmed, semanticscholar, unpaywall
 
 log = logging.getLogger("biblio")
@@ -30,6 +31,7 @@ class Filters:
 
 
 def _run(name: str, query: Query) -> tuple[str, list[dict], dict]:
+    trace.source.set(SOURCES[name].LABEL)  # chaque base tourne dans sa copie du contexte : ses requêtes sont étiquetées
     start = time.perf_counter()
     try:
         records = SOURCES[name].search(query)
@@ -136,8 +138,15 @@ def search(conn: sqlite3.Connection, text: str, sources: list[str] | None = None
         raise ValueError(f"Source inconnue : {', '.join(sorted(unknown))}")
     query = Query(text, per_source, filters.year_from, filters.year_to, tuple(filters.mesh))
 
-    with ThreadPoolExecutor(max_workers=len(names)) as pool:
-        runs = list(pool.map(lambda n: _run(n, query), names))
+    trace.step("query", text=text, boolean=query.boolean, plain=query.plain, sources=[SOURCES[n].LABEL for n in names])
+    with ThreadPoolExecutor(max_workers=len(names)) as pool:  # copy_context : les requêtes restent tracées
+        futures = [pool.submit(contextvars.copy_context().run, _run, n, query) for n in names]
+        runs = []
+        for future in as_completed(futures):
+            name, records, status = future.result()
+            trace.step("source", name=name, label=SOURCES[name].LABEL, **status)
+            runs.append((name, records, status))
+    runs.sort(key=lambda run: names.index(run[0]))  # ordre fixe des sources : classement reproductible
     by_source = {name: records for name, records, _ in runs}
     statuses = {name: {"label": SOURCES[name].LABEL, **status} for name, _, status in runs}
 
@@ -153,7 +162,11 @@ def search(conn: sqlite3.Connection, text: str, sources: list[str] | None = None
         rec["in_library"] = in_library(conn, rec)
         results.append(rec)
 
+    trace.step("merge", found=sum(s["count"] for s in statuses.values()), merged=len(results) + sum(hidden.values()),
+               kept=len(results), hidden=hidden)  # fmt: skip
     reranked = rerank and _semantic_rerank(text, results)
+    if reranked:
+        trace.step("rerank", count=min(len(results), RERANK_TOP))
     return {
         "query": {"pubmed": text, "boolean": query.boolean, "plain": query.plain},
         "sources": statuses,

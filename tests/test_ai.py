@@ -138,3 +138,30 @@ def test_concept_groups_filter():
     on = {"title": "Dalbavancin against vancomycin-resistant E. faecium isolates", "abstract": "VRE bacteremia."}
     off = {"title": "Removing patients from MRSA isolation", "abstract": "Vancomycin resistance screening."}
     assert question.group_coverage(groups, on) == 1.0 and question.group_coverage(groups, off) == 1 / 3
+
+
+def test_ask_stream_shows_each_step(api, network):
+    """Le déroulé : mots-clés traduits, requête envoyée, chaque base, fusion, filtre, puis le résultat."""
+    with api.stream("POST", "/api/v1/ask/stream", json={"question": "Transmission des BLSE dans le foyer ?", "all_journals": True}) as r:
+        events = [json.loads(line[5:]) for line in r.iter_lines() if line.startswith("data:")]
+    steps = [e["step"] for e in events if "step" in e]
+    kinds = [s["kind"] for s in steps]
+    assert kinds[0] == "keywords" and ["BLSE", "ESBL"] in steps[0]["translated"]
+    assert kinds.index("query") < kinds.index("source") < kinds.index("merge") and kinds[-1] == "answer"
+    assert {s["label"] for s in steps if s["kind"] == "source"} == {"PubMed", "Europe PMC", "OpenAlex", "Crossref", "Semantic Scholar"}
+    requests = [s for s in steps if s["kind"] == "request"]
+    assert any("esearch.fcgi" in s["url"] and s["status"] == 200 for s in requests)
+    assert all("api_key" not in s["url"] and "email" not in s["url"] for s in requests)
+    assert events[-1]["result"]["query"] == "transmission ESBL household"
+
+
+def test_ask_stream_error(api, monkeypatch):
+    from biblio import ask
+
+    def broken(*args, **kwargs):
+        raise ValueError("requête impossible")
+
+    monkeypatch.setattr(ask, "ask_online", broken)
+    with api.stream("POST", "/api/v1/ask/stream", json={"question": "BLSE ?"}) as r:
+        events = [json.loads(line[5:]) for line in r.iter_lines() if line.startswith("data:")]
+    assert events == [{"error": "requête impossible"}]

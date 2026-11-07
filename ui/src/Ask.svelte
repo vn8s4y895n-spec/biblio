@@ -3,6 +3,7 @@
   import SourceCard from "./SourceCard.svelte";
   import { addRecord, copy, copyCitation, makePackage, sendToZotero } from "./lib/actions.js";
   import Synthesis from "./lib/Synthesis.svelte";
+  import Trace from "./lib/Trace.svelte";
   import { api, apiStream } from "./lib/api.js";
   import { fmt, t } from "./lib/i18n.js";
   import { toast } from "./lib/toast.js";
@@ -18,6 +19,7 @@
   let editedQuery = $state("");
   let result = $state(null);
   let loading = $state(false);
+  let trace = $state(null); // déroulé de la dernière recherche : { steps, running, ms }
   let error = $state(null);
   let selected = $state(0);
   let highlight = $state(null); // { source, text }
@@ -71,15 +73,22 @@
     error = null;
     highlight = null;
     savedInfo = null;
+    const started = performance.now();
+    trace = { steps: [], running: true, ms: 0 };
     try {
-      const out = await api("/ask", {
-        method: "POST",
-        body: {
-          question: question.trim(), scope, query, all_journals: !recommendedOnly,
-          year_from: yearFrom ? Number(yearFrom) : null, open_access: openAccess,
-        },
+      let out = null;
+      const body = {
+        question: question.trim(), scope, query, all_journals: !recommendedOnly,
+        year_from: yearFrom ? Number(yearFrom) : null, open_access: openAccess,
+      };
+      await apiStream("/ask/stream", body, (event) => {
+        if (ticket !== runs) return;
+        if (event.step) trace.steps.push(event.step);
+        if (event.result) out = event.result;
+        if (event.error) throw new Error(event.error);
       });
       if (ticket !== runs) return;
+      if (!out) throw new Error($t("trace.interrupted"));
       result = out;
       editedQuery = result.query ?? "";
       for (const w of out.warnings ?? []) toast(w, "warn", 7000);
@@ -90,7 +99,10 @@
     } catch (e) {
       if (ticket === runs) error = e.message;
     } finally {
-      if (ticket === runs) loading = false;
+      if (ticket === runs) {
+        loading = false;
+        trace = { ...trace, running: false, ms: performance.now() - started };
+      }
     }
   }
 
@@ -118,6 +130,7 @@
       result = { scope: s.scope, query: s.query, answer: s.answer, sources: s.sources, hidden: {}, total: s.sources.length };
       synthesis = s.synthesis;
       savedInfo = s;
+      trace = null;
       selected = 0;
     } catch (e) {
       toast(e.message, "error");
@@ -246,6 +259,10 @@
         </button>
       </div>
     </form>
+
+    {#if trace && (trace.running || trace.steps.length)}
+      <Trace {trace} />
+    {/if}
 
     {#if error}
       <p class="error">{error}</p>

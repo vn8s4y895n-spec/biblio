@@ -290,6 +290,7 @@ curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:8765/api/v1/works/10.100
 | GET | `/api/v1/journals/lookup?issn=&nlmid=&abbrev=` | Statut d'une revue |
 | POST | `/api/v1/shutdown` | Arrêter le serveur |
 | POST | `/api/v1/ask` | Question → réponse extraite et sources (`{"question", "scope": "online"\|"library", "query", "all_journals", "year_from", "open_access"}`) |
+| POST | `/api/v1/ask/stream` | Même question, avec son déroulé au fil de l'eau (SSE) : traductions, requête de l'IA, chaque requête envoyée aux bases (sans clé ni e-mail), fusion, filtres, puis le résultat |
 | GET | `/api/v1/history?limit=` | Questions posées récemment |
 | POST | `/api/v1/history/forget` | Retirer une question (`{"question", "scope"}`) ou tout effacer (`{}`) |
 | GET | `/api/v1/llm` | IA : fournisseur, modèle, joignable, modèles proposés |

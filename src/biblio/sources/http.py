@@ -11,7 +11,7 @@ from pathlib import Path
 
 import httpx
 
-from .. import __version__
+from .. import __version__, trace
 
 # Réglés au démarrage par `configure()` ; `transport` est remplacé dans les tests (aucun accès réseau).
 contact_email = ""
@@ -96,11 +96,13 @@ def get(url: str, params: dict | None = None, ttl: int | None = None, headers: d
     cached = ttl and cache_path
     key = _cache_key(url, params) if cached else ""
     if cached and (hit := _cache_read(key, url, params)):
+        trace.step("request", url=trace.public_url(hit.request.url), status=hit.status_code, cached=True)
         return hit
     agent = f"Biblio/{__version__}" + (f" (mailto:{contact_email})" if contact_email else "")
     host = httpx.URL(url).host
     if (until := _paused_until.get(host, 0)) > time.monotonic():
         raise SourceError(f"{host} : en pause encore {round(until - time.monotonic())} s après un refus (HTTP 429)")
+    start = time.perf_counter()
     try:
         with httpx.Client(transport=transport, timeout=20, follow_redirects=True, headers={"User-Agent": agent}) as client:
             for attempt in (1, 2):
@@ -110,7 +112,10 @@ def get(url: str, params: dict | None = None, ttl: int | None = None, headers: d
                     break
                 time.sleep(min(float(response.headers.get("retry-after", 1) or 1), 5))
     except httpx.HTTPError as exc:
+        trace.step("request", url=trace.public_url(httpx.URL(url, params=params)), error=str(exc) or type(exc).__name__)
         raise SourceError(f"{host} : {exc}") from exc
+    trace.step("request", url=trace.public_url(response.request.url), status=response.status_code,
+               ms=round((time.perf_counter() - start) * 1000))  # fmt: skip
     if response.status_code == 404:
         return None
     if response.status_code == 429:

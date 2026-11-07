@@ -5,7 +5,7 @@ import html
 import re
 import sqlite3
 
-from . import core, library, question as questions, search, semantic
+from . import core, library, question as questions, search, semantic, trace
 
 ANSWER_SOURCES = 8  # sources dont on lit le résumé pour composer la réponse
 ANSWER_SENTENCES = 5
@@ -111,24 +111,36 @@ def ask_online(conn: sqlite3.Connection, question: str, filters: search.Filters,
     écartées (`off_topic`)."""
     from . import ai, llm  # import local : ai importe ce module
 
-    terms = None if query or questions.is_syntax(question) else questions.keywords(question)
+    translated: list = []
+    terms = None if query or questions.is_syntax(question) else questions.keywords(question, translated)
     if terms is not None and not terms:
         terms = None
+    if query:
+        trace.step("user_query", query=query)
+    elif terms:
+        trace.step("keywords", terms=terms, translated=translated)
+    else:
+        trace.step("syntax", query=question)
     related, warnings, query_by = [], [], "user" if query else "keywords"
     if terms and ai.enabled():
+        trace.step("ai_plan_start", model=llm.current.model)
         try:  # requête écrite par le modèle (traduction, MeSH, synonymes) ; sinon, mots-clés
             planned = ai.plan(question)
             query, related, query_by, terms = planned["query"], planned["related"], "ai", None
+            trace.step("ai_plan", query=query, related=related)
         except llm.LLMError as exc:
             warnings.append(str(exc))
+            trace.step("ai_error", error=str(exc))
     query = query or (" ".join(terms) if terms else question)
     found = search.search(conn, query, limit=limit * 3, filters=filters)
     if query_by == "ai" and found["total"] < RELAX_BELOW:  # requête du modèle trop étroite : mots-clés
         terms = questions.keywords(question)
         query, query_by = " ".join(terms), "keywords"
+        trace.step("fallback", found=found["total"], minimum=RELAX_BELOW, query=query)
         found = search.search(conn, query, limit=limit * 3, filters=filters)
     if terms and len(terms) >= 3 and found["total"] < RELAX_BELOW:
         query = questions.relaxed(terms)
+        trace.step("relax", found=found["total"], minimum=RELAX_BELOW, query=query)
         found = search.search(conn, query, limit=limit * 3, filters=filters)
     results = found["results"]
     off_topic = 0
@@ -151,7 +163,10 @@ def ask_online(conn: sqlite3.Connection, question: str, filters: search.Filters,
         # À rang égal dans les bases, la source qui couvre le plus la question passe devant.
         kept.sort(key=lambda r: -(r["score"] + cover(r) / search.RRF_K))
         results = kept
+        trace.step("topic", by="concepts" if query_by == "ai" else "keywords", removed=off_topic, kept=len(kept),
+                   need=round(need, 2))  # fmt: skip
     sources = [_decorate(rec) for rec in results[:limit]]
+    trace.step("answer", shown=len(sources))
     return {"scope": "online", "question": question, "query": query, "query_by": query_by, "related": related,
             "warnings": warnings, "total": len(results), "hidden": found["hidden"], "off_topic": off_topic,
             "status": found["sources"], "answer": compose(question, sources), "sources": sources}  # fmt: skip
@@ -161,6 +176,7 @@ def ask_library(conn: sqlite3.Connection, question: str, limit: int = 20) -> dic
     """Dans la bibliothèque, la réponse reprend le meilleur passage de chaque notice (résumé, note ou texte
     intégral, avec sa page)."""
     found = library.search(conn, question, limit)
+    trace.step("library", engine=found["engine"], mode=found["mode"], total=found["total"])
     sources, answer = [], []
     for n, hit in enumerate(found["results"], 1):
         work = core.get_work(conn, hit["id"])

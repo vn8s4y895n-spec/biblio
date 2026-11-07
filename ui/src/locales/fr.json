@@ -396,5 +396,34 @@
     "backup_done": "Sauvegarde créée : {name}",
     "export_full": "Export complet (.zip)",
     "restore_help": "Restaurer : fermer Biblio puis, dans un terminal, « biblio restore <archive> ». Les données actuelles sont mises de côté, jamais effacées."
+  },
+  "trace": {
+    "running": "Recherche en cours…",
+    "summary": "Déroulé · {sources} bases · {requests} requêtes · {time} s",
+    "keywords": "Mots-clés :",
+    "syntax": "Requête PubMed telle quelle :",
+    "user_query": "Requête modifiée à la main :",
+    "ai_start": "L'IA ({model}) écrit la requête PubMed…",
+    "ai_plan": "Requête de l'IA :",
+    "ai_error": "L'IA n'a pas répondu, mots-clés à la place :",
+    "query": "Envoyée à {n} bases :",
+    "plain": "aux bases sans syntaxe PubMed :",
+    "cached": "en cache",
+    "source": "{n} résultats en {time} s",
+    "merge": "{found} résultats, {merged} après fusion des doublons, {kept} gardés",
+    "hidden": "{n} masqués ({status})",
+    "rerank": "Reclassés par le sens : les {n} premiers",
+    "fallback": "Requête de l'IA trop étroite ({found} résultats, moins de {minimum}) : mots-clés",
+    "relax": "Trop peu de résultats ({found}, moins de {minimum}) : requête assouplie (il peut manquer un terme)",
+    "topic_concepts": "Filtre de sujet : {removed} écartés (chaque source doit couvrir les concepts de la requête, à un près), {kept} gardés",
+    "topic_keywords": "Filtre de sujet : {removed} écartés (moins de {need} % des mots-clés), {kept} gardés",
+    "library": "Bibliothèque : {n} notices trouvées ({engine})",
+    "engine": {
+      "hybrid": "plein texte + sens",
+      "lexical": "plein texte",
+      "semantic": "sens"
+    },
+    "answer": "Réponse composée à partir des {n} premières sources",
+    "interrupted": "La recherche s'est interrompue"
   }
 }
