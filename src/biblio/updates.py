@@ -1,5 +1,5 @@
-"""Mises à jour de Biblio : la dernière version publiée sur GitHub (une requête par jour au plus, sans aucune
-donnée de la bibliothèque), puis son installation en un clic.
+"""Mises à jour de Biblio : la dernière version publiée sur GitHub (sans aucune donnée de la bibliothèque ;
+à chaque ouverture tant que Biblio est en 0.x, une fois par jour au plus ensuite), puis son installation en un clic.
 
 Mac : le .dmg est téléchargé, vérifié (empreinte SHA-256 publiée par GitHub), l'application est remplacée et
 relancée. Windows : l'installeur vérifié est lancé en mode silencieux ; il ferme Biblio, le remplace et le relance.
@@ -33,7 +33,8 @@ def _asset(assets: list[dict]) -> dict | None:
 
 
 def _latest() -> dict | None:
-    response = http.get(LATEST, ttl=24 * 3600, headers={"Accept": "application/vnd.github+json"})
+    ttl = None if __version__.startswith("0.") else 24 * 3600  # 0.x : versions fréquentes, vérifiées à chaque ouverture
+    response = http.get(LATEST, ttl=ttl, headers={"Accept": "application/vnd.github+json"})
     return response.json() if response is not None else None
 
 
