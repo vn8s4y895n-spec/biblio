@@ -27,6 +27,17 @@
   let compact = $state(load("biblio.compact", false));
   let collapsed = $state(new Set(load("biblio.collapsed", []))); // collections repliées (chemin)
   let showFilters = $state(false);
+  // Collections et tags cochés : la bibliothèque n'affiche que leurs articles (ce qui est en cours ou intéressant),
+  // le reste est archivé sans être perdu. Gardés d'une session à l'autre.
+  let shown = $state(new Set(load("biblio.shown", [])));
+  let shownAll = $state(load("biblio.shownAll", false)); // dans tous les cochés (sinon : dans l'un au moins)
+  const shownParams = () => (shown.size ? { labels: [...shown], all_labels: shownAll } : {});
+  function show(id, on) {
+    const next = new Set(shown);
+    on ? next.add(id) : next.delete(id);
+    shown = next;
+    keep("biblio.shown", [...next]);
+  }
   let detailVersion = $state(0); // la fiche ouverte se recharge après un changement fait depuis la liste
   let extra = $state({ yearFrom: "", yearTo: "", studyType: "", pdf: "" }); // filtres combinables
 
@@ -49,13 +60,18 @@
 
   $effect(() => {
     version; // rafraîchir après un import (glisser-déposer)
-    filter; q; sort; extra.yearFrom; extra.yearTo; extra.studyType; extra.pdf;
+    filter; q; sort; shown; shownAll; extra.yearFrom; extra.yearTo; extra.studyType; extra.pdf;
     const timer = setTimeout(() => refresh(), q ? 220 : 0);
     return () => clearTimeout(timer);
   });
 
   async function refreshLabels() {
-    [labels, counts] = await Promise.all([api("/labels"), api("/library/counts")]);
+    [labels, counts] = await Promise.all([api("/labels"), api("/library/counts", { params: shownParams() })]);
+    const known = new Set(labels.map((l) => l.id)); // une collection supprimée n'est plus cochée
+    if ([...shown].some((id) => !known.has(id))) {
+      shown = new Set([...shown].filter((id) => known.has(id)));
+      keep("biblio.shown", [...shown]);
+    }
   }
 
   async function refresh(more = false) {
@@ -66,7 +82,7 @@
         items = out.results;
         total = out.total;
       } else {
-        const params = { limit: PAGE, offset: more ? items.length : 0, sort };
+        const params = { limit: PAGE, offset: more ? items.length : 0, sort, ...shownParams() };
         if (extra.yearFrom) params.year_from = extra.yearFrom;
         if (extra.yearTo) params.year_to = extra.yearTo;
         if (extra.studyType) params.study_type = extra.studyType;
@@ -80,7 +96,7 @@
         const out = await api("/works", { params });
         items = more ? [...items, ...out.items] : out.items;
         total = out.total;
-        if (!more) api("/library/counts").then((c) => (counts = c));
+        if (!more) api("/library/counts", { params: shownParams() }).then((c) => (counts = c));
       }
     } catch (e) {
       toast(e.message, "error");
@@ -247,6 +263,8 @@
     {#if node?.children.size}
       <button class="ghost tw" aria-label={$t("library.fold")} onclick={() => fold(node.path)}>{collapsed.has(node.path) ? "▸" : "▾"}</button>
     {/if}
+    <input type="checkbox" class="show" checked={shown.has(label.id)} title={$t("library.show_help")}
+      aria-label={$t("library.show", { name: label.name })} onchange={(e) => show(label.id, e.target.checked)} />
     <button class="item grow" class:on={isOn({ type: "label", value: label.id })} onclick={() => choose({ type: "label", value: label.id })}>
       <span class="grow name">{text}</span><span class="faint small">{label.count}</span>
     </button>
@@ -270,6 +288,19 @@
 
 <div class="library" style="grid-template-columns: {widths[0]}px 5px {widths[1]}px 5px minmax(0, 1fr)">
   <nav class="filters scroll">
+    {#if shown.size}
+      <div class="shown small">
+        <span>{$t("library.shown", { n: shown.size })}</span>
+        {#if shown.size > 1}
+          <select class="mini" value={shownAll ? "all" : "any"} aria-label={$t("library.shown_mode")}
+            onchange={(e) => { shownAll = e.target.value === "all"; keep("biblio.shownAll", shownAll); }}>
+            <option value="any">{$t("library.shown_any")}</option>
+            <option value="all">{$t("library.shown_all")}</option>
+          </select>
+        {/if}
+        <button class="ghost small" onclick={() => { shown = new Set(); keep("biblio.shown", []); }}>{$t("library.shown_clear")}</button>
+      </div>
+    {/if}
     <button class="item" class:on={isOn({ type: "inbox" })} title={$t("library.inbox_help")} onclick={() => choose({ type: "inbox" })}><span class="grow">{$t("library.unread")}</span><span class="faint small">{counts?.inbox ?? ""}</span></button>
     {#each [["to_read", "read.to_read"], ["to_reread", "read.to_reread"], ["read", "read.read"]] as [value, key]}
       <button class="item" class:on={isOn({ type: "read_status", value })} onclick={() => choose({ type: "read_status", value })}><span class="grow">{$t(key)}</span><span class="faint small">{counts?.[value] ?? ""}</span></button>
@@ -471,6 +502,9 @@
   .item { display: flex; gap: 6px; }
   .tw { padding: 0 2px; width: 18px; font-size: 12px; color: var(--muted); flex: none; }
   .group .ghost { margin-left: 4px; }
+  .show { margin: 0 2px 0 4px; flex: none; }
+  .shown { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; padding: 6px 8px; margin-bottom: 6px;
+    border-radius: 8px; background: var(--accent-soft); color: var(--accent); }
   .side { display: flex; flex-direction: column; align-items: center; gap: 2px; }
   .fav { padding: 0 2px; font-size: 14px; line-height: 1; color: var(--faint); opacity: 0.35; }
   .fav:hover { opacity: 1; }

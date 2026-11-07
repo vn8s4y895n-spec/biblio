@@ -252,3 +252,20 @@ def test_sort_filters_counts_and_move(api, network):
     api.post(f"/api/v1/labels/{b['id']}/works", json={"works": [str(merino["id"])], "move": True})
     names = sorted(lb["name"] for lb in api.get(f"/api/v1/works/{merino['id']}").json()["labels"])
     assert names == ["B", "t"]  # sortie de A, le tag reste
+
+
+def test_checked_labels(api, network):
+    """Collections et tags cochés : n'afficher que leurs articles (l'un au moins, ou tous)."""
+    a, b, c = (api.post("/api/v1/works/manual", json={"title": f"Article {n}"}).json()["work"]["id"] for n in "ABC")
+    thesis = api.post("/api/v1/labels", json={"kind": "collection", "name": "Thèse"}).json()["id"]
+    staff = api.post("/api/v1/labels", json={"kind": "tag", "name": "staff"}).json()["id"]
+    api.post(f"/api/v1/labels/{thesis}/works", json={"works": [str(a), str(b)]})
+    api.post(f"/api/v1/labels/{staff}/works", json={"works": [str(b), str(c)]})
+    ids = lambda **p: sorted(w["id"] for w in api.get("/api/v1/works", params=p).json()["items"])  # noqa: E731
+    assert ids(labels=[thesis, staff]) == [a, b, c] and ids(labels=[thesis, staff], all_labels=True) == [b]
+    assert ids(labels=[thesis]) == [a, b]
+    assert ids(inbox=True) == [c]  # rangés dans Thèse : hors de « Sans statut »…
+    assert ids(inbox=True, labels=[thesis]) == [a, b]  # … sauf quand on regarde justement dans Thèse
+    api.patch(f"/api/v1/works/{a}", json={"read_status": "read"})
+    counts = api.get("/api/v1/library/counts", params={"labels": [thesis]}).json()
+    assert (counts["all"], counts["inbox"], counts["read"]) == (2, 1, 1)

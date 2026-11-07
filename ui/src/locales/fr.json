@@ -178,7 +178,14 @@
     "clear_filters": "Effacer",
     "fold": "Replier ou déplier",
     "move_to": "Déplacer vers…",
-    "remove_from": "Retirer de la collection"
+    "remove_from": "Retirer de la collection",
+    "show": "Afficher les articles de « {name} »",
+    "show_help": "Cocher : n'afficher que les articles des collections et tags cochés, dans toutes les vues",
+    "shown": "Affichage limité à {n} collection(s) ou tag(s)",
+    "shown_mode": "Articles affichés",
+    "shown_any": "dans l'un au moins",
+    "shown_all": "dans tous",
+    "shown_clear": "Tout afficher"
   },
   "detail": {
     "record": "Notice",

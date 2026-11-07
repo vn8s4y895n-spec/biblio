@@ -452,14 +452,35 @@ SORTS = {"added": "w.created_at DESC", "year": "w.year IS NULL, w.year DESC, w.c
          "rating": "w.rating IS NULL, w.rating DESC, w.created_at DESC"}  # fmt: skip
 
 
-def library_counts(conn: sqlite3.Connection) -> dict:
-    """Effectifs de la colonne de gauche, et les années et types d'étude présents (pour les filtres)."""
-    filed = ("EXISTS (SELECT 1 FROM work_labels wl JOIN labels l ON l.id = wl.label_id"
-             " WHERE wl.work_id = w.id AND l.kind = 'collection')")  # fmt: skip
-    row = conn.execute(f"""SELECT count(*) AS all_, sum(favorite = 1 OR (read_status IS NULL AND NOT {filed})) AS inbox,
+FILED = ("EXISTS (SELECT 1 FROM work_labels wl JOIN labels l ON l.id = wl.label_id"
+         " WHERE wl.work_id = w.id AND l.kind = 'collection')")  # fmt: skip
+
+
+def _labels_clause(labels: list[int] | None, all_labels: bool) -> tuple[str, list]:
+    """Notices des collections et tags cochés : dans au moins l'un (défaut), ou dans tous (`all_labels`)."""
+    if not labels:
+        return "1", []
+    marks = ", ".join("?" * len(labels))
+    if all_labels:
+        return (f"(SELECT count(DISTINCT label_id) FROM work_labels WHERE work_id = w.id AND label_id IN ({marks})) = ?",
+                [*labels, len(set(labels))])  # fmt: skip
+    return f"w.id IN (SELECT work_id FROM work_labels WHERE label_id IN ({marks}))", list(labels)
+
+
+def _inbox(labels: list[int] | None) -> str:
+    """« Sans statut » : sans statut de lecture et rangées nulle part, plus les favoris. Avec des collections ou tags
+    cochés, le rangement ne compte plus (on regarde justement dedans) : sans statut, plus les favoris."""
+    return "(w.favorite = 1 OR (w.read_status IS NULL" + ("" if labels else f" AND NOT {FILED}") + "))"
+
+
+def library_counts(conn: sqlite3.Connection, labels: list[int] | None = None, all_labels: bool = False) -> dict:
+    """Effectifs de la colonne de gauche (limités aux collections et tags cochés), et les années et types d'étude
+    présents (pour les filtres)."""
+    where, params = _labels_clause(labels, all_labels)
+    row = conn.execute(f"""SELECT count(*) AS all_, sum({_inbox(labels)}) AS inbox,
                sum(read_status = 'to_read') AS to_read, sum(read_status = 'to_reread') AS to_reread,
                sum(read_status = 'read') AS read, sum(favorite) AS favorite, min(year) AS year_min, max(year) AS year_max
-        FROM works w""").fetchone()  # fmt: skip
+        FROM works w WHERE {where}""", params).fetchone()  # fmt: skip
     types = conn.execute("SELECT study_type, count(*) FROM works WHERE study_type IS NOT NULL GROUP BY study_type ORDER BY 2 DESC")
     return {"all": row["all_"], **{k: row[k] or 0 for k in ("inbox", "to_read", "to_reread", "read", "favorite")},
             "years": [row["year_min"], row["year_max"]], "study_types": [{"value": t, "count": n} for t, n in types]}  # fmt: skip
@@ -468,11 +489,13 @@ def library_counts(conn: sqlite3.Connection) -> dict:
 def list_works(conn: sqlite3.Connection, limit: int = 50, offset: int = 0, journal_status: list[str] | None = None,
                label: int | None = None, read_status: str | None = None, retracted: bool = False,
                favorite: bool = False, inbox: bool = False, sort: str = "added", year_from: int | None = None,
-               year_to: int | None = None, study_types: list[str] | None = None, has_pdf: bool | None = None) -> dict:  # fmt: skip
+               year_to: int | None = None, study_types: list[str] | None = None, has_pdf: bool | None = None,
+               labels: list[int] | None = None, all_labels: bool = False) -> dict:  # fmt: skip
     """Favoris d'abord, puis les notices les plus récentes ; filtres : statut de revue (voir journals.STATUSES),
     collection ou tag (`label`), statut de lecture (`unread` : sans statut), favoris. `inbox` : les notices à trier
     (sans statut de lecture et rangées dans aucune collection), plus les favoris. `sort` : added (ajout), year,
-    author, title ou rating ; les favoris restent en tête. Filtres combinables : années, types d'étude, avec PDF."""
+    author, title ou rating ; les favoris restent en tête. Filtres combinables : années, types d'étude, avec PDF,
+    collections et tags cochés (`labels` : dans l'un au moins, ou dans tous avec `all_labels`)."""
     if sort not in SORTS:
         raise ValueError(f"Tri inconnu : {sort}")
     if unknown := set(journal_status or ()) - set(journals.STATUSES):
@@ -503,8 +526,11 @@ def list_works(conn: sqlite3.Connection, limit: int = 50, offset: int = 0, journ
     if has_pdf is not None:
         where.append(f"{'' if has_pdf else 'NOT '}EXISTS (SELECT 1 FROM work_files WHERE work_id = w.id)")
     if inbox:
-        where.append("(w.favorite = 1 OR (w.read_status IS NULL AND NOT EXISTS (SELECT 1 FROM work_labels wl"
-                     " JOIN labels l ON l.id = wl.label_id WHERE wl.work_id = w.id AND l.kind = 'collection')))")
+        where.append(_inbox(labels))
+    if labels:
+        clause, more = _labels_clause(labels, all_labels)
+        where.append(clause)
+        params += more
     flagged = f"EXISTS (SELECT 1 FROM work_updates WHERE work_id = w.id AND kind IN ({', '.join(repr(k) for k in RETRACTED)}))"
     if retracted:
         where.append(flagged)

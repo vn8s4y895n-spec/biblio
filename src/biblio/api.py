@@ -703,15 +703,17 @@ def list_works(
     year_to: int | None = None,
     study_type: Annotated[list[str] | None, Query(description="Type d'étude (répétable)")] = None,
     has_pdf: Annotated[bool | None, Query(description="true : avec PDF ; false : sans PDF")] = None,
+    labels: Annotated[list[int] | None, Query(description="Collections et tags cochés (répétable)")] = None,
+    all_labels: Annotated[bool, Query(description="true : dans tous les cochés ; sinon dans l'un au moins")] = False,
 ):
     """Les favoris d'abord, puis selon `sort`."""
     return core.list_works(conn, limit, offset, journal_status, label, read_status, retracted, favorite, inbox, sort,
-                           year_from, year_to, study_type, has_pdf)  # fmt: skip
+                           year_from, year_to, study_type, has_pdf, labels, all_labels)  # fmt: skip
 
 
 @router.get("/library/counts", summary="Effectifs des vues de la bibliothèque, années et types d'étude présents")
-def library_counts(conn: Conn):
-    return core.library_counts(conn)
+def library_counts(conn: Conn, labels: Annotated[list[int] | None, Query()] = None, all_labels: bool = False):
+    return core.library_counts(conn, labels, all_labels)
 
 
 SourceName = Literal[tuple(search.SOURCES)]  # type: ignore[valid-type]

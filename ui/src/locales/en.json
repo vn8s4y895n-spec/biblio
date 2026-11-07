@@ -178,7 +178,14 @@
     "clear_filters": "Clear",
     "fold": "Collapse or expand",
     "move_to": "Move to…",
-    "remove_from": "Remove from collection"
+    "remove_from": "Remove from collection",
+    "show": "Show the articles of “{name}”",
+    "show_help": "Tick: show only the articles of the ticked collections and tags, in every view",
+    "shown": "Showing {n} collection(s) or tag(s) only",
+    "shown_mode": "Articles shown",
+    "shown_any": "in at least one",
+    "shown_all": "in all",
+    "shown_clear": "Show everything"
   },
   "detail": {
     "record": "Record",
