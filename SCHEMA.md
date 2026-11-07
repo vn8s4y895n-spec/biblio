@@ -4,7 +4,7 @@ SQLite en mode WAL, clés étrangères actives. Les migrations sont dans `src/bi
 
 Ce document décrit le schéma **réellement en place**. Les tables prévues pour les phases suivantes sont dans [PLAN.md](PLAN.md).
 
-## `schema_migrations` (version actuelle : 6)
+## `schema_migrations` (version actuelle : 7)
 
 | Colonne | Type | Rôle |
 |---|---|---|
@@ -130,6 +130,35 @@ Le texte d'une note vit dans `notes/<citekey>.md`, avec un en-tête YAML (citeke
 ### `watched_files` : fichiers déjà examinés dans les Téléchargements (migration 5)
 
 `(path, mtime, size)` (PK), `status` (`attached`, `duplicate`, `ignored` : pas un article reconnu, `refused` : pas un PDF lisible), `seen_at`. Un fichier modifié (autre date ou taille) est réexaminé. La date d'activation de la surveillance est dans `meta` (`downloads.since`).
+
+## Rangement et recherches enregistrées (migration 7)
+
+### `labels` : collections et tags
+
+| Colonne | Rôle |
+|---|---|
+| id | Clé |
+| kind | `collection` ou `tag` (même table : ils ne diffèrent que par leur présentation) |
+| name | Nom, unique par type, casse ignorée (`COLLATE NOCASE`) |
+| created_at | Date de création |
+
+### `work_labels` : notices rangées
+
+`(label_id, work_id)` en clé primaire, `added_at`. Supprimer une collection ou un tag ne supprime pas ses notices ; supprimer une notice la retire de ses collections. À la fusion de deux notices, les rangements sont repris. Chaque ajout ou retrait est inscrit au journal `changes` (champ `collection` ou `tag`).
+
+### `saved_searches` : recherches enregistrées
+
+| Colonne | Rôle |
+|---|---|
+| question | La question posée |
+| origin | `biblio` (écran Question) ; `claude` réservé aux synthèses enregistrées par Claude via MCP (phase 10) |
+| scope | `online` ou `library` |
+| query | Requête envoyée aux bases (éventuellement corrigée à la main) |
+| answer_json | Phrases de la réponse : `[{"text", "source", "score", "page"?}]`, `source` = numéro dans `sources_json` (1…) |
+| sources_json | Sources telles qu'affichées (notices complètes, avec résumé Biblio et effectif) |
+| created_at, updated_at | Dates |
+
+Les sources sont copiées telles quelles : une recherche enregistrée se relit à l'identique, même hors ligne, et « Relancer » la refait avec les données du jour.
 
 ## Liste des revues recommandées (migration 2)
 

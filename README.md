@@ -1,7 +1,7 @@
 # Biblio
 
 Gestionnaire de bibliographie local, autonome et ouvert, pensé pour la recherche en santé.
-Le projet avance par phases : voir [PLAN.md](PLAN.md). Ce README décrit ce qui fonctionne **aujourd'hui** (phases 1 à 5).
+Le projet avance par phases : voir [PLAN.md](PLAN.md). Ce README décrit ce qui fonctionne **aujourd'hui** (phases 1 à 6).
 
 ## Installation (développement)
 
@@ -13,13 +13,36 @@ uv sync
 uv run biblio --help
 ```
 
+L'interface (Svelte, dans `ui/`) se compile une fois avec Node.js ; le résultat va dans `src/biblio/web/`, que le serveur sert sur `/`. Les utilisateurs de l'application n'auront pas besoin de Node.
+
+```bash
+npm --prefix ui install && npm --prefix ui run build
+npm --prefix ui run dev      # développement : rechargement à chaud, l'API du serveur local est relayée
+```
+
 **Si le dossier du projet est synchronisé par iCloud** (Documents, Bureau) : iCloud peut masquer des fichiers de l'environnement Python, que Python 3.13 ignore alors (`No module named 'biblio'`). Placez l'environnement hors synchro :
 
 ```bash
 rm -rf .venv && mkdir .venv.nosync && ln -s .venv.nosync .venv && uv sync
 ```
 
-## Usage
+## L'application
+
+```bash
+uv run biblio app              # fenêtre native (démarre le serveur ; l'arrête à la fermeture s'il l'a lancé)
+uv run biblio app --browser    # même interface dans le navigateur
+```
+
+- **Question** : une question en langage courant (ou une requête PubMed), dans les bases en ligne ou dans ta bibliothèque. La réponse est faite des phrases des résumés les plus proches de la question, chacune avec le numéro de sa source ; cliquer le numéro fait défiler jusqu'à la source et surligne la phrase. Sans IA pour l'instant (phase 9).
+- **Sources**, à droite : statut de revue (filtre « revues recommandées » actif par défaut ; les résultats masqués sont comptés), accès libre, type d'étude, effectif, **résumé Biblio** (la conclusion des auteurs), ajout à la bibliothèque (`＋` ou « Tout ajouter »). La requête envoyée aux bases est modifiable.
+- **Enregistrer la recherche** garde la question, la réponse et les sources ; les recherches enregistrées s'affichent sur l'écran d'accueil.
+- **Bibliothèque** en trois panneaux redimensionnables : filtres (statut de lecture, collections, tags, statut de revue), liste (recherche plein texte et par le sens, sélection multiple, glisser une notice sur une collection), fiche (statut de lecture, note étoilée, tags, collections, résumé, MeSH, **lecteur PDF**, **note Markdown**).
+- **Glisser-déposer** n'importe où : PDF, ou fichiers .bib, .ris, .nbib, .json.
+- **Clavier** : `/` question ou recherche, `j` / `k` élément suivant / précédent, `a` ajouter la source, `x` sélectionner, `Échap` quitter le champ, `⌘S` enregistrer la note.
+- **Réglages** : langue (français, anglais ou celle du système), thème (clair, sombre ou celui du système), e-mail de contact et clés des bases, surveillance des Téléchargements, téléchargement du modèle sémantique et avancement de l'indexation, vérification de la liste des revues. Ils sont écrits dans `config.toml`.
+- **Jeton** : l'interface le reçoit dans l'adresse (`#token=…`, partie jamais envoyée au serveur). Les fichiers de l'interface sont servis sans jeton ; aucune donnée ne l'est.
+
+## Ligne de commande
 
 ```bash
 uv run biblio add 10.1001/jama.2018.12163       # par DOI (nu, doi:…, ou URL doi.org)
@@ -204,7 +227,7 @@ curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:8765/api/v1/works/10.100
 | POST | `/api/v1/duplicates/dismiss` | Écarter (`{"a", "b"}`) |
 | POST | `/api/v1/notes/sync` | Réindexer les notes modifiées hors de Biblio |
 | POST | `/api/v1/inbox/scan` | Traiter la boîte d'entrée (et les Téléchargements si activé) maintenant |
-| GET | `/api/v1/works?limit=&offset=&journal_status=` | Lister (filtre répétable sur le statut de revue) |
+| GET | `/api/v1/works?limit=&offset=&journal_status=&label=&read_status=` | Lister (statut de revue répétable, collection ou tag, statut de lecture ou `unread`) |
 | GET | `/api/v1/works/{ref}` | Lire (id, clé, DOI, PMID) |
 | GET | `/api/v1/works/{ref}/changes` | Journal des modifications |
 | GET | `/api/v1/search/online?q=&source=&per_source=&limit=&year_from=&year_to=&study_type=&open_access=&mesh=&journal=&journal_status=&all_journals=` | Recherche fédérée |
@@ -214,6 +237,14 @@ curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:8765/api/v1/works/10.100
 | POST | `/api/v1/journals/import?filename=` | Importer un .xlsx (corps brut de la requête) |
 | GET | `/api/v1/journals/lookup?issn=&nlmid=&abbrev=` | Statut d'une revue |
 | POST | `/api/v1/shutdown` | Arrêter le serveur |
+| POST | `/api/v1/ask` | Question → réponse extraite et sources (`{"question", "scope": "online"\|"library", "query", "all_journals", "year_from", "open_access"}`) |
+| GET / POST | `/api/v1/searches` | Recherches enregistrées : lister / enregistrer (`{"question", "scope", "query", "answer", "sources"}`) |
+| GET / DELETE | `/api/v1/searches/{id}` | Relire / supprimer |
+| GET / POST | `/api/v1/labels` | Collections et tags (`{"kind": "collection"\|"tag", "name"}`) |
+| PATCH / DELETE | `/api/v1/labels/{id}` | Renommer / supprimer (les notices restent) |
+| POST | `/api/v1/labels/{id}/works` | Ranger des notices (`{"works": [...], "remove": false}`) |
+| PATCH | `/api/v1/works/{ref}` | Statut de lecture et note (`{"read_status", "rating"}` ; null efface) |
+| GET / PUT | `/api/v1/settings` | Réglages de l'interface (PUT : champs omis inchangés ; écrit `config.toml`) |
 
 L'en-tête facultatif `X-Biblio-Client` (`api`, `cli`, `web`, `mcp`…) est inscrit dans le journal des modifications.
 
@@ -221,7 +252,7 @@ L'en-tête facultatif `X-Biblio-Client` (`api`, `cli`, `web`, `mcp`…) est insc
 
 Dossier de données : `~/Library/Application Support/Biblio` (macOS), `%APPDATA%\Biblio` (Windows), `~/.local/share/biblio` (Linux). La variable `BIBLIO_HOME` le remplace.
 
-- `config.toml` : créé au premier lancement (droits 600). Contient le port, le jeton de l'API et, à remplir, l'e-mail de contact demandé par Crossref et NCBI, ainsi qu'une clé NCBI facultative.
+- `config.toml` : créé au premier lancement (droits 600). Contient le port, le jeton de l'API, l'e-mail de contact et les clés des bases, la surveillance des Téléchargements, la recherche par le sens, la langue et le thème. Il se modifie à la main ou depuis les réglages de l'application (qui le réécrivent sans les commentaires ajoutés à la main).
 - `library/` : les PDF (par empreinte). `notes/` : les notes Markdown. `inbox/` : la boîte d'entrée.
 - `biblio.sqlite` : la base (SQLite en mode WAL), documentée dans [SCHEMA.md](SCHEMA.md). **Ne la placez pas dans un dossier synchronisé** (iCloud Drive, OneDrive) : la synchro peut la corrompre.
 
@@ -240,4 +271,5 @@ Les tests n'accèdent jamais au réseau :
 - une recherche réelle auprès des 5 sources est enregistrée dans `tests/fixtures/search/`. La réponse de Semantic Scholar est écrite à la main d'après son format documenté, le service ayant refusé toutes les requêtes sans clé ;
 - le site de Sorbonne Université est simulé, avec des fichiers .xlsx générés par les tests ;
 - les PDF de test sont générés par les tests (`make_pdf` dans `tests/conftest.py`) : texte réel, titre, DOI en XMP ;
+- les deux fichiers de traduction (`ui/src/locales/fr.json`, `en.json`) doivent avoir les mêmes clés, et toute clé utilisée dans l'interface doit exister ;
 - la recherche par le sens est testée avec un modèle simulé (`FakeEmbedder`). Un test supplémentaire utilise le vrai modèle s'il est présent : `BIBLIO_TEST_MODELS=<dossier des modèles> uv run pytest`.

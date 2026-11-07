@@ -1,6 +1,6 @@
 # Biblio — Plan
 
-Statut : **plan validé le 2026-11-06. Phases 1 à 5 terminées** (2026-11-06). Prochaine étape : phase 6.
+Statut : **plan validé le 2026-11-06. Phases 1 à 6 terminées** (phase 6 : 2026-11-07). Prochaine étape : phase 7.
 
 ## Objectif
 
@@ -329,7 +329,24 @@ Chaque phase se termine par : tests verts (aucun appel réseau, réponses enregi
      - les césures marquées par pdfium (U+FFFE) sont recollées ; les PDF sont réindexés automatiquement quand l'extraction change (`index.version`) ;
      - une correspondance plein texte partielle pèse moitié moins que le sens. Le dosage des deux moteurs reste à affiner sur un usage réel : sur « les animaux de compagnie sont-ils un réservoir… », le sens seul classe le bon article en tête, l'hybride le met en troisième ;
      - l'indexation tourne à ~5 passages longs par seconde sur le processeur. CoreML (accélération Apple) est disponible dans ONNX Runtime mais n'a pas encore été testé.
-6. **Interface Svelte, FR + EN.** Écran question → réponse → sources (réponse extraite, sans LLM pour l'instant), résumé Biblio, enregistrement des recherches, bibliothèque en trois panneaux, lecteur PDF, collections, tags, notes, clavier, thèmes, traductions FR/EN, **écran de réglages** (e-mail de contact et clés OpenAlex / Semantic Scholar / NCBI, à faire avec toi à ce moment-là). Fenêtre `pywebview`.
+6. ✅ **Interface Svelte, FR + EN.** Écran question → réponse → sources (réponse extraite, sans LLM pour l'instant), résumé Biblio, enregistrement des recherches, bibliothèque en trois panneaux, lecteur PDF, collections, tags, notes, clavier, thèmes, traductions FR/EN, **écran de réglages** (e-mail de contact et clés OpenAlex / Semantic Scholar / NCBI, à faire avec toi à ce moment-là). Fenêtre `pywebview`.
+   - *Bilan* : 147 tests verts (dont la parité des traductions FR / EN). Interface compilée : 110 Ko de JavaScript (38 Ko compressés). Commande `biblio app` (fenêtre native) et `biblio app --browser`.
+   - *Démo réelle* (bibliothèque d'essai, navigateur intégré et fenêtre pywebview) :
+     - « household transmission of ESBL-producing E. coli » : 20 sources de revues recommandées (52 masquées), réponse en 5 phrases citées, toutes sur la transmission dans le foyer ; le numéro de citation mène à la source et surligne la phrase dans le résumé ;
+     - ajout par `a`, collection, statut de lecture, note étoilée, lecteur PDF, recherche par le sens dans la bibliothèque, enregistrement puis relecture d'une recherche ;
+     - thème sombre et anglais vérifiés ; les réglages réécrivent `config.toml` et servent sans redémarrage.
+   - *Écarts au plan* :
+     - **Svelte + Vite sans SvelteKit** : trois écrans et un routage par l'adresse (`#/…`) suffisent ;
+     - **lecteur PDF du système** (WebKit sur Mac, WebView2 sur Windows) au lieu de pdf.js : rien à embarquer, recherche et zoom inclus. Surligner un passage dans le PDF lui-même demandera pdf.js plus tard ;
+     - **collections et tags dans une même table** (`labels`), distingués par leur type ;
+     - langue et thème rangés dans `config.toml` (`[ui]`) : la fenêtre pywebview ne garde pas le stockage du navigateur ;
+     - non fait, reporté : « Questions liées » et « 1 phrase sans source vérifiée » (phase 9, avec le LLM), touches `c` (citation Vancouver) et `z` (Zotero) en phase 7, recherche relancée périodiquement en phase 8.
+   - *Constats et corrections* :
+     - **sans IA, une question en français ne trouve que la littérature francophone** (souvent sans résumé) : les bases cherchent les mots tels quels. La traduction de la question en requête PubMed anglaise relève de la phase 9 (ou de Claude par MCP, phase 10). D'ici là, poser la question en anglais ou en syntaxe PubMed ;
+     - une phrase trop éloignée de la question est écartée de la réponse (même seuil que la recherche par le sens) ;
+     - certaines sources collent les intitulés de résumé au texte (« …coliIMPORTANCE Entero… ») : ils sont reconnus et séparés ;
+     - un effectif inférieur à 10 n'est pas affiché (souvent un autre nombre) ;
+     - une réponse arrivée après une recherche plus récente est ignorée.
 7. **Citation, exports et envois.** CSL (Vancouver, APA, `.csl` ajoutés), BibTeX / RIS / CSL-JSON / Markdown, clés `auteurAnnéeMot`, `library.bib` synchronisé, **envoi direct dans Zotero**, **paquets `.biblio`** (création, aperçu, import, fusion).
 8. **Veille et suivi.** Recherches enregistrées, articles proches (OpenAlex / Semantic Scholar), preprint → publié, rétractations (Crossref / Retraction Watch).
 9. **IA.** Module LLM interchangeable, question → requête PubMed, réponse rédigée avec citations vérifiées, résumé rédigé, adaptateurs des moteurs IA externes (selon les API disponibles, voir les risques).

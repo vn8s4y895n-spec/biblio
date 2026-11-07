@@ -374,6 +374,8 @@ def merge_works(conn: sqlite3.Connection, home: Path, keep: str | int, drop: str
         conn.execute("INSERT OR IGNORE INTO work_subjects SELECT ?, subject_id, major FROM work_subjects WHERE work_id = ?", (keep_id, drop_id))
         moved = [r[0] for r in conn.execute("SELECT sha256 FROM work_files WHERE work_id = ?", (drop_id,))]
         conn.execute("UPDATE OR IGNORE work_files SET work_id = ? WHERE work_id = ?", (keep_id, drop_id))
+        conn.execute("INSERT OR IGNORE INTO work_labels SELECT label_id, ?, added_at FROM work_labels WHERE work_id = ?",
+                     (keep_id, drop_id))  # fmt: skip
         notes.absorb(conn, home, keep_id, drop_id)
         conn.execute("UPDATE changes SET work_id = ? WHERE work_id = ?", (keep_id, drop_id))
         _log(conn, keep_id, client, "merge", None, old, None)
@@ -419,27 +421,44 @@ def get_work(conn: sqlite3.Connection, ref: str | int) -> dict:
         )
     ]
     work["journal_status"] = journals.status_of_work(conn, work_id)
+    work["labels"] = [
+        dict(r) for r in conn.execute(
+            "SELECT l.id, l.kind, l.name FROM work_labels wl JOIN labels l ON l.id = wl.label_id"
+            " WHERE wl.work_id = ? ORDER BY l.kind, l.name", (work_id,))
+    ]  # fmt: skip
     return work
 
 
-def list_works(conn: sqlite3.Connection, limit: int = 50, offset: int = 0, journal_status: list[str] | None = None) -> dict:
-    """Notices les plus récentes d'abord ; `journal_status` filtre sur le statut de revue (voir journals.STATUSES)."""
+def list_works(conn: sqlite3.Connection, limit: int = 50, offset: int = 0, journal_status: list[str] | None = None,
+               label: int | None = None, read_status: str | None = None) -> dict:  # fmt: skip
+    """Notices les plus récentes d'abord ; filtres : statut de revue (voir journals.STATUSES), collection ou tag
+    (`label`), statut de lecture (`unread` : sans statut)."""
     if unknown := set(journal_status or ()) - set(journals.STATUSES):
         raise ValueError(f"Statut de revue inconnu : {', '.join(sorted(unknown))}")
-    where, params = "", []
+    where, params = [], []
     if journal_status:
-        where = f"WHERE s.status IN ({', '.join('?' * len(journal_status))})"
-        params = list(journal_status)
-    base = f"FROM works w JOIN work_journal_status s ON s.work_id = w.id {where}"
+        where.append(f"s.status IN ({', '.join('?' * len(journal_status))})")
+        params += journal_status
+    if label is not None:
+        where.append("w.id IN (SELECT work_id FROM work_labels WHERE label_id = ?)")
+        params.append(label)
+    if read_status == "unread":
+        where.append("w.read_status IS NULL")
+    elif read_status:
+        where.append("w.read_status = ?")
+        params.append(read_status)
+    base = f"FROM works w JOIN work_journal_status s ON s.work_id = w.id {'WHERE ' + ' AND '.join(where) if where else ''}"
     rows = conn.execute(
         f"""SELECT w.id, w.citekey, w.title, w.year, w.container_title, w.study_type, s.status AS journal_status,
+                   w.read_status, w.rating,
                    (SELECT family FROM work_authors WHERE work_id = w.id AND position = 0) AS first_author,
-                   (SELECT value FROM identifiers WHERE work_id = w.id AND scheme = 'doi') AS doi
+                   (SELECT value FROM identifiers WHERE work_id = w.id AND scheme = 'doi') AS doi,
+                   EXISTS (SELECT 1 FROM work_files WHERE work_id = w.id) AS has_pdf
             {base} ORDER BY w.created_at DESC, w.id DESC LIMIT ? OFFSET ?""",
         [*params, limit, offset],
     )
     total = conn.execute(f"SELECT count(*) {base}", params).fetchone()[0]
-    return {"total": total, "items": [dict(r) for r in rows]}
+    return {"total": total, "items": [{**dict(r), "has_pdf": bool(r["has_pdf"])} for r in rows]}
 
 
 def get_changes(conn: sqlite3.Connection, ref: str | int) -> list[dict]:

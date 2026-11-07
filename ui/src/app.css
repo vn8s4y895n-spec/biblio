@@ -1,0 +1,132 @@
+/* Thème : clair par défaut, sombre si le système l'est (ou si choisi dans les réglages). */
+:root {
+  --bg: #f6f6f3;
+  --surface: #ffffff;
+  --surface-2: #f0f0ec;
+  --border: #e3e3de;
+  --text: #1c1c1e;
+  --muted: #6b6b72;
+  --faint: #9a9aa1;
+  --accent: #0e6f6a;
+  --accent-soft: #e2f1ef;
+  --accent-text: #ffffff;
+  --mark: #fff1b8;
+  --ok: #1f7a3d;
+  --ok-soft: #e3f3e7;
+  --warn: #a5560b;
+  --warn-soft: #fbeedd;
+  --danger: #b42318;
+  --violet: #6d3fc9;
+  --violet-soft: #efe8fb;
+  --grey-soft: #ececea;
+  --shadow: 0 1px 2px rgb(0 0 0 / 0.05), 0 4px 16px rgb(0 0 0 / 0.04);
+  --radius: 10px;
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+  --serif: "Iowan Old Style", "Charter", Georgia, serif;
+  --mono: ui-monospace, "SF Mono", Menlo, monospace;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #161618;
+    --surface: #1e1e21;
+    --surface-2: #26262a;
+    --border: #333338;
+    --text: #ececef;
+    --muted: #a0a0a8;
+    --faint: #75757d;
+    --accent: #4fc1b6;
+    --accent-soft: #1d3634;
+    --accent-text: #0d1f1d;
+    --mark: #5a4b12;
+    --ok: #5cc884;
+    --ok-soft: #1c3324;
+    --warn: #e9a35a;
+    --warn-soft: #3a2a17;
+    --danger: #f97066;
+    --violet: #b79cf5;
+    --violet-soft: #2c2440;
+    --grey-soft: #2b2b30;
+    --shadow: 0 1px 2px rgb(0 0 0 / 0.3);
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #161618;
+  --surface: #1e1e21;
+  --surface-2: #26262a;
+  --border: #333338;
+  --text: #ececef;
+  --muted: #a0a0a8;
+  --faint: #75757d;
+  --accent: #4fc1b6;
+  --accent-soft: #1d3634;
+  --accent-text: #0d1f1d;
+  --mark: #5a4b12;
+  --ok: #5cc884;
+  --ok-soft: #1c3324;
+  --warn: #e9a35a;
+  --warn-soft: #3a2a17;
+  --danger: #f97066;
+  --violet: #b79cf5;
+  --violet-soft: #2c2440;
+  --grey-soft: #2b2b30;
+  --shadow: 0 1px 2px rgb(0 0 0 / 0.3);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font: 14px/1.5 var(--font);
+  -webkit-font-smoothing: antialiased;
+}
+#app { height: 100%; }
+
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+mark { background: var(--mark); color: inherit; border-radius: 2px; padding: 0 1px; }
+
+button, input, select, textarea { font: inherit; color: inherit; }
+button {
+  display: inline-flex; align-items: center; gap: 6px;
+  border: 1px solid var(--border); background: var(--surface); border-radius: 7px;
+  padding: 5px 11px; cursor: pointer; white-space: nowrap;
+}
+button:hover:not(:disabled) { border-color: var(--faint); }
+button:disabled { opacity: 0.5; cursor: default; }
+button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); font-weight: 550; }
+button.primary:hover:not(:disabled) { filter: brightness(1.08); }
+button.ghost { border-color: transparent; background: transparent; color: var(--muted); }
+button.ghost:hover:not(:disabled) { background: var(--surface-2); color: var(--text); }
+button.small { padding: 2px 8px; font-size: 12.5px; }
+
+input[type="text"], input[type="email"], input[type="search"], input[type="number"], input[type="password"], select, textarea {
+  border: 1px solid var(--border); background: var(--surface); border-radius: 7px; padding: 6px 10px; outline: none;
+}
+input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 1px;
+}
+textarea { resize: vertical; }
+
+.muted { color: var(--muted); }
+.faint { color: var(--faint); }
+.small { font-size: 12.5px; }
+.row { display: flex; align-items: center; gap: 8px; }
+.wrap { flex-wrap: wrap; }
+.grow { flex: 1; min-width: 0; }
+.eyebrow { font-size: 11.5px; font-weight: 650; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); }
+.chip {
+  display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px; border-radius: 99px;
+  background: var(--surface-2); font-size: 12px; line-height: 20px; white-space: nowrap;
+}
+.kbd { font: 11px var(--mono); border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 4px; padding: 0 4px; color: var(--muted); }
+.title-serif { font-family: var(--serif); }
+.scroll { overflow: auto; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+input[type="checkbox"], progress { accent-color: var(--accent); }

@@ -108,6 +108,16 @@ def serve(
     uvicorn.run(create_app(cfg, background=True), host=host or cfg.host, port=port or cfg.port)
 
 
+@app.command("app")
+def open_app(
+    browser: Annotated[bool, typer.Option("--browser", help="Ouvrir dans le navigateur plutôt que dans une fenêtre")] = False,
+) -> None:
+    """Ouvre Biblio dans sa fenêtre (démarre le serveur au besoin)."""
+    from .app import run
+
+    run(browser)
+
+
 @app.command()
 def stop() -> None:
     """Arrête le serveur s'il tourne (sans le démarrer)."""

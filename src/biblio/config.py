@@ -1,5 +1,6 @@
 """Configuration : `config.toml` dans le dossier de données, créé au premier lancement."""
 
+import json
 import os
 import secrets
 import sys
@@ -8,31 +9,37 @@ from dataclasses import dataclass
 from pathlib import Path
 
 TEMPLATE = """\
-# Configuration de Biblio
+# Configuration de Biblio (modifiable ici ou dans les réglages de l'application)
 
 [server]
-host = "127.0.0.1"   # mettre "0.0.0.0" pour ouvrir l'accès au réseau local
-port = 8765
-token = "{token}"   # jeton de l'API : en-tête « Authorization: Bearer <jeton> »
+host = {host}   # mettre "0.0.0.0" pour ouvrir l'accès au réseau local
+port = {port}
+token = {token}   # jeton de l'API : en-tête « Authorization: Bearer <jeton> »
 
 [sources]
-contact_email = ""   # recommandé : Crossref, OpenAlex et NCBI le demandent ; indispensable pour Unpaywall
-ncbi_api_key = ""    # facultatif : fait passer la limite PubMed de 3 à 10 requêtes/s
-openalex_api_key = ""         # facultatif, gratuit (openalex.org/settings/api) : sans clé, petit budget quotidien partagé
-semanticscholar_api_key = ""  # facultatif, gratuit sur demande : sans clé, Semantic Scholar refuse souvent (HTTP 429)
+contact_email = {contact_email}   # recommandé : Crossref, OpenAlex et NCBI le demandent ; indispensable pour Unpaywall
+ncbi_api_key = {ncbi}    # facultatif : fait passer la limite PubMed de 3 à 10 requêtes/s
+openalex_api_key = {openalex}         # facultatif, gratuit (openalex.org/settings/api) : sans clé, petit budget quotidien partagé
+semanticscholar_api_key = {semanticscholar}  # facultatif, gratuit sur demande : sans clé, Semantic Scholar refuse souvent (HTTP 429)
 
 [inbox]
 # Importer automatiquement les PDF d'articles téléchargés dans ce dossier (ceux qui ne sont pas reconnus comme
 # des articles sont laissés de côté). Les fichiers du dossier ne sont jamais déplacés ni supprimés.
-watch_downloads = false
-downloads_dir = "~/Downloads"
+watch_downloads = {watch_downloads}
+downloads_dir = {downloads_dir}
 
 [semantic]
 # Recherche par le sens (modèle bge-m3, multilingue, exécuté localement : aucun texte n'est envoyé).
-# Le modèle (~2,3 Go) est téléchargé une fois au premier démarrage du serveur.
-enabled = true
-models_dir = ""   # vide : dossier « models » du dossier de données
+# Le modèle (~2,3 Go) se télécharge une fois, depuis les réglages ou avec `biblio semantic download`.
+enabled = {semantic}
+models_dir = {models_dir}   # vide : dossier « models » du dossier de données
+
+[ui]
+language = {language}   # "fr", "en" ou vide (langue du système)
+theme = {theme}   # "system", "light" ou "dark"
 """
+
+API_KEYS = ("ncbi", "openalex", "semanticscholar")
 
 
 def home() -> Path:
@@ -58,6 +65,8 @@ class Config:
     downloads_dir: Path = Path.home() / "Downloads"
     semantic: bool = True
     models_dir_setting: str = ""
+    language: str = ""
+    theme: str = "system"
 
     @property
     def models_dir(self) -> Path:
@@ -77,25 +86,45 @@ class Config:
         return f"http://{host}:{self.port}"
 
 
+def save(cfg: Config) -> None:
+    """Réécrit config.toml (lisible par le seul utilisateur : il contient le jeton et les clés)."""
+    def value(v) -> str:  # json.dumps produit une chaîne TOML valide
+        return str(v).lower() if isinstance(v, bool) else json.dumps(str(v), ensure_ascii=False)
+
+    downloads = str(cfg.downloads_dir).replace(str(Path.home()), "~", 1)
+    text = TEMPLATE.format(
+        host=value(cfg.host), port=cfg.port, token=value(cfg.token), contact_email=value(cfg.contact_email),
+        **{name: value(cfg.api_keys.get(name, "")) for name in API_KEYS},
+        watch_downloads=value(cfg.watch_downloads), downloads_dir=value(downloads), semantic=value(cfg.semantic),
+        models_dir=value(cfg.models_dir_setting), language=value(cfg.language), theme=value(cfg.theme),
+    )  # fmt: skip
+    cfg.home.mkdir(parents=True, exist_ok=True)
+    tmp = cfg.path.with_suffix(".tmp")
+    tmp.write_text(text, encoding="utf-8")
+    tmp.chmod(0o600)
+    tmp.replace(cfg.path)
+
+
 def load() -> Config:
     root = home()
     path = root / "config.toml"
     if not path.exists():
-        root.mkdir(parents=True, exist_ok=True)
-        path.write_text(TEMPLATE.format(token=secrets.token_urlsafe(32)), encoding="utf-8")
-        path.chmod(0o600)
+        save(Config(home=root, host="127.0.0.1", port=8765, token=secrets.token_urlsafe(32), contact_email="",
+                    api_keys={}))  # fmt: skip
     data = tomllib.loads(path.read_text(encoding="utf-8"))
     server, sources, inbox = data.get("server", {}), data.get("sources", {}), data.get("inbox", {})
-    semantic = data.get("semantic", {})
+    semantic, ui = data.get("semantic", {}), data.get("ui", {})
     return Config(
         home=root,
         host=server.get("host", "127.0.0.1"),
         port=int(server.get("port", 8765)),
         token=server["token"],
         contact_email=sources.get("contact_email", ""),
-        api_keys={name: sources.get(f"{name}_api_key", "") for name in ("ncbi", "openalex", "semanticscholar")},
+        api_keys={name: sources.get(f"{name}_api_key", "") for name in API_KEYS},
         watch_downloads=bool(inbox.get("watch_downloads", False)),
         downloads_dir=Path(inbox.get("downloads_dir", "~/Downloads")).expanduser(),
         semantic=bool(semantic.get("enabled", True)),
         models_dir_setting=semantic.get("models_dir", ""),
+        language=ui.get("language", ""),
+        theme=ui.get("theme", "system"),
     )

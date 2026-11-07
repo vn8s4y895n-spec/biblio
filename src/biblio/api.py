@@ -8,13 +8,17 @@ import sqlite3
 import threading
 import time
 from collections.abc import Iterator
+from dataclasses import replace
+from importlib.resources import files
+from pathlib import Path
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, BackgroundTasks, Body, Depends, FastAPI, Header, HTTPException, Query, Request, Response
 from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import __version__, core, db, formats, importer, journals, library, notes, search, semantic
+from . import __version__, ask, config, core, db, formats, importer, journals, library, notes, organize, search, semantic
 from .config import Config
 from .sources import http
 from .sources.http import SourceError
@@ -98,6 +102,67 @@ class MergeRequest(BaseModel):
 
 class NoteBody(BaseModel):
     text: str
+
+
+class WorkUpdate(BaseModel):
+    read_status: Literal[organize.READ_STATUSES] | None = None  # type: ignore[valid-type]
+    rating: int | None = None
+
+
+class LabelCreate(BaseModel):
+    kind: Literal[organize.KINDS]  # type: ignore[valid-type]
+    name: str
+
+
+class LabelRename(BaseModel):
+    name: str
+
+
+class LabelWorks(BaseModel):
+    works: list[str]  # id, clé, DOI ou PMID
+    remove: bool = False
+
+
+class AskRequest(BaseModel):
+    question: str
+    scope: Literal["online", "library"] = "online"
+    query: str | None = None  # requête PubMed modifiée (sinon : la question)
+    limit: int = 20
+    year_from: int | None = None
+    year_to: int | None = None
+    study_type: list[str] = []
+    open_access: bool = False
+    all_journals: bool = False  # montrer aussi les revues hors liste
+
+
+class SavedSearch(BaseModel):
+    question: str
+    scope: Literal["online", "library"] = "online"
+    query: str | None = None
+    answer: list[dict] = []
+    sources: list[dict] = []
+
+
+class Settings(BaseModel):
+    """Réglages modifiables depuis l'interface (les autres restent dans config.toml)."""
+
+    contact_email: str | None = None
+    ncbi_api_key: str | None = None
+    openalex_api_key: str | None = None
+    semanticscholar_api_key: str | None = None
+    watch_downloads: bool | None = None
+    downloads_dir: str | None = None
+    semantic: bool | None = None
+    language: Literal["", "fr", "en"] | None = None
+    theme: Literal["system", "light", "dark"] | None = None
+
+
+def settings_of(cfg: Config) -> dict:
+    return {
+        "contact_email": cfg.contact_email, **{f"{k}_api_key": v for k, v in cfg.api_keys.items()},
+        "watch_downloads": cfg.watch_downloads, "downloads_dir": str(cfg.downloads_dir), "semantic": cfg.semantic,
+        "language": cfg.language, "theme": cfg.theme, "home": str(cfg.home), "version": __version__,
+    }  # fmt: skip
 
 
 def home(request: Request):
@@ -224,6 +289,86 @@ def shutdown(background: BackgroundTasks):
     return {"status": "stopping"}
 
 
+@router.get("/settings", summary="Réglages modifiables depuis l'interface")
+def get_settings(request: Request):
+    return settings_of(request.app.state.config)
+
+
+@router.put("/settings", summary="Modifier des réglages (champs omis : inchangés) ; écrit config.toml")
+def put_settings(body: Settings, request: Request):
+    """Les e-mail et clés servent dès la requête suivante. Activer ou couper la recherche sémantique prend effet au
+    prochain démarrage (`restart_needed`)."""
+    cfg = request.app.state.config
+    changes = body.model_dump(exclude_none=True)
+    if "contact_email" in changes and changes["contact_email"].strip() and "@" not in changes["contact_email"]:
+        raise HTTPException(422, "Adresse e-mail invalide")
+    keys = {k: changes.pop(f"{k}_api_key", v).strip() for k, v in cfg.api_keys.items()}
+    if "downloads_dir" in changes:
+        changes["downloads_dir"] = Path(changes["downloads_dir"]).expanduser()
+    new = replace(cfg, **{k: v.strip() if isinstance(v, str) else v for k, v in changes.items()}, api_keys=keys)
+    config.save(new)
+    request.app.state.config = new
+    http.configure(new.contact_email, new.api_keys, new.db_path)
+    return {**settings_of(new), "restart_needed": new.semantic != request.app.state.semantic_at_start}
+
+
+@router.post("/ask", summary="Poser une question : réponse extraite des sources, avec ses références")
+def ask_question(body: AskRequest, conn: Conn):
+    """`scope` : online (bases en ligne, filtre des revues recommandées par défaut) ou library. `answer` : phrases
+    choisies dans les sources, chacune avec le numéro de sa source (1…). Chaque source a son `summary` (conclusion
+    des auteurs) et son `sample_size` quand le résumé les donne."""
+    if body.scope == "library":
+        return ask.ask_library(conn, body.question, body.limit)
+    filters = search.Filters(year_from=body.year_from, year_to=body.year_to, study_types=body.study_type,
+                             open_access=body.open_access, journal_status=[] if body.all_journals else ["recommended"])  # fmt: skip
+    return ask.ask_online(conn, body.question, filters, body.limit, body.query)
+
+
+@router.get("/searches", summary="Recherches enregistrées (les plus récentes d'abord)")
+def list_searches(conn: Conn):
+    return organize.searches(conn)
+
+
+@router.post("/searches", status_code=201, summary="Enregistrer une recherche : question, réponse et sources")
+def save_search(body: SavedSearch, conn: Conn):
+    return organize.save_search(conn, body.model_dump())
+
+
+@router.get("/searches/{search_id}", summary="Relire une recherche enregistrée")
+def get_search(search_id: int, conn: Conn):
+    return organize.get_search(conn, search_id)
+
+
+@router.delete("/searches/{search_id}", status_code=204, summary="Supprimer une recherche enregistrée")
+def delete_search(search_id: int, conn: Conn):
+    organize.delete_search(conn, search_id)
+
+
+@router.get("/labels", summary="Collections et tags, avec leur nombre de notices")
+def list_labels(conn: Conn):
+    return organize.labels(conn)
+
+
+@router.post("/labels", status_code=201, summary="Créer une collection ou un tag (renvoie l'existant si le nom est pris)")
+def create_label(body: LabelCreate, conn: Conn):
+    return organize.create_label(conn, body.kind, body.name)
+
+
+@router.patch("/labels/{label_id}", summary="Renommer une collection ou un tag")
+def rename_label(label_id: int, body: LabelRename, conn: Conn):
+    return organize.rename_label(conn, label_id, body.name)
+
+
+@router.delete("/labels/{label_id}", status_code=204, summary="Supprimer une collection ou un tag (pas ses notices)")
+def delete_label(label_id: int, conn: Conn):
+    organize.delete_label(conn, label_id)
+
+
+@router.post("/labels/{label_id}/works", summary="Ranger des notices dans une collection / un tag (ou les en retirer)")
+def label_works(label_id: int, body: LabelWorks, conn: Conn, client: Client):
+    return {"changed": organize.set_label(conn, label_id, body.works, not body.remove, client)}
+
+
 JournalStatus = Literal[journals.STATUSES]  # type: ignore[valid-type]
 
 
@@ -233,8 +378,10 @@ def list_works(
     limit: Annotated[int, Query(ge=1, le=500)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
     journal_status: Annotated[list[JournalStatus] | None, Query(description="Filtre sur le statut de revue (répétable)")] = None,
+    label: Annotated[int | None, Query(description="Collection ou tag (id)")] = None,
+    read_status: Literal[(*organize.READ_STATUSES, "unread")] | None = None,  # type: ignore[valid-type]
 ):
-    return core.list_works(conn, limit, offset, journal_status)
+    return core.list_works(conn, limit, offset, journal_status, label, read_status)
 
 
 SourceName = Literal[tuple(search.SOURCES)]  # type: ignore[valid-type]
@@ -355,12 +502,18 @@ def get_work(ref: str, conn: Conn):
     return core.get_work(conn, ref)
 
 
-def _background(config: Config) -> None:
+@router.patch("/works/{ref:path}", summary="Statut de lecture et note (1 à 5) ; null efface")
+def update_work(ref: str, body: WorkUpdate, conn: Conn, client: Client):
+    return organize.update_work(conn, ref, body.model_dump(exclude_unset=True), client)
+
+
+def _background(app: FastAPI) -> None:
     """Toutes les 5 s : boîte d'entrée, Téléchargements (si activé) et notes modifiées hors de Biblio.
-    Toutes les 6 h : liste des revues."""
+    Toutes les 6 h : liste des revues. Les réglages sont relus à chaque tour (écran de réglages)."""
     # ponytail: boucle dans un thread ; passera par la file de tâches de la phase 5.
     next_journal_check = 0.0
     while True:
+        config = app.state.config
         conn = db.connect(config.db_path)
         try:
             importer.scan_inbox(conn, config.home)
@@ -387,12 +540,6 @@ def create_app(config: Config, background: bool = False) -> FastAPI:
     core.setup(conn, config.home)
     conn.close()
     http.configure(config.contact_email, config.api_keys, config.db_path)
-    if background:
-        threading.Thread(target=_background, args=(config,), daemon=True, name="background").start()
-        if config.semantic:  # charge le modèle s'il est téléchargé, puis indexe les passages au fil de l'eau
-            threading.Thread(target=semantic.run_indexer, args=(config.db_path, config.models_dir), daemon=True,
-                             name="semantic").start()  # fmt: skip
-
     app = FastAPI(
         title="Biblio",
         version=__version__,
@@ -400,6 +547,12 @@ def create_app(config: Config, background: bool = False) -> FastAPI:
         "(jeton dans config.toml ou `biblio token`).",
     )
     app.state.config = config
+    app.state.semantic_at_start = config.semantic
+    if background:
+        threading.Thread(target=_background, args=(app,), daemon=True, name="background").start()
+        if config.semantic:  # charge le modèle s'il est téléchargé, puis indexe les passages au fil de l'eau
+            threading.Thread(target=semantic.run_indexer, args=(config.db_path, config.models_dir), daemon=True,
+                             name="semantic").start()  # fmt: skip
 
     @app.get("/api/v1/health", summary="État du serveur (sans authentification)")
     def health():
@@ -411,4 +564,10 @@ def create_app(config: Config, background: bool = False) -> FastAPI:
     errors = {ValueError: 422, core.NotFound: 404, SourceError: 502}
     for exc_type, status in errors.items():
         app.add_exception_handler(exc_type, lambda _req, exc, status=status: JSONResponse({"detail": str(exc)}, status))
+
+    # Interface compilée (ui/, `npm run build`) : fichiers statiques sans données, servis sans jeton. L'interface
+    # reçoit le jeton dans l'adresse (#token=…), qui n'est jamais envoyée au serveur.
+    web = files("biblio") / "web"
+    if web.is_dir():
+        app.mount("/", StaticFiles(directory=str(web), html=True), name="web")
     return app

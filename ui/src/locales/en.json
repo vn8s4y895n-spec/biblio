@@ -1,0 +1,103 @@
+{
+  "app": { "no_token": "Open Biblio from the app (or run the command below): this page needs the access token." },
+  "nav": { "ask": "Ask", "library": "Library", "settings": "Settings" },
+  "common": { "cancel": "Cancel", "delete": "Delete", "decimal": "." },
+  "keys": {
+    "question": "ask a question", "sources": "next / previous source", "add": "add to library",
+    "search": "search", "navigate": "next / previous item", "select": "select"
+  },
+  "ask": {
+    "placeholder": "Ask your question, in English or French (or in PubMed syntax)…",
+    "scope": "Where to search", "scope_online": "Online databases", "scope_library": "My library",
+    "recommended_only": "Recommended journals only", "open_access": "Open access", "since": "Since",
+    "submit": "Search", "searching": "Searching…",
+    "query": "Query sent to the databases (editable)", "rerun": "Run again",
+    "answer": "Answer", "no_answer": "No sentence from the sources directly answers the question.",
+    "extracted": "Sentences taken from the sources' abstracts, without AI: always check the article.",
+    "extracted_library": "Passages taken from your library (abstracts, notes, full texts).",
+    "save": "Save search", "saved": "Search saved", "saved_short": "Saved",
+    "saved_on": "Search saved on {date}", "origin": "by {origin}", "refresh": "Run again now",
+    "saved_searches": "Saved searches", "sources_count": "{n} sources",
+    "tips": "Examples: “household transmission of ESBL E. coli”, “treatment duration for Pseudomonas bacteremia”, or a PubMed query.",
+    "sources": "Sources ({n})", "hidden": "{n} hidden (not listed) · show", "no_sources": "No source with these filters.",
+    "add_all": "Add all", "added": "Added:"
+  },
+  "source": {
+    "summary": "Biblio summary", "abstract": "Full abstract", "add": "Add", "adding": "Adding…",
+    "open_in_library": "In library", "free_pdf": "Free PDF", "cited_by": "cited {n} times"
+  },
+  "badge": { "oa": "Open access" },
+  "status": {
+    "recommended": { "label": "Recommended journal", "help": "Journal on the CDD / CNU health list (Sorbonne University)" },
+    "withdrawn": { "label": "Removed from list", "help": "Journal removed from the recommended list" },
+    "not_listed": { "label": "Not listed", "help": "Journal not on the recommended list" },
+    "preprint": { "label": "Preprint", "help": "Not peer reviewed" },
+    "unidentified": { "label": "Unknown journal", "help": "Journal not found (no ISSN or NLMID)" },
+    "no_list": { "label": "No list", "help": "No journal list loaded" }
+  },
+  "study": {
+    "rct": "Randomized trial", "clinical-trial": "Clinical trial", "meta-analysis": "Meta-analysis",
+    "systematic-review": "Systematic review", "review": "Review", "cohort": "Cohort", "case-control": "Case-control",
+    "cross-sectional": "Cross-sectional", "observational": "Observational", "case-report": "Case report",
+    "guideline": "Guideline"
+  },
+  "origin": { "metadata": "Record", "abstract": "Abstract", "fulltext": "Full text", "note": "Note" },
+  "read": { "to_read": "To read", "read": "Read", "to_reread": "To reread" },
+  "library": {
+    "all": "Whole library", "unread": "No status", "collections": "Collections", "tags": "Tags",
+    "journals": "Journals", "new": "New", "name": "Name…", "no_collection": "No collection", "no_tag": "No tag",
+    "confirm_delete_label": "Delete “{name}”? The articles stay in the library.",
+    "search": "Search the library (full text and meaning)…", "count": "{n} articles",
+    "selected": "{n} selected", "add_to": "Add to…", "mark_read": "Mark read", "select": "Select",
+    "batch_done": "{n} articles updated", "added_to": "{n} added to “{name}”",
+    "empty": "No articles here. Add sources from the Ask screen or drop PDFs.",
+    "no_match": "No results.", "more": "Show more",
+    "pick": "Pick an article from the list.",
+    "drop_hint": "Drop PDFs or .bib, .ris, .nbib files anywhere to import them. Drag an article onto a collection to file it."
+  },
+  "detail": {
+    "record": "Record", "note": "Note", "read_status": "Reading status", "rating": "Rating",
+    "add_tag": "+ tag", "copy": "Copy", "copied": "Copied", "publisher": "Publisher page",
+    "added_on": "Added on {date}", "no_pdf": "No PDF for this article yet.",
+    "find_pdf": "Find the free PDF", "searching_pdf": "Looking for the PDF…",
+    "pdf_found": "PDF found and stored", "pdf_none": "No free PDF found. Download it from the publisher page, then drop it here.",
+    "drop_pdf": "Or drop the PDF on the window.",
+    "note_placeholder": "Your notes in Markdown. [[key]] links to another article.",
+    "note_saved": "Saved", "note_unsaved": "Unsaved changes (⌘S)",
+    "links": "Cites", "backlinks": "Cited by"
+  },
+  "drop": {
+    "hint": "Drop to import into Biblio",
+    "refs": "{name}: {created} added, {updated} completed",
+    "pdf": {
+      "attached": "{name} stored: {title}", "duplicate": "{name}: already in the library",
+      "needs_metadata": "{name} stored, but the article was not recognized", "ignored": "{name}: not a recognized article"
+    }
+  },
+  "settings": {
+    "saved": "Saved", "display": "Display", "language": "Language", "theme": "Theme", "system": "Same as system",
+    "light": "Light", "dark": "Dark",
+    "sources": "Online databases",
+    "sources_help": "This stays on your computer. The email and keys are only sent to the matching databases, for better service.",
+    "email": "Contact email", "email_help": "Requested by Crossref, OpenAlex and NCBI; required for Unpaywall.",
+    "ncbi_api_key": "NCBI key (PubMed)", "ncbi_api_key_help": "Optional: 10 requests/s instead of 3.",
+    "openalex_api_key": "OpenAlex key", "openalex_api_key_help": "Free: without a key, a small shared daily budget.",
+    "semanticscholar_api_key": "Semantic Scholar key", "semanticscholar_api_key_help": "Free on request: without a key, the database often refuses.",
+    "optional": "optional", "stored_in": "Saved in {path}",
+    "import": "Automatic import",
+    "watch_downloads": "Watch Downloads",
+    "watch_downloads_help": "Downloaded article PDFs are imported; files are never moved or deleted.",
+    "downloads_dir": "Watched folder", "inbox_help": "Any PDF dropped in {path} is imported too.",
+    "semantic": "Search by meaning",
+    "semantic_help": "A multilingual model (bge-m3) runs on your computer: a question in French finds passages in English. No text is sent.",
+    "semantic_on": "Enabled", "restart": "Takes effect the next time Biblio starts.",
+    "model": "Model", "download": "Download ({size} GB)", "model_ready": "Ready", "model_downloaded": "Downloaded (loaded at next start)",
+    "indexing": "Indexing", "indexed": "{done} / {total} passages",
+    "journals": "Recommended journal list",
+    "journals_help": "CDD / CNU health list from Sorbonne University, checked every week.",
+    "journals_version": "Version", "journals_count": "{n} journals", "journals_checked": "Last check",
+    "journals_check": "Check now", "journals_new": "New list loaded", "journals_same": "The list is up to date",
+    "connectors": "Connectors", "connectors_soon": "Zotero, .biblio packages and Claude (Claude Desktop, with your subscription) come in the next phases.",
+    "data": "data in {path}"
+  }
+}
