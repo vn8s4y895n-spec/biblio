@@ -1,6 +1,7 @@
 #!/bin/sh
-# Construit dist.noindex/Biblio.app et dist.noindex/Biblio-<version>.dmg (Mac, Apple Silicon). Les dossiers en
-# « .noindex » ne sont pas indexés par Spotlight : seul le Biblio installé dans Applications y apparaît. Signature ad hoc : sans compte
+# Construit dist.nosync/Biblio-<version>.dmg (Mac, Apple Silicon). Les dossiers « .nosync » ne sont pas copiés par
+# iCloud Drive (qui dupliquait les fichiers en cours d'écriture : « Biblio 2.app ») ; l'app elle-même reste dans un
+# dossier « .noindex », ignoré par Spotlight : seul le Biblio installé dans Applications y apparaît. Signature ad hoc : sans compte
 # Apple Developer, un Mac qui reçoit l'app par Internet demande une confirmation au premier lancement (README).
 set -e
 cd "$(dirname "$0")/.."
@@ -13,21 +14,20 @@ fi
 VERSION=$(uv run python -c "import biblio; print(biblio.__version__)")
 
 npm --prefix ui run build
-mkdir -p packaging/build/Biblio.iconset
+mkdir -p packaging/build.nosync/Biblio.iconset
 for s in 16 32 128 256 512; do
-  sips -z $s $s packaging/icon.png --out packaging/build/Biblio.iconset/icon_${s}x${s}.png >/dev/null
-  sips -z $((s*2)) $((s*2)) packaging/icon.png --out packaging/build/Biblio.iconset/icon_${s}x${s}@2x.png >/dev/null
+  sips -z $s $s packaging/icon.png --out packaging/build.nosync/Biblio.iconset/icon_${s}x${s}.png >/dev/null
+  sips -z $((s*2)) $((s*2)) packaging/icon.png --out packaging/build.nosync/Biblio.iconset/icon_${s}x${s}@2x.png >/dev/null
 done
-iconutil -c icns packaging/build/Biblio.iconset -o packaging/build/Biblio.icns
+iconutil -c icns packaging/build.nosync/Biblio.iconset -o packaging/build.nosync/Biblio.icns
 
 cd packaging
-uv run pyinstaller --noconfirm --clean --distpath build/app.noindex --workpath build/pyinstaller.noindex biblio.spec
+uv run pyinstaller --noconfirm --clean --distpath build.nosync/app.noindex --workpath build.nosync/pyinstaller.noindex biblio.spec
 cd ..
-OUT=dist.noindex
-STAGE=packaging/build/dmg.noindex
+OUT=dist.nosync
+STAGE=packaging/build.nosync/dmg.noindex
 rm -rf "$OUT" "$STAGE" && mkdir -p "$OUT" "$STAGE"
-cp -R packaging/build/app.noindex/Biblio.app "$OUT/"
-cp -R "$OUT/Biblio.app" "$STAGE/" && ln -s /Applications "$STAGE/Applications"
+cp -R packaging/build.nosync/app.noindex/Biblio.app "$STAGE/" && ln -s /Applications "$STAGE/Applications"
 hdiutil create -volname Biblio -srcfolder "$STAGE" -ov -format UDZO "$OUT/Biblio-$VERSION.dmg" >/dev/null
-rm -rf "$STAGE" packaging/build/app.noindex
-echo "✓ $OUT/Biblio.app et $OUT/Biblio-$VERSION.dmg"
+rm -rf "$STAGE"
+echo "✓ $OUT/Biblio-$VERSION.dmg (app pour les essais : packaging/build.nosync/app.noindex/Biblio.app)"

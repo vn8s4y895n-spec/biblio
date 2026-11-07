@@ -3,7 +3,7 @@ __pycache__/
 *.py[oc]
 build/
 dist/
-dist.noindex/
+dist.nosync/
 wheels/
 *.egg-info
 
@@ -16,7 +16,7 @@ graphify-out/
 ui/node_modules
 ui/node_modules.nosync/
 src/biblio/web/
-packaging/build/
+packaging/build.nosync/
 .DS_Store
 
 # Plan de travail personnel, gardé hors du dépôt public

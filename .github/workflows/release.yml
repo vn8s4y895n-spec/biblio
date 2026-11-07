@@ -40,7 +40,7 @@ jobs:
         run: python3 packaging/set_version.py "${{ github.event.release.tag_name }}"
       - run: npm --prefix ui ci
       - run: ./packaging/build_mac.sh
-      - run: gh release upload "${{ github.event.release.tag_name }}" dist.noindex/*.dmg --clobber
+      - run: gh release upload "${{ github.event.release.tag_name }}" dist.nosync/*.dmg --clobber
         env:
           GH_TOKEN: ${{ github.token }}
       - name: Titre de la version (sinon GitHub affiche le message du dernier commit)

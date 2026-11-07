@@ -11,7 +11,7 @@ binaries = collect_dynamic_libs("sqlite_vec")
 hiddenimports = (collect_submodules("biblio") + collect_submodules("uvicorn") + collect_submodules("mcp")
                  + collect_submodules("keyring.backends") + ["webview.platforms.cocoa" if sys.platform == "darwin"
                                                               else "webview.platforms.winforms"])
-icon = "build/Biblio.icns" if sys.platform == "darwin" else "icon.png"  # Windows : converti par Pillow
+icon = "build.nosync/Biblio.icns" if sys.platform == "darwin" else "icon.png"  # Windows : converti par Pillow
 
 a = Analysis(["entry.py"], datas=datas, binaries=binaries, hiddenimports=hiddenimports,
              excludes=["tkinter", "torch", "matplotlib", "IPython"])
