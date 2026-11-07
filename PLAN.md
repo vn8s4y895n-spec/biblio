@@ -330,7 +330,7 @@ Chaque phase se termine par : tests verts (aucun appel réseau, réponses enregi
      - une correspondance plein texte partielle pèse moitié moins que le sens. Le dosage des deux moteurs reste à affiner sur un usage réel : sur « les animaux de compagnie sont-ils un réservoir… », le sens seul classe le bon article en tête, l'hybride le met en troisième ;
      - l'indexation tourne à ~5 passages longs par seconde sur le processeur. CoreML (accélération Apple) est disponible dans ONNX Runtime mais n'a pas encore été testé.
 6. ✅ **Interface Svelte, FR + EN.** Écran question → réponse → sources (réponse extraite, sans LLM pour l'instant), résumé Biblio, enregistrement des recherches, bibliothèque en trois panneaux, lecteur PDF, collections, tags, notes, clavier, thèmes, traductions FR/EN, **écran de réglages** (e-mail de contact et clés OpenAlex / Semantic Scholar / NCBI, à faire avec toi à ce moment-là). Fenêtre `pywebview`.
-   - *Bilan* : 147 tests verts (dont la parité des traductions FR / EN). Interface compilée : 110 Ko de JavaScript (38 Ko compressés). Commande `biblio app` (fenêtre native) et `biblio app --browser`.
+   - *Bilan* : 149 tests verts (dont la parité des traductions FR / EN). Interface compilée : 110 Ko de JavaScript (38 Ko compressés). Commande `biblio app` (fenêtre native) et `biblio app --browser`.
    - *Démo réelle* (bibliothèque d'essai, navigateur intégré et fenêtre pywebview) :
      - « household transmission of ESBL-producing E. coli » : 20 sources de revues recommandées (52 masquées), réponse en 5 phrases citées, toutes sur la transmission dans le foyer ; le numéro de citation mène à la source et surligne la phrase dans le résumé ;
      - ajout par `a`, collection, statut de lecture, note étoilée, lecteur PDF, recherche par le sens dans la bibliothèque, enregistrement puis relecture d'une recherche ;
@@ -342,7 +342,11 @@ Chaque phase se termine par : tests verts (aucun appel réseau, réponses enregi
      - langue et thème rangés dans `config.toml` (`[ui]`) : la fenêtre pywebview ne garde pas le stockage du navigateur ;
      - non fait, reporté : « Questions liées » et « 1 phrase sans source vérifiée » (phase 9, avec le LLM), touches `c` (citation Vancouver) et `z` (Zotero) en phase 7, recherche relancée périodiquement en phase 8.
    - *Constats et corrections* :
-     - **sans IA, une question en français ne trouve que la littérature francophone** (souvent sans résumé) : les bases cherchent les mots tels quels. La traduction de la question en requête PubMed anglaise relève de la phase 9 (ou de Claude par MCP, phase 10). D'ici là, poser la question en anglais ou en syntaxe PubMed ;
+     - **une question en français ne trouvait que des titres francophones sans rapport** (essai réel : « Chez un E. faecium résistant à la vancomycine… ceftobiprole, ceftaroline, dalbavancine ? » → 0 résultat sur PubMed, Europe PMC et OpenAlex, qui exigent tous les mots, et seulement des titres approximatifs de Crossref). Corrigé sans IA (`question.py`) :
+       - la question devient une liste de mots-clés : mots de la question retirés, glossaire français → anglais de l'infectiologie, noms de médicaments anglicisés, espèces abrégées développées (« E.faecium » → « Enterococcus faecium ») ;
+       - si moins de 10 résultats, la requête est assouplie (un mot-clé peut manquer) ;
+       - une source qui contient moins de la moitié des mots-clés est écartée (comptée dans `off_topic`).
+       - Même question après correction : 4 articles PubMed, 25 Europe PMC, 25 OpenAlex ; toutes les sources affichées portent sur les ERV et ces molécules. La vraie traduction (un modèle de langue) reste prévue en phase 9 ;
      - une phrase trop éloignée de la question est écartée de la réponse (même seuil que la recherche par le sens) ;
      - certaines sources collent les intitulés de résumé au texte (« …coliIMPORTANCE Entero… ») : ils sont reconnus et séparés ;
      - un effectif inférieur à 10 n'est pas affiché (souvent un autre nombre) ;

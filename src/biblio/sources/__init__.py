@@ -29,7 +29,7 @@ class Query:
         """Pour les sources en texte libre : sans opérateurs ni termes exclus par NOT."""
         text = re.sub(r'\bNOT\s+("[^"]*"|\([^)]*\)|\S+)', " ", self.boolean)
         text = re.sub(r"\b(AND|OR)\b|[()\"]", " ", text)
-        return re.sub(r"\s+", " ", text).strip()
+        return " ".join(dict.fromkeys(text.split()))  # sans doublons (requête assouplie : termes répétés)
 
     @property
     def years(self) -> tuple[int, int] | None:

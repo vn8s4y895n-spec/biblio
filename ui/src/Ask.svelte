@@ -254,6 +254,7 @@
     <aside class="sources">
       <div class="sources-head">
         <div class="eyebrow">{$t("ask.sources", { n: result.sources.length })}</div>
+        {#if result.off_topic}<span class="small faint" title={$t("ask.off_topic_help")}>{$t("ask.off_topic", { n: result.off_topic })}</span>{/if}
         {#if hiddenCount}
           <button class="ghost small" onclick={() => { recommendedOnly = false; run(editedQuery || null); }}>
             {$t("ask.hidden", { n: hiddenCount })}

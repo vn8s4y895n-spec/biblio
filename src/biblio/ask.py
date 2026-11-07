@@ -5,10 +5,12 @@ import html
 import re
 import sqlite3
 
-from . import core, library, search, semantic
+from . import core, library, question as questions, search, semantic
 
 ANSWER_SOURCES = 8  # sources dont on lit le résumé pour composer la réponse
 ANSWER_SENTENCES = 5
+RELAX_BELOW = 10  # moins de résultats que cela : la requête est assouplie (un terme peut manquer)
+MIN_COVERAGE = 0.5  # part minimale des mots-clés présents dans le titre et le résumé d'une source
 LEXICAL_MIN = 0.3  # sans modèle : part minimale des mots de la question présents dans la phrase
 SENTENCE_END = re.compile(r"(?<=[.!?])\s+(?=[A-Z0-9(\[])")
 # Sections d'un résumé structuré qui portent les résultats (les autres décrivent le contexte ou la méthode).
@@ -102,11 +104,29 @@ def _decorate(rec: dict) -> dict:
 
 def ask_online(conn: sqlite3.Connection, question: str, filters: search.Filters, limit: int = 20,
                query: str | None = None) -> dict:  # fmt: skip
-    """`query` : requête PubMed corrigée à la main ; la question sert toujours à choisir les phrases."""
-    found = search.search(conn, query or question, limit=limit, filters=filters)
-    sources = [_decorate(rec) for rec in found["results"]]
-    return {"scope": "online", "question": question, "query": found["query"]["boolean"], "total": found["total"],
-            "hidden": found["hidden"], "status": found["sources"], "answer": compose(question, sources),
+    """`query` : requête corrigée à la main (envoyée telle quelle) ; la question sert toujours à choisir les phrases.
+    Sinon, une question en langage courant devient une liste de mots-clés (voir question.py), assouplie si elle
+    trouve trop peu, et les sources qui ne contiennent pas au moins la moitié des mots-clés sont écartées
+    (`off_topic`)."""
+    terms = None if query or questions.is_syntax(question) else questions.keywords(question)
+    if terms is not None and not terms:
+        terms = None
+    query = query or (" ".join(terms) if terms else question)
+    found = search.search(conn, query, limit=limit * 3, filters=filters)
+    if terms and len(terms) >= 3 and found["total"] < RELAX_BELOW:
+        query = questions.relaxed(terms)
+        found = search.search(conn, query, limit=limit * 3, filters=filters)
+    results = found["results"]
+    off_topic = 0
+    if terms and len(terms) >= 2:
+        kept = [r for r in results if questions.coverage(terms, r) >= MIN_COVERAGE]
+        off_topic = len(results) - len(kept)
+        # À rang égal dans les bases, la source qui contient le plus de mots-clés passe devant.
+        kept.sort(key=lambda r: -(r["score"] + questions.coverage(terms, r) / search.RRF_K))
+        results = kept
+    sources = [_decorate(rec) for rec in results[:limit]]
+    return {"scope": "online", "question": question, "query": query, "total": len(results), "hidden": found["hidden"],
+            "off_topic": off_topic, "status": found["sources"], "answer": compose(question, sources),
             "sources": sources}  # fmt: skip
 
 

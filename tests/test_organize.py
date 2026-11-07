@@ -152,3 +152,27 @@ def test_web_ui_is_served_without_token(api):
     page = api.get("/", headers={"Authorization": ""})
     assert page.status_code == 200 and "<div id=\"app\">" in page.text
     assert api.get("/api/v1/works", headers={"Authorization": ""}).status_code == 401  # les données restent protégées
+
+
+def test_question_to_keywords():
+    from biblio import question
+
+    q = "Chez un E.faecium résistant à la vancomycine, est il possible d’utiliser du Ceftobiprole et Ceftaroline ? Et la dalbavancine ?"
+    assert question.keywords(q) == ['"Enterococcus faecium"', "resistant", "vancomycin", "Ceftobiprole", "Ceftaroline", "dalbavancin"]
+    assert question.keywords("transmission intrafamiliale des E. coli BLSE") == ["transmission", "household", '"Escherichia coli"', "ESBL"]
+    assert question.keywords("K. pneumoniae et méropénème")[0:2] == ['"Klebsiella pneumoniae"', "meropenem"]
+    assert question.is_syntax('ESBL[tiab] AND household') and not question.is_syntax("ESBL household ?")
+    assert question.relaxed(["a", "b", "c"]) == "(a AND b) OR (a AND c) OR (b AND c)"
+    rec = {"title": "Ceftaroline et vancomycine chez Enterococcus faecium", "abstract": None}
+    assert question.coverage(['"Enterococcus faecium"', "vancomycin", "ceftaroline", "dalbavancin"], rec) == 0.75
+
+
+def test_ask_sends_keywords_and_drops_off_topic(api, network):
+    from biblio import question
+
+    out = api.post("/api/v1/ask", json={"question": "Quelle transmission des BLSE dans le foyer ?", "all_journals": True}).json()
+    terms = ["transmission", "ESBL", "household"]
+    pubmed = next(r for r in network if "esearch" in str(r.url))
+    assert pubmed.url.params["term"] == out["query"] == "transmission ESBL household"
+    assert out["sources"] and all(question.coverage(terms, s) >= 0.5 for s in out["sources"])
+    assert out["off_topic"] > 0  # les fixtures contiennent des notices sans rapport (thèses, posters)
