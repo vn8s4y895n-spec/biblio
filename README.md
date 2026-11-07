@@ -1,7 +1,6 @@
 # Biblio
 
 Gestionnaire de bibliographie local, autonome et ouvert, pensé pour la recherche en santé.
-Le projet avance par phases : voir [PLAN.md](PLAN.md). Ce README décrit ce qui fonctionne **aujourd'hui** (phases 1 à 9).
 
 ## Installation
 

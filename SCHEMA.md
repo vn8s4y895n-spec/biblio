@@ -2,7 +2,7 @@
 
 SQLite en mode WAL, clés étrangères actives. Les migrations sont dans `src/biblio/migrations/NNNN_nom.sql` : chacune est appliquée une seule fois, dans une transaction, au démarrage du serveur. Elles sont tracées dans `schema_migrations`. Les dates sont en UTC, au format ISO 8601 (`2026-11-06T21:37:00Z`).
 
-Ce document décrit le schéma **réellement en place**. Les tables prévues pour les phases suivantes sont dans [PLAN.md](PLAN.md).
+Ce document décrit le schéma **réellement en place**.
 
 ## `schema_migrations` (version actuelle : 12)
 

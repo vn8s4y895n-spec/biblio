@@ -17,3 +17,6 @@ ui/node_modules.nosync/
 src/biblio/web/
 packaging/build/
 .DS_Store
+
+# Plan de travail personnel, gardé hors du dépôt public
+PLAN.md
