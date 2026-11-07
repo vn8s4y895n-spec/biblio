@@ -106,8 +106,12 @@ def _note_text(note_html: str) -> str:
     return re.sub(r"\n{3,}", "\n\n", text).strip()
 
 
-def import_rdf(conn: sqlite3.Connection, home: Path, path: Path, client: str = "zotero") -> dict:
-    """Importe un export Zotero RDF. Les PDF sont cherchés à côté du fichier .rdf (dossier files/ de l'export)."""
+def import_rdf(conn: sqlite3.Connection, home: Path, path: Path, label_id: int | None = None, client: str = "zotero") -> dict:
+    """Importe un export Zotero RDF. Les PDF sont cherchés à côté du fichier .rdf (dossier files/ de l'export).
+
+    Rangement : dans la collection de Biblio `label_id` si elle est donnée ; les collections décrites dans l'export
+    sont recréées. L'export d'une seule collection ne la décrit pas : sans `label_id`, les articles vont alors dans
+    une collection au nom du fichier (Zotero lui donne le nom de la collection exportée). `target` : son nom."""
     try:
         g = Graph(ET.parse(path).getroot())
     except (ET.ParseError, OSError) as exc:
@@ -142,6 +146,11 @@ def import_rdf(conn: sqlite3.Connection, home: Path, path: Path, client: str = "
         _attach_pdfs(conn, home, g, node, path.parent, work_id, report)
         _add_notes(conn, home, g, node, work_id, report)
     _collections(conn, g, works, report, client)
+    if works and label_id is None and not any(n.tag == "{%s}Collection" % NS["z"] for n in g.nodes):
+        label_id = organize.create_label(conn, "collection", path.stem)["id"]
+    if works and label_id is not None:
+        organize.set_label(conn, label_id, list(works.values()), True, client)
+        report["target"] = conn.execute("SELECT name FROM labels WHERE id = ?", (label_id,)).fetchone()[0]
     return report
 
 

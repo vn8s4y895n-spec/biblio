@@ -263,11 +263,12 @@
     "sent": "{n} envoyés dans Zotero ({pdfs} PDF) → {where}",
     "rdf_button": "↓ Zotero",
     "rdf_label": "Export Zotero RDF",
-    "rdf_help": "Importer un export Zotero RDF. Dans Zotero : clic droit sur une collection → Exporter la collection… → format « Zotero RDF », cocher « Exporter les notes » et « Exporter les fichiers », puis choisir ici le fichier .rdf du dossier exporté. Notices, PDF, notes, tags et collections sont repris.",
+    "rdf_help": "Importer un export Zotero RDF, dans la collection sélectionnée s'il y en a une. Dans Zotero : clic droit sur une collection → Exporter la collection… → format « Zotero RDF », cocher « Exporter les notes » et « Exporter les fichiers », puis choisir ici le fichier .rdf du dossier exporté. Notices, PDF, notes, tags et collections sont repris.",
     "rdf_importing": "Import de l'export Zotero…",
     "rdf_done": "Zotero : {created} ajoutés, {completed} complétés, {pdfs} PDF, {notes} notes, {collections} collections",
     "rdf_missing": "{n} PDF absents de l'export : dans Zotero, cocher « Exporter les fichiers »",
-    "rdf_browser": "Dans un navigateur, Biblio ne reçoit que le fichier .rdf : les PDF ne sont repris que depuis la fenêtre de Biblio."
+    "rdf_browser": "Dans un navigateur, Biblio ne reçoit que le fichier .rdf : les PDF ne sont repris que depuis la fenêtre de Biblio.",
+    "rdf_target": "Rangés dans la collection « {name} »"
   },
   "package": {
     "make": "Paquet .biblio",

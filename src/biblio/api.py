@@ -274,23 +274,24 @@ async def import_file(request: Request, conn: Conn, client: Client, data: Annota
         import tempfile
 
         with tempfile.TemporaryDirectory() as tmp:
-            (Path(tmp) / "export.rdf").write_bytes(data)
-            return {**zotero_rdf.import_rdf(conn, home(request), Path(tmp) / "export.rdf"), "format": "zotero-rdf"}
+            (Path(tmp) / "Import Zotero.rdf").write_bytes(data)
+            return {**zotero_rdf.import_rdf(conn, home(request), Path(tmp) / "Import Zotero.rdf"), "format": "zotero-rdf"}
     return importer.import_bibliography(conn, data.decode("utf-8-sig", errors="replace"), format, client)
 
 
-class LocalPath(BaseModel):
-    path: str
+class RdfImport(BaseModel):
+    path: str  # fichier .rdf de l'export
+    label: int | None = None  # collection de Biblio où ranger les articles (celle sélectionnée dans la Bibliothèque)
 
 
 @router.post("/import/zotero-rdf", summary="Importer un export Zotero RDF (chemin du fichier .rdf sur cet ordinateur)")
-def import_zotero_rdf(body: LocalPath, request: Request, conn: Conn):
+def import_zotero_rdf(body: RdfImport, request: Request, conn: Conn):
     """Notices, PDF (dossier files/ de l'export), notes, tags et collections. Dans Zotero : Exporter… → Zotero RDF,
     avec « Exporter les fichiers » et « Exporter les notes ». Un article déjà présent est complété, pas dupliqué."""
     path = Path(body.path).expanduser()
     if path.suffix.lower() != ".rdf" or not path.is_file():
         raise HTTPException(422, f"Pas un export Zotero RDF : {path.name}")
-    return {**zotero_rdf.import_rdf(conn, home(request), path), "format": "zotero-rdf"}
+    return {**zotero_rdf.import_rdf(conn, home(request), path, body.label), "format": "zotero-rdf"}
 
 
 @router.post("/files", summary="Déposer un PDF", openapi_extra=binary_body("application/pdf"))

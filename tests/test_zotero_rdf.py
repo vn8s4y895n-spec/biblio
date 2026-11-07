@@ -60,3 +60,17 @@ def test_pdf_outside_the_export_is_refused(api, tmp_path):
     (folder / "Export.rdf").write_text(EXPORT.read_text().replace("files/23/Harris%20et%20al.%20-%202018.pdf", "../secret.pdf"))
     out = api.post("/api/v1/import/zotero-rdf", json={"path": str(folder / "Export.rdf")}).json()
     assert out["pdfs"] == 0 and out["missing_pdfs"] == 2
+
+
+def test_target_collection(api, export, tmp_path):
+    """Export d'une seule collection (Zotero ne la décrit pas) : collection choisie, sinon au nom du fichier."""
+    single = tmp_path / "Export" / "Carbapénèmes.rdf"
+    text = export.read_text()
+    single.write_text(text[: text.index("<z:Collection")] + "</rdf:RDF>")
+    out = api.post("/api/v1/import/zotero-rdf", json={"path": str(single)}).json()
+    assert out["collections"] == 0 and out["target"] == "Carbapénèmes"
+    target = api.post("/api/v1/labels", json={"kind": "collection", "name": "Lectures"}).json()
+    out = api.post("/api/v1/import/zotero-rdf", json={"path": str(export), "label": target["id"]}).json()
+    assert out["target"] == "Lectures" and out["collections"] == 2  # les collections de l'export sont gardées aussi
+    counts = {lb["name"]: lb["count"] for lb in api.get("/api/v1/labels").json() if lb["kind"] == "collection"}
+    assert counts["Lectures"] == 2 and counts["Carbapénèmes"] == 2

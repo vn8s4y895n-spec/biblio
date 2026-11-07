@@ -159,6 +159,8 @@
   }
 
   const focus = (el) => el.focus();
+  // Collection de Biblio sélectionnée à gauche (cible d'un import), sinon null.
+  const selectedCollection = () => (filter.type === "label" && collections.some((c) => c.id === filter.value) ? filter.value : null);
   const isOn = (f) => filter.type === f.type && filter.value === f.value && !q;
 </script>
 
@@ -176,7 +178,7 @@
         <span class="eyebrow grow">{$t(title)}</span>
         {#if kind === "collection"}
           <button class="ghost small" title={$t("zotero.rdf_help")}
-            onclick={async () => { if (await importZoteroRdf()) { refresh(); refreshLabels(); } }}>{$t("zotero.rdf_button")}</button>
+            onclick={async () => { if (await importZoteroRdf(selectedCollection())) { refresh(); refreshLabels(); } }}>{$t("zotero.rdf_button")}</button>
         {/if}
         <button class="ghost small" title={$t("library.new")} onclick={() => { newLabel = kind; newName = ""; }}>＋</button>
       </div>

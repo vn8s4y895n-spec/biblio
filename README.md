@@ -139,7 +139,7 @@ uv run biblio pdf harris2018effect --open          # l'ouvrir, ou ouvrir la page
 - **Notice déjà présente** : même identifiant, ou même titre, année et premier auteur sans identifiant. Elle est complétée, jamais dupliquée.
 - **Même titre avec un identifiant différent** : c'est un doublon probable. Il est signalé, à fusionner ou à écarter.
 
-**Export Zotero RDF** (tout reprendre de Zotero) : dans Zotero, clic droit sur une collection → *Exporter la collection…* (ou *Fichier → Exporter la bibliothèque…*) → format **Zotero RDF**, cocher *Exporter les notes* et *Exporter les fichiers*. Puis dans Biblio : Bibliothèque → « ↓ Zotero » et choisir le fichier `.rdf` du dossier exporté (ou `biblio import Export.rdf`).
+**Export Zotero RDF** (tout reprendre de Zotero) : dans Zotero, clic droit sur une collection → *Exporter la collection…* (ou *Fichier → Exporter la bibliothèque…*) → format **Zotero RDF**, cocher *Exporter les notes* et *Exporter les fichiers*. Puis dans Biblio : Bibliothèque → « ↓ Zotero » et choisir le fichier `.rdf` du dossier exporté (ou `biblio import Export.rdf`). Les articles vont dans la collection sélectionnée à gauche ; sans sélection, l'export d'une collection Zotero devient une collection Biblio du même nom (Zotero ne décrit pas la collection exportée elle-même, seulement ses sous-collections).
 - Repris : notices (DOI, PMID de la zone « Extra »), PDF du dossier `files/`, notes, tags posés à la main (les tags automatiques sont laissés), collections et sous-collections (« Parent / Enfant »).
 - Un article déjà présent est complété, jamais dupliqué ; un réimport n'ajoute ni PDF ni note en double.
 - Envoyé comme simple fichier (navigateur, `POST /import`), le `.rdf` est lu sans ses PDF.
