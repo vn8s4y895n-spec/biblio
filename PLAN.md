@@ -357,7 +357,7 @@ Chaque phase se termine par : tests verts (aucun appel réseau, réponses enregi
    - *Démo* (bibliothèque d'essai) : référence Vancouver dans la fiche, export Markdown formaté avec liens DOI et `[[clé]]`, `library.bib` tenu à jour en tâche de fond, paquet de deux articles (3,3 Mo avec PDF) déposé sur la fenêtre → aperçu → import sans doublon (« 0 ajoutés, 2 complétés »).
    - *Écarts au plan* :
      - **style par défaut : Vancouver des bibliothèques universitaires de médecine** (style CSL officiel). Le style NLM « Citing Medicine » est mal rendu par citeproc-py (« 2018Sep11 », « 1.Harris ») : non fourni ;
-     - **Zotero par son serveur local** (celui de l'extension de navigateur) plutôt que par l'API web : ni compte ni clé, PDF joints. Testé contre un Zotero simulé ; **pas encore essayé avec ton vrai Zotero** (je n'ai pas voulu écrire dans ta bibliothèque Zotero sans toi) ;
+     - **Zotero par son serveur local** (celui de l'extension de navigateur) plutôt que par l'API web : ni compte ni clé, PDF joints. testé contre un Zotero simulé, puis **validé avec le vrai Zotero** (2026-11-07, collection d'essai) ;
      - les clés de citation `auteurAnnéeMot` existaient depuis la phase 1.
    - *Constats et corrections* :
      - les auteurs collectifs (« MERINO Trial Investigators and the … ») étaient coupés à « and » en BibTeX et lus comme « Prénom Nom » en RIS : protégés à l'export, reconnus à l'import ;
