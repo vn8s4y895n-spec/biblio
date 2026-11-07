@@ -36,7 +36,8 @@ uv run biblio app --browser    # même interface dans le navigateur
 - **Question** : une question en langage courant (ou une requête PubMed), dans les bases en ligne ou dans ta bibliothèque. Une question en langage courant est réduite à ses mots-clés, traduits en anglais pour les termes courants d'infectiologie (vancomycine → vancomycin, BLSE → ESBL, E. faecium → Enterococcus faecium) ; la requête est assouplie si elle trouve moins de 10 résultats, et les sources qui contiennent moins de la moitié des mots-clés sont écartées. Une requête en syntaxe PubMed est envoyée telle quelle. La réponse est faite des phrases des résumés les plus proches de la question, chacune avec le numéro de sa source ; cliquer le numéro fait défiler jusqu'à la source et surligne la phrase. Sans IA pour l'instant (phase 9).
 - **Sources**, à droite : statut de revue (filtre « revues recommandées » actif par défaut ; les résultats masqués sont comptés), accès libre, type d'étude, effectif, **résumé Biblio** (la conclusion des auteurs), ajout à la bibliothèque (`＋` ou « Tout ajouter »). La requête envoyée aux bases est modifiable.
 - **Question d'origine** : un article ajouté depuis l'écran Question garde la question posée ; sa fiche l'affiche (« Ajouté depuis la question »), et un clic la repose.
-- **Enregistrer la recherche** garde la question, la réponse et les sources ; les recherches enregistrées s'affichent sur l'écran d'accueil.
+- **Questions récentes** : l'écran d'accueil liste les questions déjà posées (la plus récente d'abord) ; un clic la repose, ✕ la retire, « Effacer l'historique » vide la liste.
+- **Enregistrer la recherche** garde la question, la réponse et les sources ; les recherches enregistrées s'affichent en dessous.
 - **Bibliothèque** en trois panneaux redimensionnables : filtres (statut de lecture, collections, tags, statut de revue), liste (recherche plein texte et par le sens, sélection multiple, glisser une notice sur une collection), fiche (statut de lecture, note étoilée, tags, collections, résumé, MeSH, **lecteur PDF**, **note Markdown**).
 - **Glisser-déposer** n'importe où : PDF, ou fichiers .bib, .ris, .nbib, .json.
 - **Citer, exporter, envoyer** : la fiche affiche la référence dans le style choisi (Vancouver par défaut) ; boutons et sélection multiple pour exporter (BibTeX, RIS, CSL-JSON, liste Markdown), envoyer dans Zotero ou créer un paquet `.biblio`. Une recherche enregistrée s'envoie aussi en paquet. Un paquet `.biblio` déposé sur la fenêtre s'ouvre en aperçu avant import.
@@ -264,6 +265,8 @@ curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:8765/api/v1/works/10.100
 | GET | `/api/v1/journals/lookup?issn=&nlmid=&abbrev=` | Statut d'une revue |
 | POST | `/api/v1/shutdown` | Arrêter le serveur |
 | POST | `/api/v1/ask` | Question → réponse extraite et sources (`{"question", "scope": "online"\|"library", "query", "all_journals", "year_from", "open_access"}`) |
+| GET | `/api/v1/history?limit=` | Questions posées récemment |
+| POST | `/api/v1/history/forget` | Retirer une question (`{"question", "scope"}`) ou tout effacer (`{}`) |
 | GET / POST | `/api/v1/searches` | Recherches enregistrées : lister / enregistrer (`{"question", "scope", "query", "answer", "sources"}`) |
 | GET / DELETE | `/api/v1/searches/{id}` | Relire / supprimer |
 | GET / POST | `/api/v1/labels` | Collections et tags (`{"kind": "collection"\|"tag", "name"}`) |

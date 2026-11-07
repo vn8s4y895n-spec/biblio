@@ -351,7 +351,9 @@ Chaque phase se termine par : tests verts (aucun appel réseau, réponses enregi
      - certaines sources collent les intitulés de résumé au texte (« …coliIMPORTANCE Entero… ») : ils sont reconnus et séparés ;
      - un effectif inférieur à 10 n'est pas affiché (souvent un autre nombre) ;
      - une réponse arrivée après une recherche plus récente est ignorée.
-   - *Ajout après la phase (demande d'usage)* : chaque article ajouté depuis l'écran Question garde la question posée (table `work_questions`), affichée dans sa fiche et reposable d'un clic.
+   - *Ajouts après la phase (demandes d'usage)* :
+     - chaque article ajouté depuis l'écran Question garde la question posée (table `work_questions`), affichée dans sa fiche et reposable d'un clic ;
+     - l'écran d'accueil montre l'historique des questions posées à la place des exemples (table `question_history`, phase 8).
 7. ✅ **Citation, exports et envois.** CSL (Vancouver, APA, `.csl` ajoutés), BibTeX / RIS / CSL-JSON / Markdown, clés `auteurAnnéeMot`, `library.bib` synchronisé, **envoi direct dans Zotero**, **paquets `.biblio`** (création, aperçu, import, fusion).
    - *Bilan* : 162 tests verts. Commandes `cite`, `styles`, `styles-add`, `export`, `zotero`, `pack`, et `import` qui accepte les `.biblio`.
    - *Démo* (bibliothèque d'essai) : référence Vancouver dans la fiche, export Markdown formaté avec liens DOI et `[[clé]]`, `library.bib` tenu à jour en tâche de fond, paquet de deux articles (3,3 Mo avec PDF) déposé sur la fenêtre → aperçu → import sans doublon (« 0 ajoutés, 2 complétés »).

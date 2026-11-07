@@ -4,7 +4,7 @@ SQLite en mode WAL, clés étrangères actives. Les migrations sont dans `src/bi
 
 Ce document décrit le schéma **réellement en place**. Les tables prévues pour les phases suivantes sont dans [PLAN.md](PLAN.md).
 
-## `schema_migrations` (version actuelle : 9)
+## `schema_migrations` (version actuelle : 10)
 
 | Colonne | Type | Rôle |
 |---|---|---|
@@ -171,6 +171,10 @@ La question posée sur l'écran Question qui a mené à ajouter l'article : `(wo
 - `work_updates (work_id, kind, notice_doi, date, source, found_at)` : avis sur un article. `kind` : type Crossref (`retraction`, `expression_of_concern`, `correction`, `erratum`…) ou `published` (version publiée d'un preprint, `notice_doi` = DOI de la revue). `source` : `retraction-watch`, `publisher`, `crossref`. Les avis sont repris à la fusion de deux notices, sauf `published`.
 - `alerts (id, kind, work_id, search_id, data_json, created_at, seen_at)` : alertes à lire. `kind` : `new_results` (`data_json` : question, nombre, notices nouvelles), `retraction`, `concern`, `correction`, `published` (`data_json` : DOI de l'avis, date, source). Une seule alerte non lue par article et par type.
 - Identifiant `preprint-doi` : DOI d'un preprint fusionné dans sa version publiée.
+
+## `question_history` : questions posées (migration 10)
+
+`(question, scope)` en clé primaire, `asked_at` (à la milliseconde), `times` (nombre de fois posée). Chaque question de l'écran Question y est inscrite ; la reposer la fait remonter en tête.
 
 ## Liste des revues recommandées (migration 2)
 

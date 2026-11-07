@@ -365,11 +365,27 @@ def ask_question(body: AskRequest, conn: Conn):
     """`scope` : online (bases en ligne, filtre des revues recommandées par défaut) ou library. `answer` : phrases
     choisies dans les sources, chacune avec le numéro de sa source (1…). Chaque source a son `summary` (conclusion
     des auteurs) et son `sample_size` quand le résumé les donne."""
+    organize.remember_question(conn, body.question, body.scope)
     if body.scope == "library":
         return ask.ask_library(conn, body.question, body.limit)
     filters = search.Filters(year_from=body.year_from, year_to=body.year_to, study_types=body.study_type,
                              open_access=body.open_access, journal_status=[] if body.all_journals else ["recommended"])  # fmt: skip
     return ask.ask_online(conn, body.question, filters, body.limit, body.query)
+
+
+class ForgetRequest(BaseModel):
+    question: str | None = None  # omise : tout l'historique
+    scope: Literal["online", "library"] | None = None
+
+
+@router.get("/history", summary="Questions posées récemment (la plus récente d'abord)")
+def question_history(conn: Conn, limit: Annotated[int, Query(ge=1, le=200)] = 30):
+    return organize.question_history(conn, limit)
+
+
+@router.post("/history/forget", summary="Retirer une question de l'historique (ou tout l'effacer)")
+def forget_question(body: ForgetRequest, conn: Conn):
+    return {"removed": organize.forget_question(conn, body.question, body.scope)}
 
 
 @router.get("/searches", summary="Recherches enregistrées (les plus récentes d'abord)")

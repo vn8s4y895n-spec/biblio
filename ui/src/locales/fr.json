@@ -46,14 +46,16 @@
     "refresh": "Relancer maintenant",
     "saved_searches": "Recherches enregistrées",
     "sources_count": "{n} sources",
-    "tips": "Exemples : « transmission intrafamiliale des E. coli BLSE », « durée de traitement d'une bactériémie à Pseudomonas », ou une requête PubMed.",
     "sources": "Sources ({n})",
     "hidden": "{n} masquées (hors liste) · montrer",
     "no_sources": "Aucune source avec ces filtres.",
     "add_all": "Tout ajouter",
     "added": "Ajouté :",
     "off_topic": "{n} hors sujet écartées",
-    "off_topic_help": "Résultats qui contiennent moins de la moitié des mots-clés de la question"
+    "off_topic_help": "Résultats qui contiennent moins de la moitié des mots-clés de la question",
+    "history": "Questions récentes",
+    "clear_history": "Effacer l'historique",
+    "forget": "Retirer de l'historique"
   },
   "source": {
     "summary": "Résumé Biblio",

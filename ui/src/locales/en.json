@@ -46,14 +46,16 @@
     "refresh": "Run again now",
     "saved_searches": "Saved searches",
     "sources_count": "{n} sources",
-    "tips": "Examples: “household transmission of ESBL E. coli”, “treatment duration for Pseudomonas bacteremia”, or a PubMed query.",
     "sources": "Sources ({n})",
     "hidden": "{n} hidden (not listed) · show",
     "no_sources": "No source with these filters.",
     "add_all": "Add all",
     "added": "Added:",
     "off_topic": "{n} off-topic removed",
-    "off_topic_help": "Results containing fewer than half of the question's keywords"
+    "off_topic_help": "Results containing fewer than half of the question's keywords",
+    "history": "Recent questions",
+    "clear_history": "Clear history",
+    "forget": "Remove from history"
   },
   "source": {
     "summary": "Biblio summary",

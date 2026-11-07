@@ -99,6 +99,33 @@ def add_question(conn: sqlite3.Connection, work_id: int, question: str, scope: s
                          (work_id, question, scope))  # fmt: skip
 
 
+# --- Historique des questions ---------------------------------------------------------------------
+
+
+def remember_question(conn: sqlite3.Connection, question: str, scope: str) -> None:
+    question = " ".join(question.split())
+    with db.transaction(conn):
+        conn.execute(
+            "INSERT INTO question_history (question, scope) VALUES (?, ?) ON CONFLICT (question, scope) DO UPDATE"
+            " SET asked_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), times = times + 1",
+            (question, scope),
+        )
+
+
+def question_history(conn: sqlite3.Connection, limit: int = 30) -> list[dict]:
+    rows = conn.execute("SELECT question, scope, asked_at, times FROM question_history ORDER BY asked_at DESC LIMIT ?", (limit,))
+    return [dict(r) for r in rows]
+
+
+def forget_question(conn: sqlite3.Connection, question: str | None = None, scope: str | None = None) -> int:
+    """Retire une question de l'historique (toutes si `question` est omise)."""
+    with db.transaction(conn):
+        if question is None:
+            return conn.execute("DELETE FROM question_history").rowcount
+        return conn.execute("DELETE FROM question_history WHERE question = ? AND (? IS NULL OR scope = ?)",
+                            (question, scope, scope)).rowcount  # fmt: skip
+
+
 # --- Recherches enregistrées ------------------------------------------------------------
 
 

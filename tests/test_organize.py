@@ -191,3 +191,15 @@ def test_question_kept_with_added_work(api, conn, cfg):
     assert manual["work"]["questions"][0]["question"] == q
     merged = core.merge_works(conn, cfg.home, "harris2018effect", manual["work"]["id"], "cli")
     assert len(merged["questions"]) == 2  # même question : gardée une fois
+
+
+def test_question_history(api):
+    for q in ("Transmission des BLSE ?", "piperacillin mortality", "Transmission des BLSE ?"):
+        api.post("/api/v1/ask", json={"question": q, "scope": "library"})
+    api.post("/api/v1/ask", json={"question": "  piperacillin   mortality ", "scope": "library"})
+    history = api.get("/api/v1/history").json()
+    assert [(h["question"], h["times"]) for h in history] == [("piperacillin mortality", 2), ("Transmission des BLSE ?", 2)]
+    assert api.post("/api/v1/history/forget", json={"question": "piperacillin mortality"}).json() == {"removed": 1}
+    assert [h["question"] for h in api.get("/api/v1/history").json()] == ["Transmission des BLSE ?"]
+    assert api.post("/api/v1/history/forget", json={}).json() == {"removed": 1}
+    assert api.get("/api/v1/history").json() == []

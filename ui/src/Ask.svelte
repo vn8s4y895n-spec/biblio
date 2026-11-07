@@ -21,6 +21,7 @@
   let highlight = $state(null); // { source, text }
   let adding = $state({}); // numéro de source → en cours
   let saved = $state([]); // recherches enregistrées
+  let history = $state([]); // questions posées récemment
   let savedInfo = $state(null); // recherche enregistrée affichée
   let input;
   let runs = 0; // seule la dernière recherche lancée s'affiche
@@ -47,7 +48,18 @@
   });
 
   async function refreshSaved() {
-    saved = await api("/searches").catch(() => []);
+    [saved, history] = await Promise.all([api("/searches").catch(() => []), api("/history").catch(() => [])]);
+  }
+
+  function askAgain(h) {
+    question = h.question;
+    scope = h.scope;
+    run();
+  }
+
+  async function forget(h) {
+    await api("/history/forget", { method: "POST", body: h ? { question: h.question, scope: h.scope } : {} });
+    refreshSaved();
   }
 
   async function run(query = null) {
@@ -252,6 +264,21 @@
       </div>
     {:else}
       <div class="intro">
+        {#if history.length}
+          <div class="row">
+            <span class="eyebrow grow">{$t("ask.history")}</span>
+            <button class="ghost small" onclick={() => forget(null)}>{$t("ask.clear_history")}</button>
+          </div>
+          <ul class="saved">
+            {#each history as h (h.question + h.scope)}
+              <li class="row">
+                <button class="link grow" onclick={() => askAgain(h)}>{h.question}</button>
+                <span class="small faint">{h.scope === "library" ? $t("ask.scope_library") + " · " : ""}{$fmt.date(h.asked_at)}</span>
+                <button class="ghost small" title={$t("ask.forget")} onclick={() => forget(h)}>✕</button>
+              </li>
+            {/each}
+          </ul>
+        {/if}
         {#if saved.length}
           <div class="eyebrow">{$t("ask.saved_searches")}</div>
           <ul class="saved">
@@ -263,8 +290,6 @@
               </li>
             {/each}
           </ul>
-        {:else}
-          <p class="muted tips">{$t("ask.tips")}</p>
         {/if}
         <p class="small faint keys">
           <span class="kbd">/</span> {$t("keys.question")} · <span class="kbd">j</span> <span class="kbd">k</span> {$t("keys.sources")} ·
@@ -344,7 +369,9 @@
   .intro { display: grid; gap: 10px; }
   .saved { list-style: none; padding: 0; margin: 0; }
   .saved li { padding: 7px 0; border-bottom: 1px solid var(--border); }
-  .tips { font-size: 15px; }
+  .link { border: none; background: none; padding: 0; color: var(--accent); text-align: left; white-space: normal; justify-content: flex-start; }
+  .link:hover { text-decoration: underline; }
+  .intro .eyebrow { margin-top: 8px; }
 
   .sources { border-left: 1px solid var(--border); background: var(--surface); display: flex; flex-direction: column; min-height: 0; }
   .sources-head, .sources-foot { display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; flex: none; }
