@@ -147,3 +147,22 @@ def test_semantic_commands(cfg):
         assert "household" in out.output.lower() and "≈" in out.output and "plein texte + sens" in out.output
     finally:
         semantic.set_embedder(None)
+
+
+def test_cite_export_pack(cfg, tmp_path):
+    runner.invoke(cli.app, ["add", MERINO_DOI, "--no-pdf"])
+    out = runner.invoke(cli.app, ["cite", "harris2018effect"])
+    assert out.exit_code == 0 and out.output.startswith("Harris PNA, Tambyah PA")
+    assert runner.invoke(cli.app, ["cite", "harris2018effect", "--style", "apa"]).output.startswith("Harris, P. N. A.")
+    assert "apa" in runner.invoke(cli.app, ["styles"]).output
+    assert "@article{harris2018effect," in runner.invoke(cli.app, ["export"]).output
+    target = tmp_path / "out.ris"
+    assert runner.invoke(cli.app, ["export", "harris2018effect", "-f", "ris", "-o", str(target)]).exit_code == 0
+    assert target.read_text().startswith("TY  - JOUR")
+    assert runner.invoke(cli.app, ["export", "-c", "inconnue"]).exit_code == 1
+    package = tmp_path / "envoi.biblio"
+    out = runner.invoke(cli.app, ["pack", "harris2018effect", "-o", str(package)])
+    assert out.exit_code == 0 and package.stat().st_size > 0
+    out = runner.invoke(cli.app, ["import", str(package)])
+    assert "0 articles ajoutés, 1 déjà présents" in out.output
+    assert runner.invoke(cli.app, ["zotero"]).exit_code == 1  # il faut désigner les notices

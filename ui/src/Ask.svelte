@@ -1,6 +1,7 @@
 <script>
   import { onMount, tick, untrack } from "svelte";
   import SourceCard from "./SourceCard.svelte";
+  import { copyCitation, makePackage, sendToZotero } from "./lib/actions.js";
   import { api, identifierOf } from "./lib/api.js";
   import { fmt, t } from "./lib/i18n.js";
   import { toast } from "./lib/toast.js";
@@ -133,6 +134,17 @@
     }
   }
 
+  // z : ajoute la source si besoin, puis l'envoie dans Zotero.
+  async function toZotero(i) {
+    if (!result.sources[i].in_library) await add(i);
+    if (result.sources[i].in_library) sendToZotero({ works: [result.sources[i].in_library] });
+  }
+
+  function sendPackage() {
+    const works = result.sources.map((s) => s.in_library).filter(Boolean);
+    makePackage({ works, searches: [savedInfo.id], title: question.trim() }, question.trim().slice(0, 60));
+  }
+
   async function addAll() {
     for (let i = 0; i < result.sources.length; i++) await add(i);
   }
@@ -156,6 +168,8 @@
       if (e.key === "j") selected = Math.min(selected + 1, result.sources.length - 1);
       else if (e.key === "k") selected = Math.max(selected - 1, 0);
       else if (e.key === "a") add(selected);
+      else if (e.key === "c") copyCitation(result.sources[selected].in_library ?? result.sources[selected]);
+      else if (e.key === "z") toZotero(selected);
     }
   }
 </script>
@@ -234,6 +248,9 @@
 
       <div class="row wrap">
         <button onclick={save} disabled={!!savedInfo || !result.sources.length}>{savedInfo ? `✓ ${$t("ask.saved_short")}` : $t("ask.save")}</button>
+        {#if savedInfo}
+          <button onclick={sendPackage} title={$t("package.search_help")}>{$t("package.send_search")}</button>
+        {/if}
       </div>
     {:else}
       <div class="intro">
@@ -253,7 +270,8 @@
         {/if}
         <p class="small faint keys">
           <span class="kbd">/</span> {$t("keys.question")} · <span class="kbd">j</span> <span class="kbd">k</span> {$t("keys.sources")} ·
-          <span class="kbd">a</span> {$t("keys.add")}
+          <span class="kbd">a</span> {$t("keys.add")} · <span class="kbd">c</span> {$t("keys.cite")} ·
+          <span class="kbd">z</span> Zotero
         </p>
       </div>
     {/if}

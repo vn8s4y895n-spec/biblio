@@ -1,6 +1,6 @@
 # Biblio — Plan
 
-Statut : **plan validé le 2026-11-06. Phases 1 à 6 terminées** (phase 6 : 2026-11-07). Prochaine étape : phase 7.
+Statut : **plan validé le 2026-11-06. Phases 1 à 7 terminées** (phases 6 et 7 : 2026-11-07). Prochaine étape : phase 8.
 
 ## Objectif
 
@@ -352,8 +352,17 @@ Chaque phase se termine par : tests verts (aucun appel réseau, réponses enregi
      - un effectif inférieur à 10 n'est pas affiché (souvent un autre nombre) ;
      - une réponse arrivée après une recherche plus récente est ignorée.
    - *Ajout après la phase (demande d'usage)* : chaque article ajouté depuis l'écran Question garde la question posée (table `work_questions`), affichée dans sa fiche et reposable d'un clic.
-7. **Citation, exports et envois.** CSL (Vancouver, APA, `.csl` ajoutés), BibTeX / RIS / CSL-JSON / Markdown, clés `auteurAnnéeMot`, `library.bib` synchronisé, **envoi direct dans Zotero**, **paquets `.biblio`** (création, aperçu, import, fusion).
-8. **Veille et suivi.** Recherches enregistrées, articles proches (OpenAlex / Semantic Scholar), preprint → publié, rétractations (Crossref / Retraction Watch).
+7. ✅ **Citation, exports et envois.** CSL (Vancouver, APA, `.csl` ajoutés), BibTeX / RIS / CSL-JSON / Markdown, clés `auteurAnnéeMot`, `library.bib` synchronisé, **envoi direct dans Zotero**, **paquets `.biblio`** (création, aperçu, import, fusion).
+   - *Bilan* : 162 tests verts. Commandes `cite`, `styles`, `styles-add`, `export`, `zotero`, `pack`, et `import` qui accepte les `.biblio`.
+   - *Démo* (bibliothèque d'essai) : référence Vancouver dans la fiche, export Markdown formaté avec liens DOI et `[[clé]]`, `library.bib` tenu à jour en tâche de fond, paquet de deux articles (3,3 Mo avec PDF) déposé sur la fenêtre → aperçu → import sans doublon (« 0 ajoutés, 2 complétés »).
+   - *Écarts au plan* :
+     - **style par défaut : Vancouver des bibliothèques universitaires de médecine** (style CSL officiel). Le style NLM « Citing Medicine » est mal rendu par citeproc-py (« 2018Sep11 », « 1.Harris ») : non fourni ;
+     - **Zotero par son serveur local** (celui de l'extension de navigateur) plutôt que par l'API web : ni compte ni clé, PDF joints. Testé contre un Zotero simulé ; **pas encore essayé avec ton vrai Zotero** (je n'ai pas voulu écrire dans ta bibliothèque Zotero sans toi) ;
+     - les clés de citation `auteurAnnéeMot` existaient depuis la phase 1.
+   - *Constats et corrections* :
+     - les auteurs collectifs (« MERINO Trial Investigators and the … ») étaient coupés à « and » en BibTeX et lus comme « Prénom Nom » en RIS : protégés à l'export, reconnus à l'import ;
+     - un paquet contenant un PDF dont l'empreinte ne correspond pas est importé sans ce PDF, avec un avertissement.
+8. **Veille et suivi.** Recherches relancées périodiquement, articles proches (OpenAlex / Semantic Scholar), preprint → publié, rétractations (Crossref / Retraction Watch).
 9. **IA.** Module LLM interchangeable, question → requête PubMed, réponse rédigée avec citations vérifiées, résumé rédigé, adaptateurs des moteurs IA externes (selon les API disponibles, voir les risques).
 10. **Interopérabilité et connecteurs.** OpenAPI complet, `openapi.json` + `llms.txt`, serveur MCP (stdio + HTTP) avec outils, instructions, prompts et ressources, écran Réglages → Connecteurs, **intégration Claude** (extension `.mcpb`, skill, commande Claude Code, synthèses visibles dans Biblio), webhooks signés HMAC, `backup` / `restore` testés, export complet en formats ouverts. Test de bout en bout : un client MCP simulé déroule le skill (recherche → filtre → enregistrement de la synthèse) et on vérifie le résultat en base.
 11. **Application à double-cliquer.** Paquet macOS (`.app` dans un `.dmg`), puis Windows (`.exe`), association des fichiers `.biblio` pour l'ouverture par double-clic, mise à jour de l'application. README et guide d'installation pour les collègues (FR + EN).

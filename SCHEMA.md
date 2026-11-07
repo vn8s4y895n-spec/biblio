@@ -234,6 +234,7 @@ Cache des recherches en ligne (un jour) et des réponses Unpaywall (sept jours).
 | `journals.last_check` | Dernière vérification réussie de la liste en ligne |
 | `journals.last_error` | Dernière erreur de vérification (supprimée après une vérification réussie) |
 | `index.version` | Version de la méthode d'extraction du texte des PDF ; si elle change, les PDF sont réindexés au démarrage |
+| `librarybib.state` | État de la bibliothèque (dernier changement, nombre de notices) lors de la dernière écriture de `library.bib` |
 | `downloads.since` | Début de la surveillance des Téléchargements (horodatage Unix) : les fichiers plus anciens sont ignorés |
 
 ## Exemples de requêtes

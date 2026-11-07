@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import WorkDetail from "./WorkDetail.svelte";
   import Badges from "./lib/Badges.svelte";
+  import { EXPORTS, exportWorks, makePackage, sendToZotero } from "./lib/actions.js";
   import { api } from "./lib/api.js";
   import { fmt, t } from "./lib/i18n.js";
   import { toast } from "./lib/toast.js";
@@ -202,7 +203,12 @@
   <section class="list">
     <div class="search">
       <input type="search" bind:this={searchBox} bind:value={q} placeholder={$t("library.search")} />
-      <div class="small faint count">{loading ? "…" : $t("library.count", { n: $fmt.number(total) })}</div>
+      <div class="row small faint count">
+        <input type="checkbox" aria-label={$t("library.select_all")} title={$t("library.select_all")}
+          checked={items.length > 0 && items.every((w) => checked.has(w.id))}
+          onchange={(e) => (checked = e.target.checked ? new Set(items.map((w) => w.id)) : new Set())} />
+        {loading ? "…" : $t("library.count", { n: $fmt.number(total) })}
+      </div>
     </div>
     {#if checked.size}
       <div class="batch row wrap">
@@ -212,6 +218,12 @@
           {#each labels as label}<option value={label.id}>{label.kind === "tag" ? "#" : ""}{label.name}</option>{/each}
         </select>
         <button class="small" onclick={() => batchRead("read")}>{$t("library.mark_read")}</button>
+        <select onchange={(e) => { exportWorks({ works: [...checked].map(String) }, e.target.value); e.target.value = ""; }}>
+          <option value="">{$t("export.title")}…</option>
+          {#each EXPORTS as [format, label]}<option value={format}>{label}</option>{/each}
+        </select>
+        <button class="small" onclick={() => sendToZotero({ works: [...checked].map(String) })}>Zotero</button>
+        <button class="small" onclick={() => makePackage({ works: [...checked].map(String) })}>{$t("package.make")}</button>
         <button class="ghost small" onclick={() => (checked = new Set())}>{$t("common.cancel")}</button>
       </div>
     {/if}
@@ -284,7 +296,7 @@
 
   .list { display: flex; flex-direction: column; background: var(--surface); }
   .search { padding: 10px 12px; border-bottom: 1px solid var(--border); }
-  .search input { width: 100%; }
+  .search input[type="search"] { width: 100%; }
   .count { margin-top: 5px; }
   .batch { padding: 8px 12px; background: var(--accent-soft); border-bottom: 1px solid var(--border); }
   .batch select { padding: 2px 6px; }

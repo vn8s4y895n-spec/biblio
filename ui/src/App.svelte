@@ -12,6 +12,8 @@
   let settings = $state(null);
   let dragging = $state(false);
   let libraryVersion = $state(0); // incrémenté après un import, pour rafraîchir la bibliothèque
+  let incoming = $state(null); // paquet .biblio déposé : { file, preview }
+  let importing = $state(false);
 
   const view = $derived(route.startsWith("/library") ? "library" : route.startsWith("/settings") ? "settings" : "ask");
 
@@ -42,6 +44,10 @@
     dragging = false;
     for (const file of event.dataTransfer?.files ?? []) {
       try {
+        if (file.name.toLowerCase().endsWith(".biblio")) {
+          incoming = { file, preview: await api("/packages/preview", { method: "POST", body: file }) };
+          continue;
+        }
         if (file.name.toLowerCase().endsWith(".pdf")) {
           const out = await api("/files", { method: "POST", body: file, params: { filename: file.name } });
           toast($t(`drop.pdf.${out.status}`, { name: file.name, title: out.work?.title ?? "" }), out.status === "needs_metadata" ? "warn" : "ok");
@@ -53,6 +59,21 @@
       } catch (e) {
         toast(`${file.name} : ${e.message}`, "error", 8000);
       }
+    }
+  }
+
+  async function importPackage() {
+    importing = true;
+    try {
+      const out = await api("/packages/import", { method: "POST", body: incoming.file });
+      toast($t("package.imported", { created: out.created.length, completed: out.completed.length, pdfs: out.pdfs, notes: out.notes }), "ok", 7000);
+      for (const err of out.errors) toast(err, "warn", 8000);
+      incoming = null;
+      libraryVersion++;
+    } catch (e) {
+      toast(e.message, "error");
+    } finally {
+      importing = false;
     }
   }
 </script>
@@ -104,6 +125,38 @@
   {/if}
 {/if}
 
+{#if incoming}
+  <div class="backdrop" role="presentation" onclick={(e) => { if (e.target === e.currentTarget) incoming = null; }}>
+    <div class="modal card" role="dialog" aria-modal="true" aria-labelledby="pkg-title">
+      <h2 id="pkg-title">{incoming.preview.manifest.title || incoming.file.name}</h2>
+      <p class="small muted">
+        {$t("package.preview", { n: incoming.preview.works.length, date: incoming.preview.manifest.created_at?.slice(0, 10) ?? "" })}
+        {#if incoming.preview.searches.length} · {$t("package.searches", { n: incoming.preview.searches.length })}{/if}
+      </p>
+      <ul class="scroll">
+        {#each incoming.preview.works as w}
+          <li>
+            <span class="title-serif">{w.title}</span>
+            <span class="small muted">{[w.first_author, w.year, w.container_title].filter(Boolean).join(" · ")}</span>
+            <span class="row small">
+              <span class="chip" class:new={w.status === "new"}>{$t(`package.${w.status}`)}</span>
+              {#if w.pdf}<span class="chip">PDF</span>{/if}
+              {#if w.note}<span class="chip">{$t("detail.note")}</span>{/if}
+              {#each w.labels as l}<span class="chip">{l.kind === "tag" ? "#" : ""}{l.name}</span>{/each}
+            </span>
+          </li>
+        {/each}
+      </ul>
+      <p class="small faint">{$t("package.rules")}</p>
+      <div class="row">
+        <div class="grow"></div>
+        <button onclick={() => (incoming = null)}>{$t("common.cancel")}</button>
+        <button class="primary" disabled={importing} onclick={importPackage}>{importing ? "…" : $t("package.import")}</button>
+      </div>
+    </div>
+  </div>
+{/if}
+
 <div class="toasts" aria-live="polite">
   {#each $toasts as item (item.id)}
     <div class="toast {item.kind}">{item.text}</div>
@@ -144,6 +197,13 @@
   }
   .dropzone div { background: var(--surface); padding: 14px 22px; border-radius: 12px; box-shadow: var(--shadow); font-weight: 600; }
 
+  .backdrop { position: fixed; inset: 0; background: rgb(0 0 0 / 0.35); display: grid; place-items: center; z-index: 55; }
+  .modal { width: min(640px, 92vw); max-height: 80vh; display: flex; flex-direction: column; gap: 10px; padding: 20px 22px; }
+  .modal h2 { margin: 0; font-size: 18px; }
+  .modal p { margin: 0; }
+  .modal ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+  .modal li { display: grid; gap: 2px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+  .modal .new { background: var(--accent-soft); color: var(--accent); }
   .toasts { position: fixed; right: 18px; bottom: 18px; display: flex; flex-direction: column; gap: 8px; z-index: 60; max-width: 420px; }
   .toast {
     background: var(--surface); border: 1px solid var(--border); border-left: 4px solid var(--accent);

@@ -8,6 +8,7 @@ import unicodedata
 import bibtexparser
 from bibtexparser.bparser import BibTexParser
 from bibtexparser.customization import convert_to_unicode
+from bibtexparser.latexenc import latex_to_unicode
 
 from . import core
 from .journals import normalize_issn
@@ -63,6 +64,27 @@ def _identifiers(*candidates: str | None) -> dict:
     return found
 
 
+def _bibtex_authors(raw: str) -> list[dict]:
+    """Auteurs BibTeX séparés par « and », sauf entre accolades : « {MERINO Trial Investigators and …} » est un
+    auteur collectif, gardé tel quel."""
+    parts, depth, current = [], 0, ""
+    for token in re.split(r"(\s+and\s+|[{}])", raw):
+        depth += token.count("{") - token.count("}") if token in "{}" else 0
+        if depth == 0 and re.fullmatch(r"\s+and\s+", token):
+            parts.append(current)
+            current = ""
+        else:
+            current += token
+    parts.append(current)
+    authors = []
+    for part in (p.strip() for p in parts if p.strip()):
+        if part.startswith("{") and part.endswith("}") and part.count("{") == 1:
+            authors.append({"family": _unlatex(latex_to_unicode(part)), "given": None, "orcid": None})
+        else:
+            authors.append(_name(_unlatex(latex_to_unicode(part))))
+    return authors
+
+
 def _name(text: str) -> dict:
     text = re.sub(r"[{}]", "", text).strip()
     if "," in text:
@@ -100,7 +122,8 @@ def _unlatex(text: str) -> str:
 
 def _bibtex(text: str) -> list[dict]:
     parser = BibTexParser(common_strings=True, ignore_nonstandard_types=False)
-    parser.customization = convert_to_unicode
+    # convert_to_unicode retire les accolades, qui délimitent pourtant les auteurs collectifs : on garde la brute.
+    parser.customization = lambda e: {**convert_to_unicode(dict(e)), "author_raw": e.get("author", "")}
     records = []
     for e in bibtexparser.loads(text, parser).entries:
         def f(key):
@@ -116,7 +139,7 @@ def _bibtex(text: str) -> list[dict]:
             issn_print=issns[0] if issns else None, issn_e=issns[1] if len(issns) > 1 else None,
             year=_year(f("year") or f("date")), volume=f("volume"), issue=f("number") or f("issue"),
             pages=(f("pages") or "").replace("--", "-") or None, language=f("language"),
-            authors=[_name(_unlatex(a)) for a in re.split(r"\s+and\s+", e.get("author", "")) if a.strip()],
+            authors=_bibtex_authors(e["author_raw"]),
             identifiers=_identifiers(f("doi"), f("pmid") and f"pmid:{f('pmid')}", f("pmcid"), arxiv and f"arXiv:{arxiv}"),
             subjects=_keywords([f("keywords") or ""]),
         ))  # fmt: skip

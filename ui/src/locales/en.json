@@ -18,7 +18,8 @@
     "add": "add to library",
     "search": "search",
     "navigate": "next / previous item",
-    "select": "select"
+    "select": "select",
+    "cite": "copy citation"
   },
   "ask": {
     "placeholder": "Ask your question, in English or French (or in PubMed syntax)…",
@@ -138,7 +139,8 @@
     "no_match": "No results.",
     "more": "Show more",
     "pick": "Pick an article from the list.",
-    "drop_hint": "Drop PDFs or .bib, .ris, .nbib files anywhere to import them. Drag an article onto a collection to file it."
+    "drop_hint": "Drop PDFs or .bib, .ris, .nbib files anywhere to import them. Drag an article onto a collection to file it.",
+    "select_all": "Select all"
   },
   "detail": {
     "record": "Record",
@@ -218,7 +220,42 @@
     "journals_new": "New list loaded",
     "journals_same": "The list is up to date",
     "connectors": "Connectors",
-    "connectors_soon": "Zotero, .biblio packages and Claude (Claude Desktop, with your subscription) come in the next phases.",
-    "data": "data in {path}"
+    "connectors_soon": "Claude (Claude Desktop, with your subscription) comes in phase 10.",
+    "data": "data in {path}",
+    "citations": "Citations and exports",
+    "style_help": "c key, record citation and Markdown exports.",
+    "add_style": "Add a style",
+    "add_style_help": ".csl file, for example from",
+    "choose_file": "Choose a file…",
+    "library_bib": "The whole library is kept up to date as BibTeX in {path} (LaTeX, Pandoc, Obsidian).",
+    "zotero_help": "Zotero must be open; articles go into the collection selected in Zotero.",
+    "zotero_on": "open · {where}",
+    "zotero_off": "closed",
+    "check": "Check"
+  },
+  "cite": {
+    "copy": "Copy citation",
+    "copied": "Citation copied",
+    "title": "Citation",
+    "style": "Citation style"
+  },
+  "export": {
+    "title": "Export"
+  },
+  "zotero": {
+    "sent": "{n} sent to Zotero ({pdfs} PDFs) → {where}"
+  },
+  "package": {
+    "make": ".biblio package",
+    "made": ".biblio package created",
+    "send_search": "Send as .biblio package",
+    "search_help": "The question, answer and sources, plus the articles already in the library with their PDFs and notes",
+    "preview": "{n} articles · package from {date}",
+    "searches": "{n} saved search(es)",
+    "new": "New",
+    "existing": "Already in your library",
+    "rules": "An article already present is completed, never duplicated. A note different from yours is appended. Your reading status and stars do not change.",
+    "import": "Import",
+    "imported": "Package imported: {created} added, {completed} completed, {pdfs} PDFs, {notes} notes"
   }
 }

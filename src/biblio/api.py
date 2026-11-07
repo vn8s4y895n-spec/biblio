@@ -18,7 +18,8 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import __version__, ask, config, core, db, formats, importer, journals, library, notes, organize, search, semantic
+from . import (__version__, ask, config, core, db, exports, formats, importer, journals, library, notes, organize,
+               packages, search, semantic, zotero)
 from .config import Config
 from .sources import http
 from .sources.http import SourceError
@@ -158,13 +159,48 @@ class Settings(BaseModel):
     semantic: bool | None = None
     language: Literal["", "fr", "en"] | None = None
     theme: Literal["system", "light", "dark"] | None = None
+    citation_style: str | None = None
+
+
+class Selection(BaseModel):
+    """Notices visées : `works` (id, clé, DOI, PMID), ou une collection / un tag (`label`), ou toute la bibliothèque."""
+
+    works: list[str] = []
+    label: int | None = None
+
+
+class ExportRequest(Selection):
+    format: Literal[exports.EXPORT_FORMATS]  # type: ignore[valid-type]
+    style: str | None = None  # Markdown : style CSL (défaut : celui des réglages)
+
+
+class ZoteroRequest(Selection):
+    pdf: bool = True
+
+
+class PackageRequest(Selection):
+    title: str | None = None
+    searches: list[int] = []  # recherches enregistrées jointes
+
+
+def selected(conn, sel: Selection) -> list:
+    if sel.works:
+        return sel.works
+    if sel.label is not None:
+        return [r[0] for r in conn.execute("SELECT work_id FROM work_labels WHERE label_id = ?", (sel.label,))]
+    return exports.all_refs(conn)
+
+
+def style_of(request: Request, style: str | None = None) -> str:
+    return style or request.app.state.config.citation_style or exports.DEFAULT_STYLE
 
 
 def settings_of(cfg: Config) -> dict:
     return {
         "contact_email": cfg.contact_email, **{f"{k}_api_key": v for k, v in cfg.api_keys.items()},
         "watch_downloads": cfg.watch_downloads, "downloads_dir": str(cfg.downloads_dir), "semantic": cfg.semantic,
-        "language": cfg.language, "theme": cfg.theme, "home": str(cfg.home), "version": __version__,
+        "language": cfg.language, "theme": cfg.theme, "citation_style": cfg.citation_style or exports.DEFAULT_STYLE,
+        "home": str(cfg.home), "version": __version__,
     }  # fmt: skip
 
 
@@ -312,6 +348,8 @@ def put_settings(body: Settings, request: Request):
     changes = body.model_dump(exclude_none=True)
     if "contact_email" in changes and changes["contact_email"].strip() and "@" not in changes["contact_email"]:
         raise HTTPException(422, "Adresse e-mail invalide")
+    if changes.get("citation_style") and changes["citation_style"] not in exports.style_paths(cfg.home):
+        raise HTTPException(422, f"Style inconnu : {changes['citation_style']}")
     keys = {k: changes.pop(f"{k}_api_key", v).strip() for k, v in cfg.api_keys.items()}
     if "downloads_dir" in changes:
         changes["downloads_dir"] = Path(changes["downloads_dir"]).expanduser()
@@ -377,6 +415,70 @@ def delete_label(label_id: int, conn: Conn):
 @router.post("/labels/{label_id}/works", summary="Ranger des notices dans une collection / un tag (ou les en retirer)")
 def label_works(label_id: int, body: LabelWorks, conn: Conn, client: Client):
     return {"changed": organize.set_label(conn, label_id, body.works, not body.remove, client)}
+
+
+@router.get("/styles", summary="Styles de citation disponibles (fournis et ajoutés)")
+def list_styles(request: Request):
+    return exports.styles(home(request))
+
+
+@router.post("/styles", status_code=201, summary="Ajouter un style de citation (.csl, corps brut)",
+             openapi_extra=binary_body("application/xml"))  # fmt: skip
+async def add_style(request: Request, data: Annotated[bytes, Depends(raw_body)], filename: str | None = None):
+    """Styles : <https://www.zotero.org/styles>. Un style dépendant est refusé (ajouter son style parent)."""
+    return exports.add_style(home(request), data, filename)
+
+
+@router.post("/export", summary="Exporter des notices : CSL-JSON, BibTeX, RIS ou Markdown (liste formatée)")
+def export_works(body: ExportRequest, request: Request, conn: Conn):
+    content, media = exports.export(conn, home(request), selected(conn, body), body.format, style_of(request, body.style))
+    ext = {"csljson": "json", "bibtex": "bib", "ris": "ris", "markdown": "md"}[body.format]
+    return Response(content, media_type=f"{media}; charset=utf-8",
+                    headers={"Content-Disposition": f'attachment; filename="biblio.{ext}"'})  # fmt: skip
+
+
+class CiteRequest(BaseModel):
+    record: dict  # notice au format interne (résultat de recherche en ligne)
+    style: str | None = None
+
+
+@router.post("/citation", summary="Référence formatée d'une notice hors bibliothèque (résultat de recherche)")
+def cite_record(body: CiteRequest, request: Request):
+    style = style_of(request, body.style)
+    return {"style": style, "text": exports.citation(body.record, home(request), style)}
+
+
+@router.get("/zotero", summary="Zotero est-il ouvert ? Collection de destination")
+def zotero_status():
+    return zotero.status()
+
+
+@router.post("/zotero", summary="Envoyer des notices (avec note, tags et PDF) dans Zotero, qui doit être ouvert")
+def zotero_send(body: ZoteroRequest, request: Request, conn: Conn):
+    """Par le serveur local de Zotero (127.0.0.1:23119) : les notices arrivent dans la collection sélectionnée."""
+    return zotero.send(conn, home(request), selected(conn, body), body.pdf)
+
+
+@router.post("/packages", summary="Créer un paquet .biblio (notices, PDF, notes, tags, questions, recherches)")
+def create_package(body: PackageRequest, request: Request, conn: Conn):
+    # Une recherche enregistrée seule : ses articles déjà dans la bibliothèque, pas toute la bibliothèque.
+    refs = selected(conn, body) if body.works or body.label is not None or not body.searches else []
+    data = packages.create(conn, home(request), refs, body.title, body.searches)
+    return Response(data, media_type="application/x-biblio",
+                    headers={"Content-Disposition": 'attachment; filename="articles.biblio"'})  # fmt: skip
+
+
+@router.post("/packages/preview", summary="Aperçu d'un paquet .biblio avant import (corps brut)",
+             openapi_extra=binary_body("application/x-biblio"))  # fmt: skip
+async def preview_package(conn: Conn, data: Annotated[bytes, Depends(raw_body)]):
+    return packages.preview(conn, data)
+
+
+@router.post("/packages/import", summary="Importer un paquet .biblio (corps brut)", openapi_extra=binary_body("application/x-biblio"))
+async def import_package(request: Request, conn: Conn, data: Annotated[bytes, Depends(raw_body)]):
+    """Articles déjà présents complétés, jamais dupliqués ; notes différentes ajoutées à la suite ; tags,
+    collections, questions et recherches enregistrées repris."""
+    return packages.import_package(conn, home(request), data)
 
 
 JournalStatus = Literal[journals.STATUSES]  # type: ignore[valid-type]
@@ -492,6 +594,13 @@ def fetch_pdf(ref: str, request: Request, conn: Conn, client: Client):
     return found
 
 
+@router.get("/works/{ref:path}/citation", summary="Référence formatée d'une notice (style CSL)")
+def get_citation(ref: str, request: Request, conn: Conn, style: str | None = None):
+    work = core.get_work(conn, ref)
+    style = style_of(request, style)
+    return {"style": style, "text": exports.citation(work, home(request), style)}
+
+
 @router.get("/works/{ref:path}/note", summary="Lire la note Markdown d'une notice")
 def get_note(ref: str, request: Request, conn: Conn):
     """`links` : notices citées par [[clé]] ; `backlinks` : notices dont la note cite celle-ci."""
@@ -518,7 +627,7 @@ def update_work(ref: str, body: WorkUpdate, conn: Conn, client: Client):
 
 
 def _background(app: FastAPI) -> None:
-    """Toutes les 5 s : boîte d'entrée, Téléchargements (si activé) et notes modifiées hors de Biblio.
+    """Toutes les 5 s : boîte d'entrée, Téléchargements (si activé), notes modifiées hors de Biblio, library.bib.
     Toutes les 6 h : liste des revues. Les réglages sont relus à chaque tour (écran de réglages)."""
     # ponytail: boucle dans un thread ; passera par la file de tâches de la phase 5.
     next_journal_check = 0.0
@@ -530,6 +639,7 @@ def _background(app: FastAPI) -> None:
             if config.watch_downloads:
                 importer.scan_downloads(conn, config.downloads_dir, config.home)
             notes.sync(conn, config.home)
+            exports.sync_library_bib(conn, config.home)
             if time.monotonic() >= next_journal_check:
                 next_journal_check = time.monotonic() + 6 * 3600
                 if result := journals.update_if_stale(conn, config.home):
@@ -571,7 +681,7 @@ def create_app(config: Config, background: bool = False) -> FastAPI:
     app.include_router(router)
 
     # ValueError couvre les saisies invalides (identifiant, format de fichier, PDF refusé, fusion impossible).
-    errors = {ValueError: 422, core.NotFound: 404, SourceError: 502}
+    errors = {ValueError: 422, core.NotFound: 404, SourceError: 502, zotero.ZoteroError: 503}
     for exc_type, status in errors.items():
         app.add_exception_handler(exc_type, lambda _req, exc, status=status: JSONResponse({"detail": str(exc)}, status))
 

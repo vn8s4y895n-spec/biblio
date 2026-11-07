@@ -37,6 +37,7 @@ models_dir = {models_dir}   # vide : dossier « models » du dossier de données
 [ui]
 language = {language}   # "fr", "en" ou vide (langue du système)
 theme = {theme}   # "system", "light" ou "dark"
+citation_style = {citation_style}   # style CSL de la touche « c » et des exports Markdown (vide : Vancouver)
 """
 
 API_KEYS = ("ncbi", "openalex", "semanticscholar")
@@ -67,6 +68,7 @@ class Config:
     models_dir_setting: str = ""
     language: str = ""
     theme: str = "system"
+    citation_style: str = ""
 
     @property
     def models_dir(self) -> Path:
@@ -97,6 +99,7 @@ def save(cfg: Config) -> None:
         **{name: value(cfg.api_keys.get(name, "")) for name in API_KEYS},
         watch_downloads=value(cfg.watch_downloads), downloads_dir=value(downloads), semantic=value(cfg.semantic),
         models_dir=value(cfg.models_dir_setting), language=value(cfg.language), theme=value(cfg.theme),
+        citation_style=value(cfg.citation_style),
     )  # fmt: skip
     cfg.home.mkdir(parents=True, exist_ok=True)
     tmp = cfg.path.with_suffix(".tmp")
@@ -127,4 +130,5 @@ def load() -> Config:
         models_dir_setting=semantic.get("models_dir", ""),
         language=ui.get("language", ""),
         theme=ui.get("theme", "system"),
+        citation_style=ui.get("citation_style", ""),
     )

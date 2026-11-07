@@ -57,7 +57,7 @@ def client() -> httpx.Client:
     c = httpx.Client(
         base_url=cfg.client_url,
         headers={"Authorization": f"Bearer {cfg.token}", "X-Biblio-Client": "cli"},
-        timeout=60,
+        timeout=300,  # envoi vers Zotero, paquets volumineux
     )
     if not _is_biblio(c):
         _start_server(c, cfg)
@@ -151,8 +151,17 @@ def add(
 def import_(
     paths: Annotated[list[Path], typer.Argument(exists=True, dir_okay=False, help="PDF, .bib, .ris, .nbib ou .json")],
 ) -> None:
-    """Importe des PDF (DOI repéré automatiquement) ou des fichiers bibliographiques (BibTeX, RIS, MEDLINE, CSL-JSON)."""
+    """Importe des PDF (DOI repéré automatiquement), des fichiers bibliographiques (BibTeX, RIS, MEDLINE, CSL-JSON)
+    ou des paquets .biblio reçus d'un autre Biblio."""
     for path in paths:
+        if path.suffix.lower() == ".biblio":
+            r = _call("POST", "/api/v1/packages/import", content=path.read_bytes(),
+                      headers={"Content-Type": "application/x-biblio"}).json()  # fmt: skip
+            typer.echo(f"✓ {path.name} : {len(r['created'])} articles ajoutés, {len(r['completed'])} déjà présents "
+                       f"(complétés), {r['pdfs']} PDF, {r['notes']} notes, {r['searches']} recherches")  # fmt: skip
+            for e in r["errors"]:
+                typer.secho(f"  ⚠ {e}", fg="yellow")
+            continue
         if path.suffix.lower() == ".pdf":
             r = _call("POST", "/api/v1/files", params={"filename": path.name}, content=path.read_bytes(),
                       headers={"Content-Type": "application/pdf"}).json()  # fmt: skip
@@ -499,6 +508,89 @@ def journals_lookup(value: Annotated[str, typer.Argument(help="ISSN, NLMID ou ab
     if status["journal"]:
         typer.secho(status["journal"]["name"], bold=True)
     typer.echo(_status_line(status))
+
+
+def _selection(refs: list[str] | None, label: str | None) -> dict:
+    """Notices visées par une commande : références données, collection / tag nommé, ou toute la bibliothèque."""
+    if label:
+        match = [x for x in _call("GET", "/api/v1/labels").json() if x["name"].casefold() == label.casefold()]
+        if not match:
+            _fail(f"Collection ou tag inconnu : {label}")
+        return {"label": match[0]["id"]}
+    return {"works": refs or []}
+
+
+Refs = Annotated[list[str] | None, typer.Argument(help="Clés, DOI ou PMID (défaut : toute la bibliothèque)")]
+LabelOpt = Annotated[str | None, typer.Option("--collection", "-c", help="Collection ou tag (nom)")]
+
+
+@app.command()
+def cite(
+    refs: Annotated[list[str], typer.Argument(help="Clés, DOI ou PMID")],
+    style: Annotated[str | None, typer.Option(help="Style CSL (voir biblio styles ; défaut : réglages)")] = None,
+) -> None:
+    """Affiche la référence formatée (Vancouver par défaut), prête à coller."""
+    for ref in refs:
+        typer.echo(_call("GET", f"/api/v1/works/{ref}/citation", params={"style": style} if style else {}).json()["text"])
+
+
+@app.command()
+def styles() -> None:
+    """Styles de citation disponibles (ajouter un .csl : biblio styles-add fichier.csl)."""
+    for s in _call("GET", "/api/v1/styles").json():
+        typer.echo(f"{'*' if s['default'] else ' '} {s['id']:<52} {s['title']}{' (ajouté)' if s['added'] else ''}")
+
+
+@app.command("styles-add")
+def styles_add(path: Annotated[Path, typer.Argument(exists=True, dir_okay=False, help="Fichier .csl")]) -> None:
+    """Ajoute un style de citation (.csl, par exemple depuis zotero.org/styles)."""
+    s = _call("POST", "/api/v1/styles", params={"filename": path.name}, content=path.read_bytes(),
+              headers={"Content-Type": "application/xml"}).json()  # fmt: skip
+    typer.echo(f"✓ Style ajouté : {s['id']} ({s['title']})")
+
+
+@app.command()
+def export(
+    refs: Refs = None,
+    format: Annotated[str, typer.Option("--format", "-f", help="bibtex, ris, csljson ou markdown")] = "bibtex",
+    collection: LabelOpt = None,
+    style: Annotated[str | None, typer.Option(help="Style CSL pour markdown")] = None,
+    output: Annotated[Path | None, typer.Option("--output", "-o", help="Fichier de sortie (défaut : écran)")] = None,
+) -> None:
+    """Exporte des notices (BibTeX, RIS, CSL-JSON ou liste Markdown formatée)."""
+    body = {**_selection(refs, collection), "format": format, **({"style": style} if style else {})}
+    text = _call("POST", "/api/v1/export", json=body).text
+    if output:
+        output.write_text(text, encoding="utf-8")
+        typer.echo(f"✓ {output}")
+    else:
+        typer.echo(text, nl=False)
+
+
+@app.command("zotero")
+def zotero_send(
+    refs: Refs = None,
+    collection: LabelOpt = None,
+    pdf: Annotated[bool, typer.Option("--pdf/--no-pdf", help="Joindre les PDF")] = True,
+) -> None:
+    """Envoie des notices dans Zotero (qui doit être ouvert), dans la collection sélectionnée dans Zotero."""
+    if not refs and not collection:
+        _fail("Indiquer des notices ou une collection (--collection)")
+    r = _call("POST", "/api/v1/zotero", json={**_selection(refs, collection), "pdf": pdf}).json()
+    typer.echo(f"✓ {r['sent']} notices et {r['pdfs']} PDF envoyés dans Zotero → {r['collection'] or r['library']}")
+
+
+@app.command()
+def pack(
+    refs: Refs = None,
+    collection: LabelOpt = None,
+    output: Annotated[Path, typer.Option("--output", "-o", help="Fichier .biblio à créer")] = Path("articles.biblio"),
+    title: Annotated[str | None, typer.Option(help="Titre du paquet (ex. « Pour Marie »)")] = None,
+) -> None:
+    """Crée un paquet .biblio (notices, PDF, notes, tags, questions) à envoyer à un autre Biblio."""
+    data = _call("POST", "/api/v1/packages", json={**_selection(refs, collection), "title": title}).content
+    output.write_bytes(data)
+    typer.echo(f"✓ {output} ({len(data) / 1e6:.1f} Mo)")
 
 
 @app.command()

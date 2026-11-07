@@ -21,6 +21,7 @@ def run(browser: bool = False) -> None:
         return
     import webview
 
+    webview.settings["ALLOW_DOWNLOADS"] = True  # exports, paquets .biblio
     webview.create_window("Biblio", url, width=1440, height=920, min_size=(960, 600))
     webview.start()
     if started_here:  # la fenêtre a lancé le serveur : elle l'arrête en se fermant

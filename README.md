@@ -1,7 +1,7 @@
 # Biblio
 
 Gestionnaire de bibliographie local, autonome et ouvert, pensé pour la recherche en santé.
-Le projet avance par phases : voir [PLAN.md](PLAN.md). Ce README décrit ce qui fonctionne **aujourd'hui** (phases 1 à 6).
+Le projet avance par phases : voir [PLAN.md](PLAN.md). Ce README décrit ce qui fonctionne **aujourd'hui** (phases 1 à 7).
 
 ## Installation (développement)
 
@@ -39,7 +39,8 @@ uv run biblio app --browser    # même interface dans le navigateur
 - **Enregistrer la recherche** garde la question, la réponse et les sources ; les recherches enregistrées s'affichent sur l'écran d'accueil.
 - **Bibliothèque** en trois panneaux redimensionnables : filtres (statut de lecture, collections, tags, statut de revue), liste (recherche plein texte et par le sens, sélection multiple, glisser une notice sur une collection), fiche (statut de lecture, note étoilée, tags, collections, résumé, MeSH, **lecteur PDF**, **note Markdown**).
 - **Glisser-déposer** n'importe où : PDF, ou fichiers .bib, .ris, .nbib, .json.
-- **Clavier** : `/` question ou recherche, `j` / `k` élément suivant / précédent, `a` ajouter la source, `x` sélectionner, `Échap` quitter le champ, `⌘S` enregistrer la note.
+- **Citer, exporter, envoyer** : la fiche affiche la référence dans le style choisi (Vancouver par défaut) ; boutons et sélection multiple pour exporter (BibTeX, RIS, CSL-JSON, liste Markdown), envoyer dans Zotero ou créer un paquet `.biblio`. Une recherche enregistrée s'envoie aussi en paquet. Un paquet `.biblio` déposé sur la fenêtre s'ouvre en aperçu avant import.
+- **Clavier** : `/` question ou recherche, `j` / `k` élément suivant / précédent, `a` ajouter la source, `c` copier la citation, `z` envoyer dans Zotero, `x` sélectionner, `Échap` quitter le champ, `⌘S` enregistrer la note.
 - **Réglages** : langue (français, anglais ou celle du système), thème (clair, sombre ou celui du système), e-mail de contact et clés des bases, surveillance des Téléchargements, téléchargement du modèle sémantique et avancement de l'indexation, vérification de la liste des revues. Ils sont écrits dans `config.toml`.
 - **Jeton** : l'interface le reçoit dans l'adresse (`#token=…`, partie jamais envoyée au serveur). Les fichiers de l'interface sont servis sans jeton ; aucune donnée ne l'est.
 
@@ -118,6 +119,25 @@ uv run biblio pdf harris2018effect --open          # l'ouvrir, ou ouvrir la page
   - **le sens** : le modèle local bge-m3, multilingue. Une question en français (« études sur la transmission de BLSE en foyer familial ») trouve des passages en anglais. Un passage trouvé par le sens seul est marqué ≈.
 - **Choix du moteur** : `--engine lexical` (plein texte seul) ou `--engine semantic` (sens seul).
 - **Vitesse** : 29 ms en médiane sur 10 000 notices (30 000 passages), encodage de la question compris.
+
+### Citations, exports, Zotero, paquets .biblio
+
+```bash
+uv run biblio cite harris2018effect                 # référence formatée (style des réglages ; Vancouver par défaut)
+uv run biblio cite harris2018effect --style apa
+uv run biblio styles                                # styles disponibles
+uv run biblio styles-add mon-style.csl              # ajouter un style (zotero.org/styles)
+uv run biblio export -f bibtex -o refs.bib          # toute la bibliothèque (ou des clés, ou -c « collection »)
+uv run biblio export -c "Thèse" -f markdown         # liste formatée, avec liens DOI et [[clé]]
+uv run biblio zotero -c "Thèse"                     # envoyer dans Zotero (ouvert), avec notes, tags et PDF
+uv run biblio pack -c "Thèse" -o these.biblio --title "Pour Marie"
+uv run biblio import these.biblio                   # chez le destinataire
+```
+
+- **Styles** : Vancouver des bibliothèques universitaires de médecine (par défaut) et APA 7, fournis ; tout style indépendant de <https://www.zotero.org/styles> s'ajoute. Le style NLM d'origine n'est pas fourni : citeproc-py le rend mal (espaces perdus).
+- **`library.bib`** : toute la bibliothèque en BibTeX, dans le dossier de données, réécrite dès qu'une notice change (pour LaTeX, Pandoc, Obsidian). Les auteurs collectifs (« MERINO Trial Investigators and … ») sont protégés par des accolades.
+- **Zotero** : par son serveur local (`127.0.0.1:23119`, celui de son extension de navigateur), sans compte ni clé. Zotero doit être ouvert ; les notices arrivent dans la collection sélectionnée dans Zotero, avec leurs tags, leur note et leur PDF.
+- **Paquets `.biblio`** : un fichier ZIP (`manifest.json`, `works.json`, `searches.json`, `files/<sha256>.pdf`) avec les notices, PDF, notes, tags, collections, questions d'origine et recherches enregistrées. Le statut de lecture et les étoiles restent personnels. À l'import : un article déjà présent est complété (jamais dupliqué), une note différente est ajoutée à la suite, un PDF dont l'empreinte ne correspond pas est refusé.
 
 ### Recherche par le sens (modèle local)
 
@@ -245,6 +265,14 @@ curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:8765/api/v1/works/10.100
 | PATCH / DELETE | `/api/v1/labels/{id}` | Renommer / supprimer (les notices restent) |
 | POST | `/api/v1/labels/{id}/works` | Ranger des notices (`{"works": [...], "remove": false}`) |
 | PATCH | `/api/v1/works/{ref}` | Statut de lecture et note (`{"read_status", "rating"}` ; null efface) |
+| GET | `/api/v1/works/{ref}/citation?style=` | Référence formatée |
+| POST | `/api/v1/citation` | Référence d'une notice hors bibliothèque (`{"record", "style"}`) |
+| GET / POST | `/api/v1/styles` | Styles disponibles / ajouter un .csl (corps brut, `?filename=`) |
+| POST | `/api/v1/export` | Exporter (`{"works"` ou `"label", "format": "bibtex"\|"ris"\|"csljson"\|"markdown", "style"}` ; vide : toute la bibliothèque) |
+| GET / POST | `/api/v1/zotero` | Zotero ouvert ? / envoyer (`{"works"` ou `"label", "pdf"}` ; 503 si Zotero est fermé) |
+| POST | `/api/v1/packages` | Créer un paquet .biblio (`{"works"` ou `"label", "title", "searches"}`) |
+| POST | `/api/v1/packages/preview` | Aperçu d'un paquet (corps brut) |
+| POST | `/api/v1/packages/import` | Importer un paquet (corps brut) |
 | GET / PUT | `/api/v1/settings` | Réglages de l'interface (PUT : champs omis inchangés ; écrit `config.toml`) |
 
 L'en-tête facultatif `X-Biblio-Client` (`api`, `cli`, `web`, `mcp`…) est inscrit dans le journal des modifications.
@@ -254,7 +282,7 @@ L'en-tête facultatif `X-Biblio-Client` (`api`, `cli`, `web`, `mcp`…) est insc
 Dossier de données : `~/Library/Application Support/Biblio` (macOS), `%APPDATA%\Biblio` (Windows), `~/.local/share/biblio` (Linux). La variable `BIBLIO_HOME` le remplace.
 
 - `config.toml` : créé au premier lancement (droits 600). Contient le port, le jeton de l'API, l'e-mail de contact et les clés des bases, la surveillance des Téléchargements, la recherche par le sens, la langue et le thème. Il se modifie à la main ou depuis les réglages de l'application (qui le réécrivent sans les commentaires ajoutés à la main).
-- `library/` : les PDF (par empreinte). `notes/` : les notes Markdown. `inbox/` : la boîte d'entrée.
+- `library/` : les PDF (par empreinte). `notes/` : les notes Markdown. `inbox/` : la boîte d'entrée. `styles/` : les styles de citation ajoutés. `library.bib` : toute la bibliothèque en BibTeX.
 - `biblio.sqlite` : la base (SQLite en mode WAL), documentée dans [SCHEMA.md](SCHEMA.md). **Ne la placez pas dans un dossier synchronisé** (iCloud Drive, OneDrive) : la synchro peut la corrompre.
 
 ## Sauvegarde

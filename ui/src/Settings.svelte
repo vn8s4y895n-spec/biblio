@@ -12,6 +12,8 @@
   let journals = $state(null);
   let checking = $state(false);
   let restartNeeded = $state(false);
+  let styles = $state([]);
+  let zotero = $state(null);
   let poll;
 
   const KEYS = [
@@ -21,7 +23,7 @@
   ];
 
   onMount(async () => {
-    [semantic, journals] = await Promise.all([api("/semantic"), api("/journals")]);
+    [semantic, journals, styles, zotero] = await Promise.all([api("/semantic"), api("/journals"), api("/styles"), api("/zotero")]);
     poll = setInterval(async () => {
       if (semantic?.status === "downloading" || (semantic?.status === "ready" && semantic.progress < 1)) semantic = await api("/semantic");
     }, 2000);
@@ -58,6 +60,20 @@
     }
   }
 
+  async function addStyle(e) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    try {
+      const added = await api("/styles", { method: "POST", body: file, params: { filename: file.name } });
+      styles = await api("/styles");
+      form.citation_style = added.id;
+      save("citation_style");
+    } catch (err) {
+      toast(err.message, "error", 8000);
+    }
+  }
+
   const gb = (bytes) => (bytes / 1e9).toFixed(1).replace(".", $t("common.decimal"));
 </script>
 
@@ -83,6 +99,21 @@
           <option value="dark">{$t("settings.dark")}</option>
         </select>
       </div>
+    </section>
+
+    <section class="card">
+      <h2>{$t("settings.citations")}</h2>
+      <div class="field">
+        <span>{$t("cite.style")}<small class="faint">{$t("settings.style_help")}</small></span>
+        <select bind:value={form.citation_style} onchange={() => save("citation_style")}>
+          {#each styles as s}<option value={s.id}>{s.title}</option>{/each}
+        </select>
+      </div>
+      <div class="field">
+        <span>{$t("settings.add_style")}<small class="faint">{$t("settings.add_style_help")} <a href="https://www.zotero.org/styles" target="_blank" rel="noreferrer">zotero.org/styles ↗</a></small></span>
+        <label class="file"><input type="file" accept=".csl" onchange={addStyle} />{$t("settings.choose_file")}</label>
+      </div>
+      <p class="small faint">{$t("settings.library_bib", { path: `${settings.home}/library.bib` })}</p>
     </section>
 
     <section class="card">
@@ -170,6 +201,17 @@
 
     <section class="card">
       <h2>{$t("settings.connectors")}</h2>
+      <div class="field">
+        <span>Zotero<small class="faint">{$t("settings.zotero_help")}</small></span>
+        <span class="status">
+          {#if zotero?.running}
+            <span class="chip ok">✓ {$t("settings.zotero_on", { where: zotero.collection ?? zotero.library })}</span>
+          {:else}
+            <span class="chip">{$t("settings.zotero_off")}</span>
+          {/if}
+          <button class="small" onclick={async () => (zotero = await api("/zotero"))}>{$t("settings.check")}</button>
+        </span>
+      </div>
       <p class="muted small">{$t("settings.connectors_soon")}</p>
     </section>
 
@@ -194,4 +236,6 @@
   .warn { color: var(--warn); }
   .mono { font-family: var(--mono); }
   .about { text-align: center; }
+  .file { border: 1px solid var(--border); border-radius: 7px; padding: 5px 11px; cursor: pointer; background: var(--surface); }
+  .file input { display: none; }
 </style>

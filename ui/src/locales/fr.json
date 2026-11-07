@@ -18,7 +18,8 @@
     "add": "ajouter à la bibliothèque",
     "search": "chercher",
     "navigate": "notice suivante / précédente",
-    "select": "sélectionner"
+    "select": "sélectionner",
+    "cite": "copier la citation"
   },
   "ask": {
     "placeholder": "Pose ta question, en français ou en anglais (ou en syntaxe PubMed)…",
@@ -138,7 +139,8 @@
     "no_match": "Aucun résultat.",
     "more": "Afficher plus",
     "pick": "Choisis un article dans la liste.",
-    "drop_hint": "Dépose des PDF ou des fichiers .bib, .ris, .nbib n'importe où pour les importer. Glisse un article sur une collection pour l'y ranger."
+    "drop_hint": "Dépose des PDF ou des fichiers .bib, .ris, .nbib n'importe où pour les importer. Glisse un article sur une collection pour l'y ranger.",
+    "select_all": "Tout sélectionner"
   },
   "detail": {
     "record": "Notice",
@@ -218,7 +220,42 @@
     "journals_new": "Nouvelle liste chargée",
     "journals_same": "La liste est à jour",
     "connectors": "Connecteurs",
-    "connectors_soon": "Zotero, paquets .biblio et Claude (Claude Desktop, avec ton abonnement) arrivent dans les prochaines phases.",
-    "data": "données dans {path}"
+    "connectors_soon": "Claude (Claude Desktop, avec ton abonnement) arrive en phase 10.",
+    "data": "données dans {path}",
+    "citations": "Citations et exports",
+    "style_help": "Touche c, citation des fiches et exports Markdown.",
+    "add_style": "Ajouter un style",
+    "add_style_help": "Fichier .csl, par exemple depuis",
+    "choose_file": "Choisir un fichier…",
+    "library_bib": "Toute la bibliothèque est tenue à jour en BibTeX dans {path} (LaTeX, Pandoc, Obsidian).",
+    "zotero_help": "Zotero doit être ouvert ; les articles arrivent dans la collection sélectionnée dans Zotero.",
+    "zotero_on": "ouvert · {where}",
+    "zotero_off": "fermé",
+    "check": "Vérifier"
+  },
+  "cite": {
+    "copy": "Copier la citation",
+    "copied": "Citation copiée",
+    "title": "Citation",
+    "style": "Style de citation"
+  },
+  "export": {
+    "title": "Exporter"
+  },
+  "zotero": {
+    "sent": "{n} envoyés dans Zotero ({pdfs} PDF) → {where}"
+  },
+  "package": {
+    "make": "Paquet .biblio",
+    "made": "Paquet .biblio créé",
+    "send_search": "Envoyer en paquet .biblio",
+    "search_help": "La question, la réponse, les sources, et les articles déjà dans la bibliothèque avec leurs PDF et notes",
+    "preview": "{n} articles · paquet du {date}",
+    "searches": "{n} recherche(s) enregistrée(s)",
+    "new": "Nouveau",
+    "existing": "Déjà dans ta bibliothèque",
+    "rules": "Un article déjà présent est complété, jamais dupliqué. Une note différente de la tienne est ajoutée à la suite. Ton statut de lecture et tes étoiles ne changent pas.",
+    "import": "Importer",
+    "imported": "Paquet importé : {created} ajoutés, {completed} complétés, {pdfs} PDF, {notes} notes"
   }
 }

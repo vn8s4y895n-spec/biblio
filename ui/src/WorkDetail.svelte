@@ -1,6 +1,7 @@
 <script>
   import { onDestroy, onMount } from "svelte";
   import Badges from "./lib/Badges.svelte";
+  import { EXPORTS, copyCitation, exportWorks, makePackage, sendToZotero } from "./lib/actions.js";
   import { api } from "./lib/api.js";
   import { doiUrl } from "./lib/format.js";
   import { fmt, t } from "./lib/i18n.js";
@@ -17,6 +18,9 @@
   let noteSaved = $state(true);
   let fetching = $state(false);
   let tagInput = $state("");
+  let styles = $state([]);
+  let style = $state("");
+  let cited = $state("");
 
   const collectionsOf = $derived(new Set(work?.labels.filter((l) => l.kind === "collection").map((l) => l.id)));
   const tagsOf = $derived(work?.labels.filter((l) => l.kind === "tag") ?? []);
@@ -25,8 +29,9 @@
   onMount(async () => {
     try {
       work = await api(`/works/${encodeURIComponent(ref)}`);
-      [files, note] = await Promise.all([api(`/works/${work.id}/files`), api(`/works/${work.id}/note`)]);
+      [files, note, styles] = await Promise.all([api(`/works/${work.id}/files`), api(`/works/${work.id}/note`), api("/styles")]);
       noteText = note.text;
+      await cite();
     } catch (e) {
       toast(e.message, "error");
     }
@@ -36,6 +41,18 @@
     if (pdfUrl) URL.revokeObjectURL(pdfUrl);
     if (!noteSaved) saveNote();
   });
+
+  async function cite() {
+    const out = await api(`/works/${work.id}/citation`, { params: { style } });
+    style = out.style;
+    cited = out.text;
+  }
+
+  function onKey(e) {
+    if (/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) || e.metaKey || e.ctrlKey || !work) return;
+    if (e.key === "c") copyCitation(work.id);
+    else if (e.key === "z") sendToZotero({ works: [String(work.id)] });
+  }
 
   async function showPdf() {
     tab = "pdf";
@@ -91,6 +108,8 @@
   const authors = $derived(work?.authors.map((a) => [a.given, a.family].filter(Boolean).join(" ")).join(", "));
 </script>
 
+<svelte:window onkeydown={onKey} />
+
 {#if work}
   <div class="detail">
     <header>
@@ -109,6 +128,15 @@
         {/each}
         {#if doiUrl(work)}<a href={doiUrl(work)} target="_blank" rel="noreferrer">{$t("detail.publisher")} ↗</a>{/if}
         <button class="chip id" title={$t("detail.copy")} onclick={() => copy(work.citekey)}>@{work.citekey}</button>
+      </div>
+      <div class="actions row wrap">
+        <button class="small" onclick={() => copyCitation(work.id)}>{$t("cite.copy")} <span class="kbd">c</span></button>
+        <button class="small" onclick={() => sendToZotero({ works: [String(work.id)] })}>Zotero <span class="kbd">z</span></button>
+        <select class="small" aria-label={$t("export.title")} onchange={(e) => { exportWorks({ works: [String(work.id)] }, e.target.value, work.citekey); e.target.value = ""; }}>
+          <option value="">{$t("export.title")}…</option>
+          {#each EXPORTS as [format, label]}<option value={format}>{label}</option>{/each}
+        </select>
+        <button class="small" onclick={() => makePackage({ works: [String(work.id)] }, work.citekey)}>{$t("package.make")}</button>
       </div>
     </header>
 
@@ -155,6 +183,18 @@
                 <label class="chip check"><input type="checkbox" checked={collectionsOf.has(c.id)} onchange={(e) => setLabel(c.id, e.target.checked)} /> {c.name}</label>
               {/each}
             </div>
+          </div>
+        {/if}
+
+        {#if cited}
+          <div class="block cite">
+            <div class="row">
+              <span class="eyebrow grow">{$t("cite.title")}</span>
+              <select class="small" bind:value={style} onchange={cite} aria-label={$t("cite.style")}>
+                {#each styles as s}<option value={s.id}>{s.title}</option>{/each}
+              </select>
+            </div>
+            <p class="cited">{cited}</p>
           </div>
         {/if}
 
@@ -231,6 +271,9 @@
   header p { margin: 0; }
   .authors { max-height: 3em; overflow: hidden; }
   .ids { gap: 6px; }
+  .actions { gap: 6px; margin-top: 4px; }
+  select.small { padding: 2px 6px; font-size: 12.5px; max-width: 220px; }
+  .cited { margin: 0; font-size: 13.5px; background: var(--surface-2); padding: 8px 10px; border-radius: 7px; user-select: text; }
   .id { border: none; cursor: copy; font: 11.5px var(--mono); }
   .tabs { gap: 2px; padding: 0 18px; border-bottom: 1px solid var(--border); }
   .tabs button { border: none; background: transparent; border-radius: 0; padding: 8px 10px; color: var(--muted); border-bottom: 2px solid transparent; }
