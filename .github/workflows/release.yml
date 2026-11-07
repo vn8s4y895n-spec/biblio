@@ -12,6 +12,10 @@ on:
 permissions:
   contents: read
 
+env:
+  # Python fourni par uv : celui des machines GitHub ne permet pas de charger sqlite-vec (extension SQLite).
+  UV_PYTHON_PREFERENCE: only-managed
+
 jobs:
   tests:
     runs-on: macos-latest
