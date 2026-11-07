@@ -160,7 +160,9 @@
     "note_saved": "Saved",
     "note_unsaved": "Unsaved changes (⌘S)",
     "links": "Cites",
-    "backlinks": "Cited by"
+    "backlinks": "Cited by",
+    "questions": "Added from the question",
+    "ask_again": "Ask this question again"
   },
   "drop": {
     "hint": "Drop to import into Biblio",

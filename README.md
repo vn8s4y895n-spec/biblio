@@ -35,6 +35,7 @@ uv run biblio app --browser    # même interface dans le navigateur
 
 - **Question** : une question en langage courant (ou une requête PubMed), dans les bases en ligne ou dans ta bibliothèque. Une question en langage courant est réduite à ses mots-clés, traduits en anglais pour les termes courants d'infectiologie (vancomycine → vancomycin, BLSE → ESBL, E. faecium → Enterococcus faecium) ; la requête est assouplie si elle trouve moins de 10 résultats, et les sources qui contiennent moins de la moitié des mots-clés sont écartées. Une requête en syntaxe PubMed est envoyée telle quelle. La réponse est faite des phrases des résumés les plus proches de la question, chacune avec le numéro de sa source ; cliquer le numéro fait défiler jusqu'à la source et surligne la phrase. Sans IA pour l'instant (phase 9).
 - **Sources**, à droite : statut de revue (filtre « revues recommandées » actif par défaut ; les résultats masqués sont comptés), accès libre, type d'étude, effectif, **résumé Biblio** (la conclusion des auteurs), ajout à la bibliothèque (`＋` ou « Tout ajouter »). La requête envoyée aux bases est modifiable.
+- **Question d'origine** : un article ajouté depuis l'écran Question garde la question posée ; sa fiche l'affiche (« Ajouté depuis la question »), et un clic la repose.
 - **Enregistrer la recherche** garde la question, la réponse et les sources ; les recherches enregistrées s'affichent sur l'écran d'accueil.
 - **Bibliothèque** en trois panneaux redimensionnables : filtres (statut de lecture, collections, tags, statut de revue), liste (recherche plein texte et par le sens, sélection multiple, glisser une notice sur une collection), fiche (statut de lecture, note étoilée, tags, collections, résumé, MeSH, **lecteur PDF**, **note Markdown**).
 - **Glisser-déposer** n'importe où : PDF, ou fichiers .bib, .ris, .nbib, .json.
@@ -209,7 +210,7 @@ curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:8765/api/v1/works/10.100
 | Méthode | Route | Rôle |
 |---|---|---|
 | GET | `/api/v1/health` | État du serveur (public) |
-| POST | `/api/v1/works` | Ajouter par identifiant, avec PDF libre (`{"identifier", "pdf"}` ; 201 créé, 200 déjà présent) |
+| POST | `/api/v1/works` | Ajouter par identifiant, avec PDF libre (`{"identifier", "pdf", "question"}` ; 201 créé, 200 déjà présent ; `question` gardée avec la notice) |
 | POST | `/api/v1/works/manual` | Saisie manuelle |
 | POST | `/api/v1/import?format=` | Importer un fichier BibTeX / RIS / nbib / CSL-JSON (corps brut) |
 | POST | `/api/v1/files?filename=` | Déposer un PDF (corps brut) |

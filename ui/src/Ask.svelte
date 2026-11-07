@@ -1,5 +1,5 @@
 <script>
-  import { onMount, tick } from "svelte";
+  import { onMount, tick, untrack } from "svelte";
   import SourceCard from "./SourceCard.svelte";
   import { api, identifierOf } from "./lib/api.js";
   import { fmt, t } from "./lib/i18n.js";
@@ -31,10 +31,18 @@
     input?.focus();
   });
 
-  // #/search/<id> : relire une recherche enregistrée.
+  // #/search/<id> : relire une recherche enregistrée ; #/q/<question> : poser cette question (depuis une fiche).
   $effect(() => {
     const id = route.match(/^\/search\/(\d+)/)?.[1];
-    if (id) openSaved(Number(id));
+    const asked = route.match(/^\/q\/(.+)/)?.[1];
+    untrack(() => {
+      if (id) openSaved(Number(id));
+      if (asked) {
+        question = decodeURIComponent(asked);
+        location.replace("#/"); // la même question pourra être reposée depuis une autre fiche
+        run();
+      }
+    });
   });
 
   async function refreshSaved() {
@@ -106,12 +114,13 @@
     try {
       const id = identifierOf(rec);
       const out = id
-        ? await api("/works", { method: "POST", body: { identifier: id } })
+        ? await api("/works", { method: "POST", body: { identifier: id, question: question.trim(), scope: result.scope } })
         : await api("/works/manual", {
             method: "POST",
             body: {
               title: rec.title, year: rec.year, container_title: rec.container_title, abstract: rec.abstract,
               authors: (rec.authors ?? []).map((a) => [a.family, a.given].filter(Boolean).join(", ")),
+              question: question.trim(),
             },
           });
       result.sources[i] = { ...rec, in_library: out.work.citekey };

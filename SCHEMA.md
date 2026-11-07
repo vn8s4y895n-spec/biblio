@@ -4,7 +4,7 @@ SQLite en mode WAL, clés étrangères actives. Les migrations sont dans `src/bi
 
 Ce document décrit le schéma **réellement en place**. Les tables prévues pour les phases suivantes sont dans [PLAN.md](PLAN.md).
 
-## `schema_migrations` (version actuelle : 7)
+## `schema_migrations` (version actuelle : 8)
 
 | Colonne | Type | Rôle |
 |---|---|---|
@@ -159,6 +159,10 @@ Le texte d'une note vit dans `notes/<citekey>.md`, avec un en-tête YAML (citeke
 | created_at, updated_at | Dates |
 
 Les sources sont copiées telles quelles : une recherche enregistrée se relit à l'identique, même hors ligne, et « Relancer » la refait avec les données du jour.
+
+### `work_questions` : questions d'origine (migration 8)
+
+La question posée sur l'écran Question qui a mené à ajouter l'article : `(work_id, question)` en clé primaire, `scope` (`online` ou `library`), `added_at`. Un article ajouté de nouveau depuis une autre question en garde une ligne de plus ; la même question n'est gardée qu'une fois. Reprises à la fusion de deux notices.
 
 ## Liste des revues recommandées (migration 2)
 

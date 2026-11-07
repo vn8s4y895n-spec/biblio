@@ -330,7 +330,7 @@ Chaque phase se termine par : tests verts (aucun appel réseau, réponses enregi
      - une correspondance plein texte partielle pèse moitié moins que le sens. Le dosage des deux moteurs reste à affiner sur un usage réel : sur « les animaux de compagnie sont-ils un réservoir… », le sens seul classe le bon article en tête, l'hybride le met en troisième ;
      - l'indexation tourne à ~5 passages longs par seconde sur le processeur. CoreML (accélération Apple) est disponible dans ONNX Runtime mais n'a pas encore été testé.
 6. ✅ **Interface Svelte, FR + EN.** Écran question → réponse → sources (réponse extraite, sans LLM pour l'instant), résumé Biblio, enregistrement des recherches, bibliothèque en trois panneaux, lecteur PDF, collections, tags, notes, clavier, thèmes, traductions FR/EN, **écran de réglages** (e-mail de contact et clés OpenAlex / Semantic Scholar / NCBI, à faire avec toi à ce moment-là). Fenêtre `pywebview`.
-   - *Bilan* : 149 tests verts (dont la parité des traductions FR / EN). Interface compilée : 110 Ko de JavaScript (38 Ko compressés). Commande `biblio app` (fenêtre native) et `biblio app --browser`.
+   - *Bilan* : 150 tests verts (dont la parité des traductions FR / EN). Interface compilée : 110 Ko de JavaScript (38 Ko compressés). Commande `biblio app` (fenêtre native) et `biblio app --browser`.
    - *Démo réelle* (bibliothèque d'essai, navigateur intégré et fenêtre pywebview) :
      - « household transmission of ESBL-producing E. coli » : 20 sources de revues recommandées (52 masquées), réponse en 5 phrases citées, toutes sur la transmission dans le foyer ; le numéro de citation mène à la source et surligne la phrase dans le résumé ;
      - ajout par `a`, collection, statut de lecture, note étoilée, lecteur PDF, recherche par le sens dans la bibliothèque, enregistrement puis relecture d'une recherche ;
@@ -351,6 +351,7 @@ Chaque phase se termine par : tests verts (aucun appel réseau, réponses enregi
      - certaines sources collent les intitulés de résumé au texte (« …coliIMPORTANCE Entero… ») : ils sont reconnus et séparés ;
      - un effectif inférieur à 10 n'est pas affiché (souvent un autre nombre) ;
      - une réponse arrivée après une recherche plus récente est ignorée.
+   - *Ajout après la phase (demande d'usage)* : chaque article ajouté depuis l'écran Question garde la question posée (table `work_questions`), affichée dans sa fiche et reposable d'un clic.
 7. **Citation, exports et envois.** CSL (Vancouver, APA, `.csl` ajoutés), BibTeX / RIS / CSL-JSON / Markdown, clés `auteurAnnéeMot`, `library.bib` synchronisé, **envoi direct dans Zotero**, **paquets `.biblio`** (création, aperçu, import, fusion).
 8. **Veille et suivi.** Recherches enregistrées, articles proches (OpenAlex / Semantic Scholar), preprint → publié, rétractations (Crossref / Retraction Watch).
 9. **IA.** Module LLM interchangeable, question → requête PubMed, réponse rédigée avec citations vérifiées, résumé rédigé, adaptateurs des moteurs IA externes (selon les API disponibles, voir les risques).

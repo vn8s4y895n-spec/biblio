@@ -90,6 +90,15 @@ def update_work(conn: sqlite3.Connection, ref: str | int, changes: dict, client:
     return core.get_work(conn, work_id)
 
 
+def add_question(conn: sqlite3.Connection, work_id: int, question: str, scope: str = "online") -> None:
+    """Garde la question qui a mené à ajouter l'article (une seule fois par question)."""
+    question = " ".join(question.split())
+    if question:
+        with db.transaction(conn):
+            conn.execute("INSERT OR IGNORE INTO work_questions (work_id, question, scope) VALUES (?, ?, ?)",
+                         (work_id, question, scope))  # fmt: skip
+
+
 # --- Recherches enregistrées ------------------------------------------------------------
 
 

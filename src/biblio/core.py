@@ -376,6 +376,8 @@ def merge_works(conn: sqlite3.Connection, home: Path, keep: str | int, drop: str
         conn.execute("UPDATE OR IGNORE work_files SET work_id = ? WHERE work_id = ?", (keep_id, drop_id))
         conn.execute("INSERT OR IGNORE INTO work_labels SELECT label_id, ?, added_at FROM work_labels WHERE work_id = ?",
                      (keep_id, drop_id))  # fmt: skip
+        conn.execute("INSERT OR IGNORE INTO work_questions SELECT ?, question, scope, added_at FROM work_questions"
+                     " WHERE work_id = ?", (keep_id, drop_id))  # fmt: skip
         notes.absorb(conn, home, keep_id, drop_id)
         conn.execute("UPDATE changes SET work_id = ? WHERE work_id = ?", (keep_id, drop_id))
         _log(conn, keep_id, client, "merge", None, old, None)
@@ -425,6 +427,10 @@ def get_work(conn: sqlite3.Connection, ref: str | int) -> dict:
         dict(r) for r in conn.execute(
             "SELECT l.id, l.kind, l.name FROM work_labels wl JOIN labels l ON l.id = wl.label_id"
             " WHERE wl.work_id = ? ORDER BY l.kind, l.name", (work_id,))
+    ]  # fmt: skip
+    work["questions"] = [
+        dict(r) for r in conn.execute(
+            "SELECT question, scope, added_at FROM work_questions WHERE work_id = ? ORDER BY added_at", (work_id,))
     ]  # fmt: skip
     return work
 

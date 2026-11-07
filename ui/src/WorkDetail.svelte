@@ -158,6 +158,17 @@
           </div>
         {/if}
 
+        {#if work.questions?.length}
+          <div class="block">
+            <div class="eyebrow">{$t("detail.questions")}</div>
+            {#each work.questions as q}
+              <a class="question" href="#/q/{encodeURIComponent(q.question)}" title={$t("detail.ask_again")}>
+                « {q.question} » <span class="small faint">{$fmt.date(q.added_at)}</span>
+              </a>
+            {/each}
+          </div>
+        {/if}
+
         {#if work.abstract}
           <div class="block">
             <div class="eyebrow">{$t("source.abstract")}</div>
@@ -236,6 +247,8 @@
   .taginput { width: 150px; padding: 2px 8px; font-size: 12.5px; }
   .check { cursor: pointer; }
   .major { font-weight: 650; }
+  .question { font-family: var(--serif); font-size: 14.5px; color: var(--text); }
+  .question:hover { color: var(--accent); }
   .abstract { margin: 0; white-space: pre-line; font-size: 13.5px; }
   iframe { width: 100%; height: 100%; border: none; background: var(--surface-2); }
   .nopdf { display: grid; justify-items: center; gap: 10px; padding-top: 12vh; text-align: center; }

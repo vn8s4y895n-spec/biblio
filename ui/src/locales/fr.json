@@ -160,7 +160,9 @@
     "note_saved": "Enregistrée",
     "note_unsaved": "Modifications non enregistrées (⌘S)",
     "links": "Cite",
-    "backlinks": "Cité par"
+    "backlinks": "Cité par",
+    "questions": "Ajouté depuis la question",
+    "ask_again": "Poser à nouveau cette question"
   },
   "drop": {
     "hint": "Dépose pour importer dans Biblio",

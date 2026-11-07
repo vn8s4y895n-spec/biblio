@@ -176,3 +176,17 @@ def test_ask_sends_keywords_and_drops_off_topic(api, network):
     assert pubmed.url.params["term"] == out["query"] == "transmission ESBL household"
     assert out["sources"] and all(question.coverage(terms, s) >= 0.5 for s in out["sources"])
     assert out["off_topic"] > 0  # les fixtures contiennent des notices sans rapport (thèses, posters)
+
+
+def test_question_kept_with_added_work(api, conn, cfg):
+    q = "Pipéracilline-tazobactam contre méropénème dans les bactériémies à BLSE ?"
+    first = api.post("/api/v1/works", json={"identifier": MERINO_DOI, "pdf": False, "question": q}).json()
+    assert [x["question"] for x in first["work"]["questions"]] == [q]
+    again = api.post("/api/v1/works", json={"identifier": MERINO_PMID, "pdf": False, "question": "  MERINO   trial "}).json()
+    assert {x["question"] for x in again["work"]["questions"]} == {q, "MERINO trial"}
+    api.post("/api/v1/works", json={"identifier": MERINO_PMID, "pdf": False, "question": q})  # pas de doublon
+    assert len(api.get("/api/v1/works/harris2018effect").json()["questions"]) == 2
+    manual = api.post("/api/v1/works/manual", json={"title": "Une étude sans identifiant", "question": q}).json()
+    assert manual["work"]["questions"][0]["question"] == q
+    merged = core.merge_works(conn, cfg.home, "harris2018effect", manual["work"]["id"], "cli")
+    assert len(merged["questions"]) == 2  # même question : gardée une fois

@@ -69,6 +69,8 @@ Conn = Annotated[sqlite3.Connection, Depends(connection)]
 class AddRequest(BaseModel):
     identifier: str
     pdf: bool = True  # télécharger la version libre et légale si elle existe
+    question: str | None = None  # question posée qui a mené à cet article (écran Question)
+    scope: Literal["online", "library"] = "online"
 
 
 class ManualWork(BaseModel):
@@ -88,6 +90,7 @@ class ManualWork(BaseModel):
     language: str | None = None
     identifiers: list[str] = []  # DOI, PMID, URL…
     keywords: list[str] = []
+    question: str | None = None  # question posée qui a mené à cet article (écran Question)
 
 
 class AttachRequest(BaseModel):
@@ -179,8 +182,12 @@ Client = Annotated[str, Depends(client_name)]
 def add_work(body: AddRequest, request: Request, response: Response, conn: Conn, client: Client):
     """Récupère la notice (PubMed + Crossref, ou arXiv) et l'ajoute à la bibliothèque, avec son PDF s'il est en
     accès libre (`pdf`). 201 si la notice est créée, 200 si l'article était déjà présent (notice existante,
-    éventuellement complétée). `warnings` signale une source injoignable ou un PDF non récupéré."""
+    éventuellement complétée). `warnings` signale une source injoignable ou un PDF non récupéré. `question` est
+    gardée avec la notice (`questions`)."""
     result = importer.add(conn, home(request), body.identifier, client, body.pdf)
+    if body.question:
+        organize.add_question(conn, result["work"]["id"], body.question, body.scope)
+        result["work"] = core.get_work(conn, result["work"]["id"])
     response.status_code = 201 if result["created"] else 200
     return result
 
@@ -188,7 +195,10 @@ def add_work(body: AddRequest, request: Request, response: Response, conn: Conn,
 @router.post("/works/manual", status_code=201, summary="Saisie manuelle d'une notice")
 def add_manual(body: ManualWork, response: Response, conn: Conn, client: Client):
     """Pour un article sans identifiant. Si un identifiant fourni est déjà connu, la notice existante est complétée (200)."""
-    work, created = core.add_manual(conn, body.model_dump(), client)
+    work, created = core.add_manual(conn, body.model_dump(exclude={"question"}), client)
+    if body.question:
+        organize.add_question(conn, work["id"], body.question)
+        work = core.get_work(conn, work["id"])
     response.status_code = 201 if created else 200
     return {"created": created, "work": work}
 
