@@ -5,7 +5,15 @@ Le projet avance par phases : voir [PLAN.md](PLAN.md). Ce README décrit ce qui 
 
 ## Installation
 
-Pour utiliser Biblio : voir [INSTALL.md](INSTALL.md) (Mac et Windows, FR + EN).
+Pour utiliser Biblio : télécharger la dernière version dans [Releases](https://github.com/vn8s4y895n-spec/biblio/releases/latest) (`.dmg` pour Mac, `-setup.exe` pour Windows), puis suivre [INSTALL.md](INSTALL.md) (FR + EN). Biblio signale lui-même une nouvelle version (bandeau en haut de la fenêtre ; une requête à GitHub par jour, sans aucune donnée de la bibliothèque).
+
+### Publier une nouvelle version
+
+1. Changer le numéro dans `pyproject.toml` et `src/biblio/__init__.py` (ex. `0.2.0`), commiter, pousser sur `main`.
+2. Sur GitHub : **Releases → Draft a new release**, étiquette `v0.2.0` (la même que le code), notes de version, **Publish**.
+3. GitHub Actions lance les tests, construit le `.dmg` et l'installeur Windows et les joint à la version (une dizaine de minutes). Les utilisateurs voient alors « Biblio 0.2.0 disponible ».
+
+Licence : [GPL-3.0](LICENSE).
 
 ### Construire l'application
 

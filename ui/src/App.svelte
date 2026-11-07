@@ -20,6 +20,7 @@
     route.startsWith("/library") ? "library" : route.startsWith("/settings") ? "settings" : route.startsWith("/watch") ? "watch" : "ask",
   );
   let unseen = $state(0); // alertes de veille non lues
+  let update = $state(null); // nouvelle version publiée sur GitHub
 
   async function refreshAlerts() {
     try { unseen = (await api("/alerts", { params: { unseen_only: true } })).unseen; } catch {}
@@ -36,6 +37,7 @@
     addEventListener("hashchange", onHash);
     if (token) api("/settings").then(applyPrefs).catch((e) => toast(e.message, "error"));
     refreshAlerts();
+    api("/update").then((u) => (update = u)).catch(() => {}); // hors ligne : rien à signaler
     // Paquet .biblio ouvert par double-clic : la fenêtre (app.py) appelle biblioOpen(chemin).
     window.biblioOpen = async (path) => {
       try {
@@ -120,6 +122,11 @@
         <a href="#/watch" class:active={view === "watch"}>{$t("nav.watch")}{#if unseen}<span class="count">{unseen}</span>{/if}</a>
       </nav>
       <div class="grow"></div>
+      {#if update?.available}
+        <a class="update" href={update.download ?? update.url} target="_blank" rel="noreferrer" title={$t("app.update_help")}>
+          {$t("app.update", { version: update.latest })}
+        </a>
+      {/if}
       <div class="lang" role="group" aria-label={$t("settings.language")}>
         {#each ["fr", "en"] as code}
           <button class="ghost small" class:on={$lang === code} onclick={() => setLang(code)}>{code.toUpperCase()}</button>
@@ -187,6 +194,7 @@
 </div>
 
 <style>
+  .update { font-size: 12.5px; font-weight: 600; color: var(--accent); background: var(--accent-soft); padding: 4px 10px; border-radius: 999px; text-decoration: none; }
   .shell { display: flex; flex-direction: column; height: 100%; }
   header {
     display: flex; align-items: center; gap: 18px; padding: 0 18px; height: 50px; flex: none;

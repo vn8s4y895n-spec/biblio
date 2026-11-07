@@ -1,0 +1,60 @@
+# Tests à chaque envoi sur main ; à chaque version publiée (Releases → Draft a new release), construction du .dmg
+# (Mac Apple Silicon) et de l'installeur Windows, joints à la version. Biblio les propose alors à ses utilisateurs.
+name: Tests et versions
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
+      - run: uv run pytest -q
+      - name: La version publiée correspond à celle du code
+        if: github.event_name == 'release'
+        run: test "v$(uv run python -c 'import biblio; print(biblio.__version__)')" = "${{ github.event.release.tag_name }}"
+
+  mac:
+    if: github.event_name == 'release'
+    needs: tests
+    runs-on: macos-14
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
+        with:
+          node-version: 24
+      - run: npm --prefix ui ci
+      - run: ./packaging/build_mac.sh
+      - run: gh release upload "${{ github.event.release.tag_name }}" dist/*.dmg --clobber
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+  windows:
+    if: github.event_name == 'release'
+    needs: tests
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
+        with:
+          node-version: 24
+      - run: choco install innosetup -y --no-progress
+      - run: powershell -ExecutionPolicy Bypass -File packaging\build_windows.ps1
+      - run: gh release upload "${{ github.event.release.tag_name }}" (Get-Item dist\*-setup.exe).FullName --clobber
+        env:
+          GH_TOKEN: ${{ github.token }}

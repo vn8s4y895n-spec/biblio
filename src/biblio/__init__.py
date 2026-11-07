@@ -1,6 +1,7 @@
 """Biblio : gestionnaire de bibliographie local, autonome et ouvert."""
 
 __version__ = "0.1.0"
+REPOSITORY = "vn8s4y895n-spec/biblio"  # GitHub : code, versions publiées (mises à jour)
 
 
 def command() -> list[str]:

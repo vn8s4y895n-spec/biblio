@@ -269,3 +269,23 @@ def test_export_full(api):
     names = set(z.namelist())
     assert {"manifest.json", "works.json", "searches.json", "library.json", "library.bib", "library.ris", f"notes/{key}.md"} <= names
     assert json.loads(z.read("library.json"))[0]["DOI"] == MERINO_DOI
+
+
+def test_update_check(api, monkeypatch):
+    from biblio import sources, updates
+
+    releases = {"tag_name": "v9.1.0", "html_url": "https://github.com/x/biblio/releases/tag/v9.1.0", "body": "Nouveautés",
+                "assets": [{"name": "Biblio-9.1.0.dmg", "browser_download_url": "https://example.org/Biblio-9.1.0.dmg"},
+                           {"name": "Biblio-9.1.0-setup.exe", "browser_download_url": "https://example.org/setup.exe"}]}  # fmt: skip
+    status = {"code": 200}
+    monkeypatch.setattr(sources.http, "transport", httpx.MockTransport(
+        lambda r: httpx.Response(status["code"], json=releases if status["code"] == 200 else {"message": "Not Found"})))  # fmt: skip
+    monkeypatch.setattr(updates.sys, "platform", "darwin")
+    out = api.get("/api/v1/update").json()
+    assert out["available"] and out["latest"] == "9.1.0" and out["download"].endswith(".dmg")
+    monkeypatch.setattr(sources.http, "cache_path", None)  # la réponse est gardée un jour : ici, on la refait
+    releases["tag_name"] = "v0.0.9"
+    assert updates.check()["available"] is False
+    status["code"] = 404
+    assert updates.check() == {"current": updates.__version__, "latest": None, "available": False,
+                               "url": f"https://github.com/{updates.REPOSITORY}/releases"}  # fmt: skip

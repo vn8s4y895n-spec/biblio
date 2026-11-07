@@ -1,6 +1,8 @@
 {
   "app": {
-    "no_token": "Open Biblio from the app (or run the command below): this page needs the access token."
+    "no_token": "Open Biblio from the app (or run the command below): this page needs the access token.",
+    "update": "↑ Biblio {version} available",
+    "update_help": "Download the new version, then replace the application (your library is kept)"
   },
   "nav": {
     "ask": "Ask",

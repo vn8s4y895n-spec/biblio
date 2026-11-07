@@ -404,7 +404,7 @@ Chaque phase se termine par : tests verts (aucun appel réseau, réponses enregi
    - *Fait* : un seul exécutable pour la fenêtre et la CLI (`Biblio mcp` pour Claude Desktop, `Biblio serve` lancé par la fenêtre) ; type de fichier `.biblio` déclaré dans l'app (Mac) et dans l'installeur (Windows, registre de l'utilisateur) ; icône ; `.dmg` avec raccourci Applications ; INSTALL.md (FR + EN).
    - *Écarts au plan* :
      - **Windows non essayé** (pas de PC) : recette PyInstaller + Inno Setup écrite, à essayer sur un PC. Limite connue : l'exécutable sans console ne convient pas au MCP en stdio sous Windows (`biblio mcp --http` à la place, ou un second exécutable console à ajouter) ;
-     - **pas de mise à jour automatique** : il faudrait un endroit où publier les versions (dépôt GitHub public par exemple). La mise à jour consiste à remplacer l'application ; les données sont migrées au lancement ;
+     - **mise à jour signalée, pas installée** : dépôt public `vn8s4y895n-spec/biblio` (GPL-3.0) ; chaque version publiée sur GitHub est construite par GitHub Actions (`.dmg`, installeur Windows) et Biblio l'annonce (bandeau, une requête par jour). L'installation reste manuelle (remplacer l'application ; les données sont migrées au lancement) : une mise à jour automatique demande une app signée ;
      - **signature ad hoc** seulement (pas de compte Apple Developer) : premier lancement par Réglages Système → Confidentialité et sécurité → « Ouvrir quand même » (le clic droit → Ouvrir ne suffit plus depuis macOS 15).
 
 Tu peux utiliser Biblio dès la fin de la phase 1 (CLI), avec l'interface dès la phase 6.

@@ -853,6 +853,13 @@ def export_full(request: Request, conn: Conn):
                     headers={"Content-Disposition": 'attachment; filename="biblio-export.zip"'})  # fmt: skip
 
 
+@router.get("/update", summary="Nouvelle version de Biblio publiée ? (GitHub, vérifié une fois par jour)")
+def check_update():
+    from . import updates
+
+    return updates.check()
+
+
 @router.get("/connectors", summary="Connecteurs : configurations MCP à copier, état de Zotero et du modèle de langue")
 def connectors(request: Request):
     from . import mcp_server  # import local : le SDK MCP n'est chargé que pour l'écran Connecteurs

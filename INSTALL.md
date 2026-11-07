@@ -4,6 +4,8 @@
 
 ## Français
 
+Télécharge la dernière version : https://github.com/vn8s4y895n-spec/biblio/releases/latest
+
 ### Mac (Apple Silicon, macOS 12 ou plus récent)
 
 1. Ouvre `Biblio-<version>.dmg`, puis fais glisser **Biblio** sur le dossier **Applications**.
@@ -27,13 +29,15 @@
 
 ### Mettre à jour
 
-Remplace l'application par la nouvelle version (Mac : glisser la nouvelle dans Applications ; Windows : lancer le nouvel installeur). Ta bibliothèque n'est pas dans l'application : elle est gardée telle quelle et mise à niveau automatiquement au premier lancement. Une sauvegarde est faite chaque jour (Réglages → Connecteurs → Sauvegardes).
+Quand une nouvelle version est publiée, Biblio l'affiche en haut de sa fenêtre (« Biblio x.y disponible ») : clique dessus pour la télécharger. Remplace l'application par la nouvelle version (Mac : glisser la nouvelle dans Applications ; Windows : lancer le nouvel installeur). Ta bibliothèque n'est pas dans l'application : elle est gardée telle quelle et mise à niveau automatiquement au premier lancement. Une sauvegarde est faite chaque jour (Réglages → Connecteurs → Sauvegardes).
 
 ### Où sont mes données ?
 
 Mac : `~/Library/Application Support/Biblio` ; Windows : `%APPDATA%\Biblio`. Ne les place pas dans iCloud Drive ou OneDrive.
 
 ## English
+
+Download the latest version: https://github.com/vn8s4y895n-spec/biblio/releases/latest
 
 ### Mac (Apple Silicon, macOS 12 or later)
 
@@ -58,7 +62,7 @@ Mac : `~/Library/Application Support/Biblio` ; Windows : `%APPDATA%\Biblio`. Ne 
 
 ### Updating
 
-Replace the application with the new version (Mac: drag the new one into Applications; Windows: run the new installer). Your library is not inside the application: it is kept as is and upgraded automatically on first launch. A backup is made every day (Settings → Connectors → Backups).
+When a new version is published, Biblio shows it at the top of its window (“Biblio x.y available”): click it to download. Replace the application with the new version (Mac: drag the new one into Applications; Windows: run the new installer). Your library is not inside the application: it is kept as is and upgraded automatically on first launch. A backup is made every day (Settings → Connectors → Backups).
 
 ### Where is my data?
 

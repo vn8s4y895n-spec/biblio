@@ -1,6 +1,8 @@
 {
   "app": {
-    "no_token": "Ouvre Biblio depuis l'application (ou lance la commande ci-dessous) : cette page a besoin du jeton d'accès."
+    "no_token": "Ouvre Biblio depuis l'application (ou lance la commande ci-dessous) : cette page a besoin du jeton d'accès.",
+    "update": "↑ Biblio {version} disponible",
+    "update_help": "Télécharger la nouvelle version, puis remplacer l'application (ta bibliothèque est gardée)"
   },
   "nav": {
     "ask": "Question",
