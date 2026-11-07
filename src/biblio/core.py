@@ -449,7 +449,15 @@ def get_work(conn: sqlite3.Connection, ref: str | int) -> dict:
 
 SORTS = {"added": "w.created_at DESC", "year": "w.year IS NULL, w.year DESC, w.created_at DESC",
          "author": "first_author IS NULL, first_author COLLATE NOCASE, w.year", "title": "w.title COLLATE NOCASE",
-         "rating": "w.rating IS NULL, w.rating DESC, w.created_at DESC"}  # fmt: skip
+         "rating": "w.rating IS NULL, w.rating DESC, w.created_at DESC",
+         "journal": "w.container_title IS NULL, w.container_title COLLATE NOCASE, w.year DESC",
+         "study_type": "w.study_type IS NULL, w.study_type, w.year DESC",
+         "status": "w.read_status IS NULL, w.read_status, w.created_at DESC"}  # fmt: skip
+
+
+def mark_opened(conn: sqlite3.Connection, ref: str | int) -> None:
+    with db.transaction(conn):
+        conn.execute("UPDATE works SET opened_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?", (resolve(conn, ref),))
 
 
 FILED = ("EXISTS (SELECT 1 FROM work_labels wl JOIN labels l ON l.id = wl.label_id"
@@ -490,12 +498,14 @@ def list_works(conn: sqlite3.Connection, limit: int = 50, offset: int = 0, journ
                label: int | None = None, read_status: str | None = None, retracted: bool = False,
                favorite: bool = False, inbox: bool = False, sort: str = "added", year_from: int | None = None,
                year_to: int | None = None, study_types: list[str] | None = None, has_pdf: bool | None = None,
-               labels: list[int] | None = None, all_labels: bool = False) -> dict:  # fmt: skip
+               labels: list[int] | None = None, all_labels: bool = False, recent: bool = False) -> dict:  # fmt: skip
     """Favoris d'abord, puis les notices les plus récentes ; filtres : statut de revue (voir journals.STATUSES),
     collection ou tag (`label`), statut de lecture (`unread` : sans statut), favoris. `inbox` : les notices à trier
     (sans statut de lecture et rangées dans aucune collection), plus les favoris. `sort` : added (ajout), year,
     author, title ou rating ; les favoris restent en tête. Filtres combinables : années, types d'étude, avec PDF,
-    collections et tags cochés (`labels` : dans l'un au moins, ou dans tous avec `all_labels`)."""
+    collections et tags cochés (`labels` : dans l'un au moins, ou dans tous avec `all_labels`). `recent` : les
+    notices ouvertes, de la plus récente à la plus ancienne (le tri et les favoris en tête ne s'appliquent pas).
+    Chaque notice donne ses collections et tags (`labels`, ids) et ses dates d'ajout et d'ouverture."""
     if sort not in SORTS:
         raise ValueError(f"Tri inconnu : {sort}")
     if unknown := set(journal_status or ()) - set(journals.STATUSES):
@@ -527,6 +537,8 @@ def list_works(conn: sqlite3.Connection, limit: int = 50, offset: int = 0, journ
         where.append(f"{'' if has_pdf else 'NOT '}EXISTS (SELECT 1 FROM work_files WHERE work_id = w.id)")
     if inbox:
         where.append(_inbox(labels))
+    if recent:
+        where.append("w.opened_at IS NOT NULL")
     if labels:
         clause, more = _labels_clause(labels, all_labels)
         where.append(clause)
@@ -537,16 +549,21 @@ def list_works(conn: sqlite3.Connection, limit: int = 50, offset: int = 0, journ
     base = f"FROM works w JOIN work_journal_status s ON s.work_id = w.id {'WHERE ' + ' AND '.join(where) if where else ''}"
     rows = conn.execute(
         f"""SELECT w.id, w.citekey, w.title, w.year, w.container_title, w.study_type, s.status AS journal_status,
-                   w.read_status, w.rating, w.favorite,
+                   w.read_status, w.rating, w.favorite, w.created_at, w.opened_at,
+                   (SELECT group_concat(label_id) FROM work_labels WHERE work_id = w.id) AS label_ids,
                    (SELECT family FROM work_authors WHERE work_id = w.id AND position = 0) AS first_author,
                    (SELECT value FROM identifiers WHERE work_id = w.id AND scheme = 'doi') AS doi,
                    EXISTS (SELECT 1 FROM work_files WHERE work_id = w.id) AS has_pdf, {flagged} AS retracted
-            {base} ORDER BY w.favorite DESC, {SORTS[sort]}, w.id DESC LIMIT ? OFFSET ?""",
+            {base} ORDER BY {"w.opened_at DESC" if recent else f"w.favorite DESC, {SORTS[sort]}"}, w.id DESC LIMIT ? OFFSET ?""",
         [*params, limit, offset],
     )
     total = conn.execute(f"SELECT count(*) {base}", params).fetchone()[0]
-    return {"total": total, "items": [{**dict(r), "has_pdf": bool(r["has_pdf"]), "retracted": bool(r["retracted"]),
-                                       "favorite": bool(r["favorite"])} for r in rows]}  # fmt: skip
+    items = []
+    for r in rows:
+        row = {k: r[k] for k in r.keys() if k != "label_ids"}
+        items.append({**row, "has_pdf": bool(r["has_pdf"]), "retracted": bool(r["retracted"]), "favorite": bool(r["favorite"]),
+                      "labels": [int(i) for i in (r["label_ids"] or "").split(",") if i]})  # fmt: skip
+    return {"total": total, "items": items}
 
 
 def get_changes(conn: sqlite3.Connection, ref: str | int) -> list[dict]:

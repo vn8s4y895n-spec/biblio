@@ -269,3 +269,36 @@ def test_checked_labels(api, network):
     api.patch(f"/api/v1/works/{a}", json={"read_status": "read"})
     counts = api.get("/api/v1/library/counts", params={"labels": [thesis]}).json()
     assert (counts["all"], counts["inbox"], counts["read"]) == (2, 1, 1)
+
+
+def test_label_colors_pins_moves_views_and_recent(api, network):
+    from conftest import MERINO_DOI
+
+    merino = api.post("/api/v1/works", json={"identifier": MERINO_DOI}).json()["work"]
+    other = api.post("/api/v1/works/manual", json={"title": "Autre"}).json()["work"]
+    blse = api.post("/api/v1/labels", json={"kind": "collection", "name": "BLSE"}).json()
+    child = api.post("/api/v1/labels", json={"kind": "collection", "name": "BLSE / Foyers"}).json()
+    projets = api.post("/api/v1/labels", json={"kind": "collection", "name": "Projets"}).json()
+    api.post(f"/api/v1/labels/{child['id']}/works", json={"works": [str(merino["id"])]})
+    out = api.patch(f"/api/v1/labels/{blse['id']}", json={"color": "teal", "pinned": True}).json()
+    assert out["color"] == "teal" and out["pinned"] == 1
+    assert api.patch(f"/api/v1/labels/{blse['id']}", json={"color": "fuchsia"}).status_code == 422
+    # glisser « BLSE » dans « Projets » : ses sous-collections suivent
+    api.patch(f"/api/v1/labels/{blse['id']}", json={"name": "Projets / BLSE"})
+    names = sorted(lb["name"] for lb in api.get("/api/v1/labels").json() if lb["kind"] == "collection")
+    assert names == ["Projets", "Projets / BLSE", "Projets / BLSE / Foyers"]
+    assert api.patch(f"/api/v1/labels/{projets['id']}", json={"name": "Projets / BLSE / X"}).status_code == 422
+    assert api.patch(f"/api/v1/labels/{child['id']}", json={"name": "Foyers"}).json()["name"] == "Foyers"  # sortie au premier niveau
+    item = next(w for w in api.get("/api/v1/works").json()["items"] if w["id"] == merino["id"])
+    assert item["labels"] == [child["id"]] and item["created_at"]
+    # récemment ouverts
+    for work in (merino, other, merino):
+        assert api.post(f"/api/v1/works/{work['id']}/opened").status_code == 204
+    assert [w["id"] for w in api.get("/api/v1/works", params={"recent": True}).json()["items"]] == [merino["id"], other["id"]]
+    assert api.get("/api/v1/works", params={"sort": "journal"}).status_code == 200
+    # vues enregistrées
+    state = {"filter": {"type": "inbox"}, "shown": [blse["id"]], "sort": "year"}
+    saved = api.put("/api/v1/views", json={"name": "Thèse", "state": state}).json()
+    api.put("/api/v1/views", json={"name": "thèse", "state": {**state, "sort": "title"}})  # même nom : remplacée
+    assert [(v["name"], v["state"]["sort"]) for v in api.get("/api/v1/views").json()] == [("Thèse", "title")]
+    assert api.delete(f"/api/v1/views/{saved['id']}").status_code == 204 and api.get("/api/v1/views").json() == []

@@ -56,7 +56,8 @@ def run(browser: bool = False, paths: list[str] | None = None) -> None:
     window.events.loaded += on_loaded
     if sys.platform == "darwin":
         _accept_finder_documents(on_open)
-    webview.start()
+    # Fenêtre non privée : les préférences d'affichage (tri, cases cochées, largeurs…) restent d'une ouverture à l'autre.
+    webview.start(private_mode=False, storage_path=str(cfg.home / "webview"))
     if started_here:  # la fenêtre a lancé le serveur : elle l'arrête en se fermant
         client.post("/api/v1/shutdown")
 

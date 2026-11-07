@@ -11,7 +11,7 @@ READ_STATUSES = ("to_read", "read", "to_reread")
 
 def labels(conn: sqlite3.Connection) -> list[dict]:
     rows = conn.execute(
-        "SELECT l.id, l.kind, l.name, count(wl.work_id) AS count FROM labels l"
+        "SELECT l.id, l.kind, l.name, l.color, l.pinned, count(wl.work_id) AS count FROM labels l"
         " LEFT JOIN work_labels wl ON wl.label_id = l.id GROUP BY l.id ORDER BY l.kind, l.name"
     )
     return [dict(r) for r in rows]
@@ -35,17 +35,68 @@ def _label(conn: sqlite3.Connection, label_id: int) -> sqlite3.Row:
     return row
 
 
+COLORS = ("red", "orange", "yellow", "green", "teal", "blue", "purple", "gray")
+
+
 def rename_label(conn: sqlite3.Connection, label_id: int, name: str) -> dict:
-    _label(conn, label_id)
-    name = " ".join(name.split())
+    """Renomme. Une collection emmène ses sous-collections (« Parent / Enfant ») : renommer « BLSE » en
+    « Projets / BLSE » la range sous « Projets » avec tout ce qu'elle contient."""
+    label = _label(conn, label_id)
+    name = " / ".join(" ".join(part.split()) for part in name.split("/") if part.strip())
     if not name:
         raise ValueError("Nom manquant")
+    if label["kind"] == "collection" and (name + " / ").startswith(label["name"] + " / ") and name != label["name"]:
+        raise ValueError("Une collection ne peut pas être rangée dans l'une de ses sous-collections")
     try:
         with db.transaction(conn):
             conn.execute("UPDATE labels SET name = ? WHERE id = ?", (name, label_id))
+            if label["kind"] == "collection":
+                old = label["name"] + " / "
+                conn.execute("UPDATE labels SET name = ? || substr(name, ?) WHERE kind = 'collection' AND substr(name, 1, ?) = ?",
+                             (name + " / ", len(old) + 1, len(old), old))  # fmt: skip
     except sqlite3.IntegrityError as exc:
         raise ValueError(f"Ce nom existe déjà : {name}") from exc
     return dict(_label(conn, label_id))
+
+
+def update_label(conn: sqlite3.Connection, label_id: int, changes: dict) -> dict:
+    """Nom (voir rename_label), couleur (COLORS, None : aucune) et épingle (collection en cours)."""
+    _label(conn, label_id)
+    if "name" in changes:
+        rename_label(conn, label_id, changes["name"])
+    if (color := changes.get("color")) is not None and color not in COLORS:
+        raise ValueError(f"Couleur inconnue : {color}")
+    with db.transaction(conn):
+        for field in ("color", "pinned"):
+            if field in changes:
+                value = int(bool(changes[field])) if field == "pinned" else changes[field]
+                conn.execute(f"UPDATE labels SET {field} = ? WHERE id = ?", (value, label_id))
+    return dict(conn.execute("SELECT id, kind, name, color, pinned FROM labels WHERE id = ?", (label_id,)).fetchone())
+
+
+# --- Vues enregistrées ---------------------------------------------------------------------------------------
+
+
+def views(conn: sqlite3.Connection) -> list[dict]:
+    return [{"id": r["id"], "name": r["name"], "state": json.loads(r["state_json"])}
+            for r in conn.execute("SELECT * FROM views ORDER BY name")]  # fmt: skip
+
+
+def save_view(conn: sqlite3.Connection, name: str, state: dict) -> dict:
+    """Enregistre (ou remplace, même nom) l'état de l'écran Bibliothèque sous un nom."""
+    name = " ".join(name.split())
+    if not name:
+        raise ValueError("Nom manquant")
+    with db.transaction(conn):
+        conn.execute("INSERT INTO views (name, state_json) VALUES (?, ?) ON CONFLICT (name) DO UPDATE SET state_json = excluded.state_json",
+                     (name, json.dumps(state, ensure_ascii=False)))  # fmt: skip
+    return next(v for v in views(conn) if v["name"].casefold() == name.casefold())
+
+
+def delete_view(conn: sqlite3.Connection, view_id: int) -> None:
+    with db.transaction(conn):
+        if not conn.execute("DELETE FROM views WHERE id = ?", (view_id,)).rowcount:
+            raise core.NotFound(f"Vue inconnue : {view_id}")
 
 
 def delete_label(conn: sqlite3.Connection, label_id: int) -> None:

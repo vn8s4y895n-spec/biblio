@@ -4,7 +4,7 @@ SQLite en mode WAL, clés étrangères actives. Les migrations sont dans `src/bi
 
 Ce document décrit le schéma **réellement en place**.
 
-## `schema_migrations` (version actuelle : 13)
+## `schema_migrations` (version actuelle : 14)
 
 | Colonne | Type | Rôle |
 |---|---|---|
@@ -181,6 +181,12 @@ La question posée sur l'écran Question qui a mené à ajouter l'article : `(wo
 
 - `ai_summaries (key, model, lang, text, created_at)` : résumés rédigés par le modèle de langue, en cache. `key` = sha256 du modèle, de la langue et du texte résumé (titre + résumé) : un autre modèle ou une autre langue donnent un autre résumé.
 - `saved_searches.synthesis_json` : réponse rédigée gardée avec la recherche, `{"text", "sentences": [{"text", "cites", "status"}], "model"}` (`status` : ok, weak, unsourced, invalid) ; NULL sans réponse rédigée. Servira aussi aux synthèses enregistrées par Claude (phase 10).
+
+## Affichage de la bibliothèque (migration 14)
+
+- `labels.color` (red, orange, yellow, green, teal, blue, purple, gray ou NULL) et `labels.pinned` (1 : collection en cours, en haut ; les autres sous « Archives »).
+- `works.opened_at` : dernière ouverture de la fiche (vue « Récemment ouverts »).
+- `views (id, name UNIQUE NOCASE, state_json, created_at)` : vues enregistrées de l'écran Bibliothèque (cases cochées, vue, filtres, tri, affichage).
 
 ## `webhooks` (migration 12)
 

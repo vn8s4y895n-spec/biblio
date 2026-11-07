@@ -123,8 +123,15 @@ class LabelCreate(BaseModel):
     name: str
 
 
-class LabelRename(BaseModel):
+class LabelUpdate(BaseModel):
+    name: str | None = None  # « Parent / Enfant » : sous-collection (la collection emmène ses sous-collections)
+    color: Literal[organize.COLORS] | None = None  # type: ignore[valid-type]  # null : aucune
+    pinned: bool | None = None  # collection en cours, en haut ; les autres sous « Archives »
+
+
+class ViewSave(BaseModel):
     name: str
+    state: dict  # état de l'écran Bibliothèque (vue, cases cochées, filtres, tri, affichage)
 
 
 class LabelWorks(BaseModel):
@@ -549,9 +556,24 @@ def create_label(body: LabelCreate, conn: Conn):
     return organize.create_label(conn, body.kind, body.name)
 
 
-@router.patch("/labels/{label_id}", summary="Renommer une collection ou un tag")
-def rename_label(label_id: int, body: LabelRename, conn: Conn):
-    return organize.rename_label(conn, label_id, body.name)
+@router.patch("/labels/{label_id}", summary="Renommer, colorer ou épingler une collection ou un tag")
+def update_label(label_id: int, body: LabelUpdate, conn: Conn):
+    return organize.update_label(conn, label_id, body.model_dump(exclude_unset=True))
+
+
+@router.get("/views", summary="Vues enregistrées de la bibliothèque")
+def list_views(conn: Conn):
+    return organize.views(conn)
+
+
+@router.put("/views", summary="Enregistrer une vue (même nom : remplacée)")
+def save_view(body: ViewSave, conn: Conn):
+    return organize.save_view(conn, body.name, body.state)
+
+
+@router.delete("/views/{view_id}", status_code=204, summary="Supprimer une vue enregistrée")
+def delete_view(view_id: int, conn: Conn):
+    organize.delete_view(conn, view_id)
 
 
 @router.delete("/labels/{label_id}", status_code=204, summary="Supprimer une collection ou un tag (pas ses notices)")
@@ -705,10 +727,11 @@ def list_works(
     has_pdf: Annotated[bool | None, Query(description="true : avec PDF ; false : sans PDF")] = None,
     labels: Annotated[list[int] | None, Query(description="Collections et tags cochés (répétable)")] = None,
     all_labels: Annotated[bool, Query(description="true : dans tous les cochés ; sinon dans l'un au moins")] = False,
+    recent: Annotated[bool, Query(description="Récemment ouverts, du plus récent au plus ancien")] = False,
 ):
     """Les favoris d'abord, puis selon `sort`."""
     return core.list_works(conn, limit, offset, journal_status, label, read_status, retracted, favorite, inbox, sort,
-                           year_from, year_to, study_type, has_pdf, labels, all_labels)  # fmt: skip
+                           year_from, year_to, study_type, has_pdf, labels, all_labels, recent)  # fmt: skip
 
 
 @router.get("/library/counts", summary="Effectifs des vues de la bibliothèque, années et types d'étude présents")
@@ -843,6 +866,11 @@ def get_passages(ref: str, conn: Conn, q: str | None = None, limit: Annotated[in
         found = [dict(r) for r in conn.execute(
             "SELECT origin, page, text FROM passages WHERE work_id = ? ORDER BY id LIMIT ?", (work_id, limit))]  # fmt: skip
     return {"work": work_id, "passages": found}
+
+
+@router.post("/works/{ref:path}/opened", status_code=204, summary="Noter l'ouverture d'une notice (vue « Récemment ouverts »)")
+def work_opened(ref: str, conn: Conn):
+    core.mark_opened(conn, ref)
 
 
 @router.get("/works/{ref:path}/note", summary="Lire la note Markdown d'une notice")

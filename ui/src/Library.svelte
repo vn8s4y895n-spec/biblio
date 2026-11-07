@@ -24,7 +24,9 @@
   let counts = $state(null); // effectifs de la colonne de gauche, années et types d'étude présents
   // Préférences d'affichage, gardées d'une session à l'autre.
   let sort = $state(load("biblio.sort", "added"));
-  let compact = $state(load("biblio.compact", false));
+  // Affichage de la liste : cartes, compact (une ligne par article) ou tableau (colonnes triables).
+  let display = $state(load("biblio.display", load("biblio.compact", false) ? "compact" : "cards"));
+  const compact = $derived(display === "compact");
   let collapsed = $state(new Set(load("biblio.collapsed", []))); // collections repliées (chemin)
   let showFilters = $state(false);
   // Collections et tags cochés : la bibliothèque n'affiche que leurs articles (ce qui est en cours ou intéressant),
@@ -38,6 +40,13 @@
     shown = next;
     keep("biblio.shown", [...next]);
   }
+  let views = $state([]); // vues enregistrées
+  let editing = $state(null); // collection ou tag renommé sur place (id), ou "view" : nom de la vue à enregistrer
+  let editName = $state("");
+  let archivesOpen = $state(load("biblio.archivesOpen", false));
+  let palette = $state(null); // id de la collection / du tag dont on choisit la couleur
+  const COLORS = { red: "#d64545", orange: "#e07b39", yellow: "#d4a72c", green: "#3f9d5a", teal: "#1f8f8a",
+                   blue: "#3a7bd5", purple: "#8a5cc7", gray: "#8a8f98" };  // prettier-ignore
   let detailVersion = $state(0); // la fiche ouverte se recharge après un changement fait depuis la liste
   let extra = $state({ yearFrom: "", yearTo: "", studyType: "", pdf: "" }); // filtres combinables
 
@@ -53,6 +62,8 @@
 
   const current = $derived(decodeURIComponent(route.match(/^\/library\/(.+)/)?.[1] ?? ""));
   const collections = $derived(labels.filter((l) => l.kind === "collection"));
+  const colored = $derived(new Map(labels.filter((l) => l.color).map((l) => [l.id, l])));
+  const pinned = $derived(collections.filter((l) => l.pinned));
   const tags = $derived(labels.filter((l) => l.kind === "tag"));
   const currentIndex = $derived(items.findIndex((w) => w.citekey === current));
 
@@ -66,7 +77,7 @@
   });
 
   async function refreshLabels() {
-    [labels, counts] = await Promise.all([api("/labels"), api("/library/counts", { params: shownParams() })]);
+    [labels, counts, views] = await Promise.all([api("/labels"), api("/library/counts", { params: shownParams() }), api("/views")]);
     const known = new Set(labels.map((l) => l.id)); // une collection supprimée n'est plus cochée
     if ([...shown].some((id) => !known.has(id))) {
       shown = new Set([...shown].filter((id) => known.has(id)));
@@ -88,6 +99,7 @@
         if (extra.studyType) params.study_type = extra.studyType;
         if (extra.pdf) params.has_pdf = extra.pdf === "yes";
         if (filter.type === "inbox") params.inbox = true;
+        if (filter.type === "recent") params.recent = true;
         if (filter.type === "favorite") params.favorite = true;
         if (filter.type === "read_status") params.read_status = filter.value;
         if (filter.type === "label") params.label = filter.value;
@@ -113,6 +125,7 @@
 
   function open(work) {
     location.hash = `#/library/${encodeURIComponent(work.citekey)}`;
+    api(`/works/${work.id}/opened`, { method: "POST" }).catch(() => {}); // vue « Récemment ouverts »
   }
 
   function toggle(id) {
@@ -173,10 +186,13 @@
     refresh();
   }
 
-  // Collections en arborescence : « Parent / Enfant » (nom donné par l'import Zotero ou à la main).
-  const tree = $derived.by(() => {
+  // Collections en arborescence : « Parent / Enfant » (nom donné par l'import Zotero ou à la main). Les collections
+  // épinglées (en cours) sont en haut ; s'il y en a, les autres sont rangées sous « Archives », repliées.
+  const tree = $derived(buildTree(pinned.length ? pinned : collections));
+  const archives = $derived(pinned.length ? buildTree(collections.filter((l) => !l.pinned)) : null);
+  function buildTree(list) {
     const root = { children: new Map() };
-    for (const label of collections) {
+    for (const label of list) {
       let node = root;
       label.name.split(" / ").forEach((part, i, parts) => {
         const path = parts.slice(0, i + 1).join(" / ");
@@ -186,7 +202,66 @@
       node.label = label;
     }
     return root;
-  });
+  }
+
+  // --- Vues enregistrées : l'état de l'écran sous un nom (cases cochées, vue, filtres, tri, affichage).
+  function snapshot() {
+    return { filter, shown: [...shown], shownAll, sort, extra: { ...extra }, display };
+  }
+
+  function applyView(view) {
+    const s = view.state;
+    filter = s.filter ?? { type: "inbox" };
+    shown = new Set(s.shown ?? []);
+    shownAll = !!s.shownAll;
+    sort = s.sort ?? "added";
+    extra = { yearFrom: "", yearTo: "", studyType: "", pdf: "", ...s.extra };
+    display = s.display ?? display;
+    q = "";
+    checked = new Set();
+    keep("biblio.shown", [...shown]);
+    keep("biblio.shownAll", shownAll);
+    keep("biblio.sort", sort);
+    keep("biblio.display", display);
+  }
+
+  async function saveView() {
+    const name = editName.trim();
+    editing = null;
+    if (!name) return;
+    await api("/views", { method: "PUT", body: { name, state: snapshot() } });
+    toast($t("library.view_saved", { name }), "ok");
+    refreshLabels();
+  }
+
+  async function deleteView(view) {
+    if (!confirm($t("library.view_delete", { name: view.name }))) return;
+    await api(`/views/${view.id}`, { method: "DELETE" });
+    refreshLabels();
+  }
+
+  // --- Collections et tags : renommer, colorer, épingler, glisser une collection dans une autre.
+  async function updateLabel(label, changes) {
+    try {
+      await api(`/labels/${label.id}`, { method: "PATCH", body: changes });
+    } catch (e) {
+      toast(e.message, "error", 8000);
+    }
+    refreshLabels();
+  }
+
+  function startRename(label) {
+    editing = label.id;
+    editName = label.name;
+  }
+
+  function finishRename(label) {
+    if (editing !== label.id) return;
+    editing = null;
+    if (editName.trim() && editName.trim() !== label.name) updateLabel(label, { name: editName.trim() });
+  }
+
+  const leaf = (name) => name.split(" / ").pop();
 
   function fold(path) {
     const next = new Set(collapsed);
@@ -201,9 +276,18 @@
     refresh();
   }
 
-  // Glisser une notice sur une collection ou un tag de la colonne de gauche.
+  // Glisser une notice sur une collection ou un tag de la colonne de gauche ; ou une collection dans une autre
+  // (elle devient sa sous-collection), ou sur le titre « Collections » (elle revient au premier niveau).
   async function dropOn(e, label) {
     e.preventDefault();
+    const moved = Number(e.dataTransfer.getData("text/x-biblio-label"));
+    if (moved) {
+      const source = collections.find((c) => c.id === moved);
+      if (source && (!label || (label.kind === "collection" && label.id !== moved)))
+        updateLabel(source, { name: label ? `${label.name} / ${leaf(source.name)}` : leaf(source.name) });
+      return;
+    }
+    if (!label) return;
     const ids = e.dataTransfer.getData("text/x-biblio-works");
     if (!ids) return;
     const out = await api(`/labels/${label.id}/works`, { method: "POST", body: { works: ids.split(",") } });
@@ -259,17 +343,42 @@
 <svelte:window onkeydown={onKey} />
 
 {#snippet labelRow(label, text, depth, node = null)}
-  <div class="labelrow" role="listitem" style="padding-left: {depth * 12}px" ondragover={(e) => e.preventDefault()} ondrop={(e) => dropOn(e, label)}>
+  <div class="labelrow" role="listitem" style="padding-left: {depth * 12}px" draggable={label.kind === "collection"}
+    ondragstart={(e) => e.dataTransfer.setData("text/x-biblio-label", String(label.id))}
+    ondragover={(e) => e.preventDefault()} ondrop={(e) => dropOn(e, label)}>
     {#if node?.children.size}
       <button class="ghost tw" aria-label={$t("library.fold")} onclick={() => fold(node.path)}>{collapsed.has(node.path) ? "▸" : "▾"}</button>
     {/if}
     <input type="checkbox" class="show" checked={shown.has(label.id)} title={$t("library.show_help")}
       aria-label={$t("library.show", { name: label.name })} onchange={(e) => show(label.id, e.target.checked)} />
-    <button class="item grow" class:on={isOn({ type: "label", value: label.id })} onclick={() => choose({ type: "label", value: label.id })}>
-      <span class="grow name">{text}</span><span class="faint small">{label.count}</span>
-    </button>
+    <button class="ghost dot" title={$t("library.color")} aria-label={$t("library.color")}
+      style="--c: {COLORS[label.color] ?? 'transparent'}" class:none={!label.color} onclick={() => (palette = palette === label.id ? null : label.id)}></button>
+    {#if editing === label.id}
+      <form class="grow" onsubmit={(e) => { e.preventDefault(); finishRename(label); }}>
+        <input type="text" class="new" bind:value={editName} use:focus onblur={() => finishRename(label)}
+          onkeydown={(e) => { if (e.key === "Escape") editing = null; }} />
+      </form>
+    {:else}
+      <button class="item grow" class:on={isOn({ type: "label", value: label.id })} title={$t("library.rename_help")}
+        onclick={() => choose({ type: "label", value: label.id })} ondblclick={() => startRename(label)}>
+        <span class="grow name">{text}</span><span class="faint small">{label.count}</span>
+      </button>
+    {/if}
+    {#if label.kind === "collection"}
+      <button class="ghost small pin" class:on={label.pinned} title={$t(label.pinned ? "library.unpin" : "library.pin")}
+        onclick={() => updateLabel(label, { pinned: !label.pinned })}>📌</button>
+    {/if}
     <button class="ghost small del" title={$t("common.delete")} onclick={() => removeLabel(label)}>✕</button>
   </div>
+  {#if palette === label.id}
+    <div class="palette" style="padding-left: {depth * 12 + 30}px">
+      {#each Object.entries(COLORS) as [name, hex]}
+        <button class="ghost swatch" style="--c: {hex}" class:on={label.color === name} aria-label={name}
+          onclick={() => { updateLabel(label, { color: name }); palette = null; }}></button>
+      {/each}
+      <button class="ghost small" onclick={() => { updateLabel(label, { color: null }); palette = null; }}>{$t("library.no_color")}</button>
+    </div>
+  {/if}
 {/snippet}
 
 {#snippet branch(node, depth)}
@@ -286,8 +395,25 @@
   {/if}
 {/snippet}
 
-<div class="library" style="grid-template-columns: {widths[0]}px 5px {widths[1]}px 5px minmax(0, 1fr)">
+<div class="library" style="grid-template-columns: {widths[0]}px 5px {display === 'table' && !q ? 'minmax(0, 1fr) 5px 38%' : `${widths[1]}px 5px minmax(0, 1fr)`}">
   <nav class="filters scroll">
+    <div class="group row first">
+      <span class="eyebrow grow">{$t("library.views")}</span>
+      <button class="ghost small" title={$t("library.view_new")} onclick={() => { editing = "view"; editName = ""; }}>＋</button>
+    </div>
+    {#if editing === "view"}
+      <form onsubmit={(e) => { e.preventDefault(); saveView(); }}>
+        <input type="text" class="new" bind:value={editName} use:focus placeholder={$t("library.view_name")} onblur={saveView} />
+      </form>
+    {/if}
+    {#each views as view (view.id)}
+      <div class="labelrow">
+        <button class="item grow" onclick={() => applyView(view)} title={$t("library.view_apply")}><span class="grow name">◧ {view.name}</span></button>
+        <button class="ghost small del" title={$t("common.delete")} onclick={() => deleteView(view)}>✕</button>
+      </div>
+    {:else}
+      {#if editing !== "view"}<p class="small faint hint">{$t("library.no_view")}</p>{/if}
+    {/each}
     {#if shown.size}
       <div class="shown small">
         <span>{$t("library.shown", { n: shown.size })}</span>
@@ -306,10 +432,12 @@
       <button class="item" class:on={isOn({ type: "read_status", value })} onclick={() => choose({ type: "read_status", value })}><span class="grow">{$t(key)}</span><span class="faint small">{counts?.[value] ?? ""}</span></button>
     {/each}
     <button class="item" class:on={isOn({ type: "favorite" })} onclick={() => choose({ type: "favorite" })}><span class="grow">♥ {$t("library.favorites")}</span><span class="faint small">{counts?.favorite ?? ""}</span></button>
+    <button class="item" class:on={isOn({ type: "recent" })} onclick={() => choose({ type: "recent" })}><span class="grow">🕘 {$t("library.recent")}</span></button>
     <button class="item" class:on={isOn({ type: "all" })} onclick={() => choose({ type: "all" })}><span class="grow">{$t("library.all")}</span><span class="faint small">{counts?.all ?? ""}</span></button>
 
     {#each [["collection", collections, "library.collections"], ["tag", tags, "library.tags"]] as [kind, list, title]}
-      <div class="group row">
+      <div class="group row" role="presentation" ondragover={(e) => e.preventDefault()}
+        ondrop={(e) => kind === "collection" && dropOn(e, null)} title={kind === "collection" ? $t("library.drop_top") : ""}>
         <span class="eyebrow grow">{$t(title)}</span>
         {#if kind === "collection"}
           <button class="ghost small" title={$t("zotero.rdf_help")}
@@ -324,6 +452,16 @@
       {/if}
       {#if kind === "collection"}
         {#each tree.children.values() as node (node.path)}{@render branch(node, 0)}{/each}
+        {#if archives}
+          <div class="labelrow">
+            <button class="ghost tw" aria-label={$t("library.fold")}
+              onclick={() => { archivesOpen = !archivesOpen; keep("biblio.archivesOpen", archivesOpen); }}>{archivesOpen ? "▾" : "▸"}</button>
+            <span class="item grow faint name">{$t("library.archives")}</span>
+          </div>
+          {#if archivesOpen}
+            {#each archives.children.values() as node (node.path)}{@render branch(node, 1)}{/each}
+          {/if}
+        {/if}
       {:else}
         {#each list as label (label.id)}{@render labelRow(label, "#" + label.name, 0)}{/each}
       {/if}
@@ -349,14 +487,18 @@
         <span class="grow">{loading ? "…" : $t("library.count", { n: $fmt.number(total) })}</span>
         {#if !q}
           <select class="mini" value={sort} aria-label={$t("library.sort")} onchange={(e) => { sort = e.target.value; keep("biblio.sort", sort); }}>
-            {#each ["added", "year", "author", "title", "rating"] as s}<option value={s}>{$t(`library.sort_${s}`)}</option>{/each}
+            {#each ["added", "year", "author", "title", "journal", "study_type", "status", "rating"] as s}<option value={s}>{$t(`library.sort_${s}`)}</option>{/each}
           </select>
           <button class="ghost small" class:on={showFilters || activeFilters} onclick={() => (showFilters = !showFilters)}>
             {$t("library.filters")}{activeFilters ? ` (${activeFilters})` : ""}
           </button>
         {/if}
-        <button class="ghost small" class:on={compact} title={$t("library.compact")} aria-pressed={compact}
-          onclick={() => { compact = !compact; keep("biblio.compact", compact); }}>☰</button>
+        <span class="modes" role="group" aria-label={$t("library.display")}>
+          {#each [["cards", "▤"], ["compact", "☰"], ["table", "▦"]] as [mode, icon]}
+            <button class="ghost small" class:on={display === mode} title={$t(`library.display_${mode}`)} aria-pressed={display === mode}
+              onclick={() => { display = mode; keep("biblio.display", mode); }}>{icon}</button>
+          {/each}
+        </span>
       </div>
       {#if showFilters && !q}
         <div class="row wrap small extra">
@@ -406,6 +548,39 @@
         <button class="ghost small" onclick={() => (checked = new Set())}>{$t("common.cancel")}</button>
       </div>
     {/if}
+    {#if display === "table" && !q}
+      <div class="scroll tablewrap">
+        <table>
+          <thead>
+            <tr>
+              <th></th><th></th>
+              {#each [["title", "title"], ["author", "author"], ["year", "year"], ["journal", "journal"], ["study_type", "study_type"], ["status", "status"], ["rating", "rating"], ["added", "added"]] as [col, key]}
+                <th><button class="ghost small" class:on={sort === key} onclick={() => { sort = key; keep("biblio.sort", sort); }}>{$t(`library.col_${col}`)}{sort === key ? " ▾" : ""}</button></th>
+              {/each}
+            </tr>
+          </thead>
+          <tbody>
+            {#each items as work (work.id)}
+              <tr class:on={work.citekey === current} draggable="true" ondragstart={(e) => drag(e, work)} onclick={() => open(work)}>
+                <td><input type="checkbox" checked={checked.has(work.id)} onclick={(e) => e.stopPropagation()} onchange={() => toggle(work.id)} aria-label={$t("library.select")} /></td>
+                <td><button class="ghost fav" class:on={work.favorite} aria-pressed={!!work.favorite} title={$t(work.favorite ? "library.unfavorite" : "library.favorite")}
+                  onclick={(e) => { e.stopPropagation(); toggleFavorite(work); }}>♥</button></td>
+                <td class="ttl">{#each work.labels.filter((id) => colored.has(id)) as id}<span class="tag-dot" style="--c: {COLORS[colored.get(id).color]}" title={colored.get(id).name}></span>{/each}{work.title}</td>
+                <td>{work.first_author ?? ""}</td>
+                <td>{work.year ?? ""}</td>
+                <td class="journal">{work.container_title ?? ""}</td>
+                <td>{work.study_type ? $t(`study.${work.study_type}`, {}, work.study_type) : ""}</td>
+                <td>{work.read_status ? $t(`read.${work.read_status}`) : ""}</td>
+                <td>{work.rating ? "★".repeat(work.rating) : ""}</td>
+                <td class="faint">{work.created_at ? $fmt.date(work.created_at) : ""}</td>
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+        {#if !items.length && !loading}<p class="empty muted">{filter.type === "inbox" && total === 0 ? $t("library.inbox_empty") : $t("library.empty")}</p>{/if}
+        {#if items.length < total}<p class="more"><button class="small" onclick={() => refresh(true)}>{$t("library.more")}</button></p>{/if}
+      </div>
+    {:else}
     <ul class="scroll">
       {#each items as work (work.id)}
         <li class:on={work.citekey === current} class:compact draggable="true" ondragstart={(e) => drag(e, work)}>
@@ -415,7 +590,7 @@
               aria-pressed={!!work.favorite} onclick={() => toggleFavorite(work)}>♥</button>
           </span>
           <button class="row-btn" onclick={() => open(work)}>
-            <span class="t title-serif">{work.title}</span>
+            <span class="t title-serif">{#each (work.labels ?? []).filter((id) => colored.has(id)) as id}<span class="tag-dot" style="--c: {COLORS[colored.get(id).color]}" title={colored.get(id).name}></span>{/each}{work.title}</span>
             <span class="small muted">{work.first_author ?? ""}{work.year ? ` · ${work.year}` : ""}{work.container_title ? ` · ${work.container_title}` : ""}</span>
             {#if work.passages?.length}
               <span class="small snippet">{@html work.passages[0].snippet}</span>
@@ -434,6 +609,7 @@
         <li class="more"><button class="small" onclick={() => refresh(true)}>{$t("library.more")}</button></li>
       {/if}
     </ul>
+    {/if}
   </section>
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div class="splitter" onpointerdown={(e) => resize(1, e)}></div>
@@ -503,6 +679,28 @@
   .tw { padding: 0 2px; width: 18px; font-size: 12px; color: var(--muted); flex: none; }
   .group .ghost { margin-left: 4px; }
   .show { margin: 0 2px 0 4px; flex: none; }
+  .first { margin-top: 0; }
+  .dot { width: 10px; height: 10px; padding: 0; border-radius: 50%; flex: none; background: var(--c); border: 1px solid var(--c); margin: 0 3px; }
+  .dot.none { border: 1px dashed var(--border); opacity: 0; }
+  .labelrow:hover .dot.none { opacity: 1; }
+  .pin { visibility: hidden; padding: 0 3px; font-size: 11px; filter: grayscale(1); opacity: 0.6; }
+  .pin.on { visibility: visible; filter: none; opacity: 1; }
+  .labelrow:hover .pin { visibility: visible; }
+  .palette { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 4px 0 6px; }
+  .swatch { width: 16px; height: 16px; padding: 0; border-radius: 50%; background: var(--c); border: 2px solid transparent; }
+  .swatch.on { border-color: var(--text); }
+  .tag-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--c); margin-right: 5px; vertical-align: 1px; }
+  .modes { display: inline-flex; gap: 1px; }
+  .tablewrap { flex: 1; overflow: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  th { position: sticky; top: 0; background: var(--surface); text-align: left; border-bottom: 1px solid var(--border); padding: 2px 4px; z-index: 1; }
+  th button { font-weight: 600; padding: 2px 4px; white-space: nowrap; }
+  td { padding: 4px 6px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  td.ttl { font-weight: 600; min-width: 240px; }
+  td.journal { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  tr { cursor: pointer; }
+  tr:hover { background: var(--surface-2); }
+  tr.on { background: var(--accent-soft); }
   .shown { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; padding: 6px 8px; margin-bottom: 6px;
     border-radius: 8px; background: var(--accent-soft); color: var(--accent); }
   .side { display: flex; flex-direction: column; align-items: center; gap: 2px; }
