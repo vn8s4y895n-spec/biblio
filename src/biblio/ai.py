@@ -25,7 +25,10 @@ PLAN_PROMPT = """Tu aides un médecin biologiste (bactériologie, maladies infec
   d'étude. Si la question contient plusieurs sous-questions, couvre-les toutes (OR entre les sous-requêtes).
   Les synonymes doivent être de vrais synonymes : n'ajoute jamais une molécule, un organisme ou une maladie
   absents de la question, même au nom proche (dalbavancine n'est pas dalfopristine).
-- "related_questions" : 3 questions proches qu'il pourrait poser ensuite, dans la langue de sa question.
+- "related_questions" : 3 questions qu'il pourrait poser ensuite, dans la langue de sa question. Elles gardent
+  le même micro-organisme (ou mécanisme de résistance), la même molécule et la même population que la question
+  de départ, et ne changent qu'un aspect : diagnostic, traitement, épidémiologie, prévention ou pronostic. Jamais
+  un autre micro-organisme, une autre maladie ou une autre spécialité.
 Réponds uniquement en JSON : {"pubmed_query": "...", "related_questions": ["...", "...", "..."]}"""
 
 ANSWER_PROMPT = """Tu es un assistant de recherche bibliographique pour un médecin biologiste.
@@ -49,9 +52,13 @@ def enabled() -> bool:
 # --- Requête PubMed -----------------------------------------------------------------------------------
 
 
-def plan(question: str) -> dict:
-    """Requête PubMed et questions liées. Lève llm.LLMError si le modèle échoue ou répond mal."""
-    data = llm.chat_json([{"role": "system", "content": PLAN_PROMPT}, {"role": "user", "content": question}])
+def plan(question: str, origin: str | None = None) -> dict:
+    """Requête PubMed et questions liées. `origin` : la question de départ quand celle-ci est une question liée
+    cliquée ; les nouvelles questions liées restent dans son sujet au lieu de dériver de génération en génération.
+    Lève llm.LLMError si le modèle échoue ou répond mal."""
+    content = question if not origin or origin == question else (
+        f"{question}\n\n(Question de départ, dont les questions liées ne doivent pas s'éloigner : {origin})")
+    data = llm.chat_json([{"role": "system", "content": PLAN_PROMPT}, {"role": "user", "content": content}])
     query = " ".join(str(data.get("pubmed_query") or "").split())
     if not query or len(query) > 1500 or query.count("(") != query.count(")"):
         raise llm.LLMError("Requête PubMed du modèle inutilisable")

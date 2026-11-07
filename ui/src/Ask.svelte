@@ -19,6 +19,7 @@
   let editedQuery = $state("");
   let result = $state(null);
   let loading = $state(false);
+  let origin = null; // question de départ quand on suit des questions liées (l'IA n'en dérive pas)
   let trace = $state(null); // déroulé de la dernière recherche : { steps, running, ms }
   let error = $state(null);
   let selected = $state(0);
@@ -66,8 +67,9 @@
     refreshSaved();
   }
 
-  async function run(query = null) {
+  async function run(query = null, related = false) {
     if (!question.trim()) return;
+    if (!related) origin = null;
     const ticket = ++runs;
     loading = true;
     error = null;
@@ -79,7 +81,7 @@
       let out = null;
       const body = {
         question: question.trim(), scope, query, all_journals: !recommendedOnly,
-        year_from: yearFrom ? Number(yearFrom) : null, open_access: openAccess,
+        year_from: yearFrom ? Number(yearFrom) : null, open_access: openAccess, origin,
       };
       await apiStream("/ask/stream", body, (event) => {
         if (ticket !== runs) return;
@@ -313,7 +315,7 @@
         <div class="row wrap related">
           <span class="small muted">{$t("ai.related")}</span>
           {#each result.related as q}
-            <button class="chip" onclick={() => { question = q; run(); }}>{q}</button>
+            <button class="chip" onclick={() => { origin ??= question.trim(); question = q; run(null, true); }}>{q}</button>
           {/each}
         </div>
       {/if}

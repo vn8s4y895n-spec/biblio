@@ -165,3 +165,13 @@ def test_ask_stream_error(api, monkeypatch):
     with api.stream("POST", "/api/v1/ask/stream", json={"question": "BLSE ?"}) as r:
         events = [json.loads(line[5:]) for line in r.iter_lines() if line.startswith("data:")]
     assert events == [{"error": "requête impossible"}]
+
+
+def test_related_questions_keep_the_original_topic(api, ai_on):
+    """Une question liée cliquée garde la question de départ : le modèle la reçoit pour ne pas dériver."""
+    api.post("/api/v1/ask", json={"question": "Prévention du portage ?", "origin": "Transmission intrafamiliale des E. coli BLSE ?",
+                                  "all_journals": True})  # fmt: skip
+    prompt = json.loads(ai_on.calls[-1].content)["messages"][-1]["content"]
+    assert prompt.startswith("Prévention du portage ?") and "Question de départ" in prompt and "E. coli BLSE" in prompt
+    api.post("/api/v1/ask", json={"question": "Transmission des BLSE ?", "all_journals": True})
+    assert json.loads(ai_on.calls[-1].content)["messages"][-1]["content"] == "Transmission des BLSE ?"

@@ -141,6 +141,7 @@ class AskRequest(BaseModel):
     study_type: list[str] = []
     open_access: bool = False
     all_journals: bool = False  # montrer aussi les revues hors liste
+    origin: str | None = None  # question de départ, quand celle-ci est une question liée cliquée (IA)
 
 
 class SavedSearch(BaseModel):
@@ -400,7 +401,7 @@ def _ask(body: AskRequest, conn: sqlite3.Connection) -> dict:
         return ask.ask_library(conn, body.question, body.limit)
     filters = search.Filters(year_from=body.year_from, year_to=body.year_to, study_types=body.study_type,
                              open_access=body.open_access, journal_status=[] if body.all_journals else ["recommended"])  # fmt: skip
-    return ask.ask_online(conn, body.question, filters, body.limit, body.query)
+    return ask.ask_online(conn, body.question, filters, body.limit, body.query, body.origin)
 
 
 @router.post("/ask/stream", summary="Poser une question en suivant son déroulé (SSE)")

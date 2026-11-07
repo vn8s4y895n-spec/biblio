@@ -103,7 +103,7 @@ def _decorate(rec: dict) -> dict:
 
 
 def ask_online(conn: sqlite3.Connection, question: str, filters: search.Filters, limit: int = 20,
-               query: str | None = None) -> dict:  # fmt: skip
+               query: str | None = None, origin: str | None = None) -> dict:  # fmt: skip
     """`query` : requête corrigée à la main (envoyée telle quelle) ; la question sert toujours à choisir les phrases.
     Sinon, avec un modèle de langue configuré, il écrit la requête PubMed et propose des questions liées
     (`query_by` = ai). Sans modèle (ou s'il échoue), la question devient une liste de mots-clés (voir question.py),
@@ -125,7 +125,7 @@ def ask_online(conn: sqlite3.Connection, question: str, filters: search.Filters,
     if terms and ai.enabled():
         trace.step("ai_plan_start", model=llm.current.model)
         try:  # requête écrite par le modèle (traduction, MeSH, synonymes) ; sinon, mots-clés
-            planned = ai.plan(question)
+            planned = ai.plan(question, origin)
             query, related, query_by, terms = planned["query"], planned["related"], "ai", None
             trace.step("ai_plan", query=query, related=related)
         except llm.LLMError as exc:
