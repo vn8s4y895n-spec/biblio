@@ -1,7 +1,7 @@
 # Biblio
 
 Gestionnaire de bibliographie local, autonome et ouvert, pensé pour la recherche en santé.
-Le projet avance par phases : voir [PLAN.md](PLAN.md). Ce README décrit ce qui fonctionne **aujourd'hui** (phases 1 à 8).
+Le projet avance par phases : voir [PLAN.md](PLAN.md). Ce README décrit ce qui fonctionne **aujourd'hui** (phases 1 à 9).
 
 ## Installation (développement)
 
@@ -36,6 +36,12 @@ uv run biblio app --browser    # même interface dans le navigateur
 - **Question** : une question en langage courant (ou une requête PubMed), dans les bases en ligne ou dans ta bibliothèque. Une question en langage courant est réduite à ses mots-clés, traduits en anglais pour les termes courants d'infectiologie (vancomycine → vancomycin, BLSE → ESBL, E. faecium → Enterococcus faecium) ; la requête est assouplie si elle trouve moins de 10 résultats, et les sources qui contiennent moins de la moitié des mots-clés sont écartées. Une requête en syntaxe PubMed est envoyée telle quelle. La réponse est faite des phrases des résumés les plus proches de la question, chacune avec le numéro de sa source ; cliquer le numéro fait défiler jusqu'à la source et surligne la phrase. Sans IA pour l'instant (phase 9).
 - **Sources**, à droite : statut de revue (filtre « revues recommandées » actif par défaut ; les résultats masqués sont comptés), accès libre, type d'étude, effectif, **résumé Biblio** (la conclusion des auteurs), ajout à la bibliothèque (`＋` ou « Tout ajouter »). La requête envoyée aux bases est modifiable.
 - **Question d'origine** : un article ajouté depuis l'écran Question garde la question posée ; sa fiche l'affiche (« Ajouté depuis la question »), et un clic la repose.
+- **Intelligence artificielle** (facultative, Réglages → Intelligence artificielle) :
+  - fournisseurs : **Ollama** en local (gratuit, rien ne sort de l'ordinateur ; modèle par défaut `qwen3.5:9b`), Mistral, ou toute API « chat completions » compatible OpenAI. Une clé éventuelle est rangée dans le trousseau du système, jamais dans `config.toml` ;
+  - **requête PubMed** écrite par le modèle (anglais, MeSH, synonymes, sous-questions) et **questions liées**. Les sources qui ne couvrent pas les concepts de la requête (à un près) sont écartées ; si la requête trouve trop peu, Biblio revient aux mots-clés ; si le modèle échoue, aussi ;
+  - **réponse rédigée** au fil de l'eau, chaque phrase citée [n] ; à la fin, chaque phrase est confrontée aux résumés des sources qu'elle cite (modèle sémantique local, sinon mots en commun) et soulignée si rien ne l'appuie, si elle n'a pas de source ou si elle cite une source inexistante ;
+  - **résumé IA** d'une source ou d'une notice (gardé en cache) ;
+  - la réponse rédigée est enregistrée avec la recherche.
 - **Questions récentes** : l'écran d'accueil liste les questions déjà posées (la plus récente d'abord) ; un clic la repose, ✕ la retire, « Effacer l'historique » vide la liste.
 - **Enregistrer la recherche** garde la question, la réponse et les sources ; les recherches enregistrées s'affichent en dessous.
 - **Bibliothèque** en trois panneaux redimensionnables : filtres (statut de lecture, collections, tags, statut de revue), liste (recherche plein texte et par le sens, sélection multiple, glisser une notice sur une collection), fiche (statut de lecture, note étoilée, tags, collections, résumé, MeSH, **lecteur PDF**, **note Markdown**).
@@ -267,6 +273,9 @@ curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:8765/api/v1/works/10.100
 | POST | `/api/v1/ask` | Question → réponse extraite et sources (`{"question", "scope": "online"\|"library", "query", "all_journals", "year_from", "open_access"}`) |
 | GET | `/api/v1/history?limit=` | Questions posées récemment |
 | POST | `/api/v1/history/forget` | Retirer une question (`{"question", "scope"}`) ou tout effacer (`{}`) |
+| GET | `/api/v1/llm` | IA : fournisseur, modèle, joignable, modèles proposés |
+| POST | `/api/v1/ask/answer` | Réponse rédigée, diffusée (SSE) : `{"question", "sources"}` → `{"delta"}`…, puis `{"done", "text", "sentences", "model"}` |
+| POST | `/api/v1/summary` | Résumé IA d'une notice (`{"record", "lang"}`) |
 | GET / POST | `/api/v1/searches` | Recherches enregistrées : lister / enregistrer (`{"question", "scope", "query", "answer", "sources"}`) |
 | GET / DELETE | `/api/v1/searches/{id}` | Relire / supprimer |
 | GET / POST | `/api/v1/labels` | Collections et tags (`{"kind": "collection"\|"tag", "name"}`) |
@@ -296,7 +305,7 @@ L'en-tête facultatif `X-Biblio-Client` (`api`, `cli`, `web`, `mcp`…) est insc
 
 Dossier de données : `~/Library/Application Support/Biblio` (macOS), `%APPDATA%\Biblio` (Windows), `~/.local/share/biblio` (Linux). La variable `BIBLIO_HOME` le remplace.
 
-- `config.toml` : créé au premier lancement (droits 600). Contient le port, le jeton de l'API, l'e-mail de contact et les clés des bases, la surveillance des Téléchargements, la recherche par le sens, la langue et le thème. Il se modifie à la main ou depuis les réglages de l'application (qui le réécrivent sans les commentaires ajoutés à la main).
+- `config.toml` : créé au premier lancement (droits 600). Contient le port, le jeton de l'API, l'e-mail de contact et les clés des bases, la surveillance des Téléchargements, la recherche par le sens, la langue, le thème, le style de citation et l'IA (fournisseur, adresse, modèle ; la clé d'IA est dans le trousseau). Il se modifie à la main ou depuis les réglages de l'application (qui le réécrivent sans les commentaires ajoutés à la main).
 - `library/` : les PDF (par empreinte). `notes/` : les notes Markdown. `inbox/` : la boîte d'entrée. `styles/` : les styles de citation ajoutés. `library.bib` : toute la bibliothèque en BibTeX.
 - `biblio.sqlite` : la base (SQLite en mode WAL), documentée dans [SCHEMA.md](SCHEMA.md). **Ne la placez pas dans un dossier synchronisé** (iCloud Drive, OneDrive) : la synchro peut la corrompre.
 

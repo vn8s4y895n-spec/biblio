@@ -1,5 +1,6 @@
 <script>
   import { onDestroy, onMount } from "svelte";
+  import AiSummary from "./lib/AiSummary.svelte";
   import Badges from "./lib/Badges.svelte";
   import RecordList from "./lib/RecordList.svelte";
   import { EXPORTS, copyCitation, exportWorks, makePackage, sendToZotero } from "./lib/actions.js";
@@ -8,7 +9,7 @@
   import { fmt, t } from "./lib/i18n.js";
   import { toast } from "./lib/toast.js";
 
-  let { ref, labels, onlabels, onchange } = $props();
+  let { ref, labels, onlabels, onchange, aiEnabled = false } = $props();
 
   let work = $state(null);
   let tab = $state("record");
@@ -250,6 +251,7 @@
         {#if work.abstract}
           <div class="block">
             <div class="eyebrow">{$t("source.abstract")}</div>
+            {#if aiEnabled}<AiSummary rec={work} />{/if}
             <p class="abstract">{work.abstract}</p>
           </div>
         {/if}

@@ -10,7 +10,7 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
-from biblio import config, core, db
+from biblio import config, core, db, llm
 from biblio.api import create_app
 from biblio.sources import http
 
@@ -219,6 +219,9 @@ def network(monkeypatch) -> list[httpx.Request]:
     monkeypatch.setattr(http, "contact_email", "")
     monkeypatch.setattr(http, "api_keys", {})
     monkeypatch.setattr(http, "cache_path", None)
+    keychain: dict[str, str] = {}  # faux trousseau : les tests ne touchent jamais à celui du système
+    monkeypatch.setattr(llm, "get_key", keychain.get)
+    monkeypatch.setattr(llm, "set_key", lambda provider, key: keychain.update({provider: key}) if key else keychain.pop(provider, None))
     return calls
 
 

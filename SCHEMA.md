@@ -4,7 +4,7 @@ SQLite en mode WAL, clés étrangères actives. Les migrations sont dans `src/bi
 
 Ce document décrit le schéma **réellement en place**. Les tables prévues pour les phases suivantes sont dans [PLAN.md](PLAN.md).
 
-## `schema_migrations` (version actuelle : 10)
+## `schema_migrations` (version actuelle : 11)
 
 | Colonne | Type | Rôle |
 |---|---|---|
@@ -175,6 +175,11 @@ La question posée sur l'écran Question qui a mené à ajouter l'article : `(wo
 ## `question_history` : questions posées (migration 10)
 
 `(question, scope)` en clé primaire, `asked_at` (à la milliseconde), `times` (nombre de fois posée). Chaque question de l'écran Question y est inscrite ; la reposer la fait remonter en tête.
+
+## IA (migration 11)
+
+- `ai_summaries (key, model, lang, text, created_at)` : résumés rédigés par le modèle de langue, en cache. `key` = sha256 du modèle, de la langue et du texte résumé (titre + résumé) : un autre modèle ou une autre langue donnent un autre résumé.
+- `saved_searches.synthesis_json` : réponse rédigée gardée avec la recherche, `{"text", "sentences": [{"text", "cites", "status"}], "model"}` (`status` : ok, weak, unsourced, invalid) ; NULL sans réponse rédigée. Servira aussi aux synthèses enregistrées par Claude (phase 10).
 
 ## Liste des revues recommandées (migration 2)
 

@@ -14,12 +14,12 @@ from pathlib import Path
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, BackgroundTasks, Body, Depends, FastAPI, Header, HTTPException, Query, Request, Response
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import (__version__, ask, config, core, db, exports, formats, importer, journals, library, notes, organize,
-               packages, search, semantic, watch, zotero)
+from . import (__version__, ai, ask, config, core, db, exports, formats, importer, journals, library, notes, organize,
+               llm, packages, search, semantic, watch, zotero)
 from .config import Config
 from .sources import http
 from .sources.http import SourceError
@@ -145,6 +145,7 @@ class SavedSearch(BaseModel):
     query: str | None = None
     answer: list[dict] = []
     sources: list[dict] = []
+    synthesis: dict | None = None  # réponse rédigée : {"text", "sentences", "model"}
 
 
 class Settings(BaseModel):
@@ -160,6 +161,21 @@ class Settings(BaseModel):
     language: Literal["", "fr", "en"] | None = None
     theme: Literal["system", "light", "dark"] | None = None
     citation_style: str | None = None
+    llm_enabled: bool | None = None
+    llm_provider: Literal[tuple(llm.PRESETS)] | None = None  # type: ignore[valid-type]
+    llm_base_url: str | None = None
+    llm_model: str | None = None
+    llm_api_key: str | None = None  # rangée dans le trousseau du système, jamais renvoyée ; "" la supprime
+
+
+class AnswerRequest(BaseModel):
+    question: str
+    sources: list[dict]  # sources renvoyées par POST /ask, dans le même ordre
+
+
+class SummaryRequest(BaseModel):
+    record: dict  # notice (titre, résumé)
+    lang: Literal["fr", "en"] = "fr"
 
 
 class Selection(BaseModel):
@@ -200,6 +216,8 @@ def settings_of(cfg: Config) -> dict:
         "contact_email": cfg.contact_email, **{f"{k}_api_key": v for k, v in cfg.api_keys.items()},
         "watch_downloads": cfg.watch_downloads, "downloads_dir": str(cfg.downloads_dir), "semantic": cfg.semantic,
         "language": cfg.language, "theme": cfg.theme, "citation_style": cfg.citation_style or exports.DEFAULT_STYLE,
+        "llm_enabled": cfg.llm_enabled, "llm_provider": cfg.llm_provider, "llm_base_url": cfg.llm_base_url,
+        "llm_model": cfg.llm_model, "llm_key_set": bool(llm.get_key(cfg.llm_provider)),
         "home": str(cfg.home), "version": __version__,
     }  # fmt: skip
 
@@ -351,12 +369,15 @@ def put_settings(body: Settings, request: Request):
     if changes.get("citation_style") and changes["citation_style"] not in exports.style_paths(cfg.home):
         raise HTTPException(422, f"Style inconnu : {changes['citation_style']}")
     keys = {k: changes.pop(f"{k}_api_key", v).strip() for k, v in cfg.api_keys.items()}
+    if (llm_key := changes.pop("llm_api_key", None)) is not None:
+        llm.set_key(changes.get("llm_provider", cfg.llm_provider), llm_key.strip())
     if "downloads_dir" in changes:
         changes["downloads_dir"] = Path(changes["downloads_dir"]).expanduser()
     new = replace(cfg, **{k: v.strip() if isinstance(v, str) else v for k, v in changes.items()}, api_keys=keys)
     config.save(new)
     request.app.state.config = new
     http.configure(new.contact_email, new.api_keys, new.db_path)
+    llm.configure(llm.Settings.of(new))
     return {**settings_of(new), "restart_needed": new.semantic != request.app.state.semantic_at_start}
 
 
@@ -386,6 +407,37 @@ def question_history(conn: Conn, limit: Annotated[int, Query(ge=1, le=200)] = 30
 @router.post("/history/forget", summary="Retirer une question de l'historique (ou tout l'effacer)")
 def forget_question(body: ForgetRequest, conn: Conn):
     return {"removed": organize.forget_question(conn, body.question, body.scope)}
+
+
+@router.get("/llm", summary="Intelligence artificielle : fournisseur, modèle, joignable, modèles proposés")
+def llm_status():
+    return llm.status()
+
+
+@router.post("/ask/answer", summary="Réponse rédigée par le modèle de langue, diffusée au fil de l'eau (SSE)")
+def ask_answer(body: AnswerRequest):
+    """Événements `data:` JSON : `{"delta": "…"}` pendant la rédaction, puis `{"done": true, "text", "sentences",
+    "model"}` où chaque phrase est vérifiée contre les sources qu'elle cite (`status` : ok, weak, unsourced,
+    invalid), ou `{"error": "…"}`."""
+    import json as _json
+
+    def events():
+        text = ""
+        try:
+            for piece in ai.answer_stream(body.question, body.sources):
+                text += piece
+                yield f"data: {_json.dumps({'delta': piece}, ensure_ascii=False)}\n\n"
+            done = {"done": True, "text": text, "sentences": ai.verify(text, body.sources), "model": llm.current.model}
+            yield f"data: {_json.dumps(done, ensure_ascii=False)}\n\n"
+        except llm.LLMError as exc:
+            yield f"data: {_json.dumps({'error': str(exc)}, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(events(), media_type="text/event-stream", headers={"Cache-Control": "no-cache"})
+
+
+@router.post("/summary", summary="Résumé rédigé d'un article par le modèle de langue (gardé en cache)")
+def ai_summary(body: SummaryRequest, conn: Conn):
+    return ai.summary(conn, body.record, body.lang)
 
 
 @router.get("/searches", summary="Recherches enregistrées (les plus récentes d'abord)")
@@ -740,6 +792,7 @@ def create_app(config: Config, background: bool = False) -> FastAPI:
     core.setup(conn, config.home)
     conn.close()
     http.configure(config.contact_email, config.api_keys, config.db_path)
+    llm.configure(llm.Settings.of(config))
     app = FastAPI(
         title="Biblio",
         version=__version__,
@@ -761,7 +814,7 @@ def create_app(config: Config, background: bool = False) -> FastAPI:
     app.include_router(router)
 
     # ValueError couvre les saisies invalides (identifiant, format de fichier, PDF refusé, fusion impossible).
-    errors = {ValueError: 422, core.NotFound: 404, SourceError: 502, zotero.ZoteroError: 503}
+    errors = {ValueError: 422, core.NotFound: 404, SourceError: 502, zotero.ZoteroError: 503, llm.LLMError: 503}
     for exc_type, status in errors.items():
         app.add_exception_handler(exc_type, lambda _req, exc, status=status: JSONResponse({"detail": str(exc)}, status))
 

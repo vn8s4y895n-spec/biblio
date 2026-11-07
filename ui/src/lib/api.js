@@ -45,3 +45,24 @@ export function identifierOf(rec) {
   const ids = rec.identifiers ?? {};
   return ids.doi ?? (ids.pmid && `PMID:${ids.pmid}`) ?? (ids.pmcid && ids.pmcid) ?? (ids.arxiv && `arXiv:${ids.arxiv}`) ?? null;
 }
+
+// Réponse diffusée au fil de l'eau (événements « data: » JSON) : `onEvent` est appelé pour chacun.
+export async function apiStream(path, body, onEvent) {
+  const response = await fetch(`/api/v1${path}`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "X-Biblio-Client": "web", "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) throw new ApiError(response.status, (await response.json().catch(() => ({}))).detail ?? response.statusText);
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const events = buffer.split("\n\n");
+    buffer = events.pop();
+    for (const event of events) if (event.startsWith("data:")) onEvent(JSON.parse(event.slice(5)));
+  }
+}

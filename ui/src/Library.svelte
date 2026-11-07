@@ -7,7 +7,7 @@
   import { fmt, t } from "./lib/i18n.js";
   import { toast } from "./lib/toast.js";
 
-  let { route, version } = $props();
+  let { route, version, aiEnabled = false } = $props();
 
   const PAGE = 100;
   let labels = $state([]);
@@ -260,7 +260,7 @@
   <section class="detail">
     {#if current}
       {#key current}
-        <WorkDetail ref={current} {labels} onlabels={refreshLabels} onchange={() => refresh()} />
+        <WorkDetail ref={current} {labels} {aiEnabled} onlabels={refreshLabels} onchange={() => refresh()} />
       {/key}
     {:else}
       <div class="placeholder muted">

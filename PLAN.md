@@ -1,6 +1,6 @@
 # Biblio — Plan
 
-Statut : **plan validé le 2026-11-06. Phases 1 à 8 terminées** (phases 6 à 8 : 2026-11-07). Prochaine étape : phase 9.
+Statut : **plan validé le 2026-11-06. Phases 1 à 9 terminées** (phases 6 à 9 : 2026-11-07). Prochaine étape : phase 10.
 
 ## Objectif
 
@@ -377,7 +377,20 @@ Chaque phase se termine par : tests verts (aucun appel réseau, réponses enregi
    - *Constats et corrections* :
      - Crossref publie parfois plusieurs avis pour un même article (7 pour l'étude Surgisphere, dont des errata) : une seule alerte par article et par type, un seul bandeau dans la fiche (le plus grave, Retraction Watch en priorité), les autres repliés ;
      - **la page de l'interface restait en cache** : après une mise à jour, la fenêtre pouvait afficher l'ancienne version. Elle est maintenant revalidée à chaque ouverture.
-9. **IA.** Module LLM interchangeable, question → requête PubMed, réponse rédigée avec citations vérifiées, résumé rédigé, adaptateurs des moteurs IA externes (selon les API disponibles, voir les risques).
+9. ✅ **IA.** Module LLM interchangeable, question → requête PubMed, réponse rédigée avec citations vérifiées, résumé rédigé, adaptateurs des moteurs IA externes (selon les API disponibles, voir les risques).
+   - *Bilan* : 179 tests verts (modèle simulé). Choix : **Ollama en local** (installé depuis ollama.com, signé et notarié) avec **qwen3.5:9b** (7,6 Go ; Apple M5, 16 Go).
+   - *Démo réelle* (« Chez un E. faecium résistant à la vancomycine, peut-on utiliser la dalbavancine ? ») :
+     - requête PubMed écrite par le modèle en 9 à 25 s (chargement compris) : MeSH, synonymes, les concepts reliés par AND ;
+     - 18 sources, toutes sur la dalbavancine et/ou les ERV (11 hors sujet écartées) ;
+     - réponse rédigée au fil de l'eau, juste sur le fond (dalbavancine inactive sur les souches VanA, CMI90 > 16 µg/mL), chaque phrase citée et vérifiée.
+   - *Écarts au plan* :
+     - **une seule interface « compatible OpenAI »** pour Ollama, Mistral et les autres ; **pas de Claude par API** dans cette phase (Claude passera par Claude Desktop et ton abonnement, phase 10 ; un accès API utiliserait le SDK officiel d'Anthropic) ;
+     - **pas d'adaptateur de moteurs IA externes** (OpenEvidence, Consensus, Elicit) : aucun n'offre d'API publique utilisable ;
+     - la vérification des citations est faite par Biblio (proximité de sens avec les phrases des sources citées), pas par le modèle lui-même.
+   - *Constats et corrections* :
+     - le modèle a d'abord ajouté « dalfopristin » comme synonyme de dalbavancine (nom proche, autre molécule) : consigne resserrée, et **filtre par concepts** (une source doit couvrir les blocs AND de la requête, à un près) ; le score sémantique seul ne suffisait pas (0,68 pour un article sur le SARM) ;
+     - le modèle mettait du Markdown (« *E. faecium* ») : consigne et nettoyage à l'affichage ;
+     - premier appel lent (chargement du modèle) : message « L'IA prépare la requête… » pendant l'attente.
 10. **Interopérabilité et connecteurs.** OpenAPI complet, `openapi.json` + `llms.txt`, serveur MCP (stdio + HTTP) avec outils, instructions, prompts et ressources, écran Réglages → Connecteurs, **intégration Claude** (extension `.mcpb`, skill, commande Claude Code, synthèses visibles dans Biblio), webhooks signés HMAC, `backup` / `restore` testés, export complet en formats ouverts. Test de bout en bout : un client MCP simulé déroule le skill (recherche → filtre → enregistrement de la synthèse) et on vérifie le résultat en base.
 11. **Application à double-cliquer.** Paquet macOS (`.app` dans un `.dmg`), puis Windows (`.exe`), association des fichiers `.biblio` pour l'ouverture par double-clic, mise à jour de l'application. README et guide d'installation pour les collègues (FR + EN).
 

@@ -14,6 +14,9 @@
   let restartNeeded = $state(false);
   let styles = $state([]);
   let zotero = $state(null);
+  let llmStatus = $state(null);
+  let llmKey = $state("");
+  let testing = $state(false);
   let poll;
 
   const KEYS = [
@@ -24,6 +27,7 @@
 
   onMount(async () => {
     [semantic, journals, styles, zotero] = await Promise.all([api("/semantic"), api("/journals"), api("/styles"), api("/zotero")]);
+    if (settings.llm_enabled) testLlm();
     poll = setInterval(async () => {
       if (semantic?.status === "downloading" || (semantic?.status === "ready" && semantic.progress < 1)) semantic = await api("/semantic");
     }, 2000);
@@ -58,6 +62,25 @@
     } finally {
       checking = false;
     }
+  }
+
+  async function testLlm() {
+    testing = true;
+    llmStatus = await api("/llm").catch((e) => ({ reachable: false, error: e.message, models: [] }));
+    testing = false;
+  }
+
+  async function saveLlm(field) {
+    await save(field);
+    testLlm();
+  }
+
+  async function saveKey() {
+    const out = await api("/settings", { method: "PUT", body: { llm_api_key: llmKey } });
+    llmKey = "";
+    onchange(out);
+    toast($t(out.llm_key_set ? "ai.key_saved" : "ai.key_removed"), "ok");
+    testLlm();
   }
 
   async function addStyle(e) {
@@ -99,6 +122,63 @@
           <option value="dark">{$t("settings.dark")}</option>
         </select>
       </div>
+    </section>
+
+    <section class="card">
+      <h2>{$t("ai.title")}</h2>
+      <p class="muted small">{$t("ai.help")}</p>
+      <label class="field toggle">
+        <span>{$t("ai.enable")}</span>
+        <input type="checkbox" bind:checked={form.llm_enabled} onchange={() => saveLlm("llm_enabled")} />
+      </label>
+      <div class="field">
+        <span>{$t("ai.provider")}</span>
+        <select bind:value={form.llm_provider} onchange={() => saveLlm("llm_provider")}>
+          <option value="ollama">{$t("ai.ollama")}</option>
+          <option value="mistral">Mistral</option>
+          <option value="custom">{$t("ai.custom")}</option>
+        </select>
+      </div>
+      <label class="field">
+        <span>{$t("ai.model")}<small class="faint">{$t("ai.model_help")}</small></span>
+        {#if llmStatus?.models?.length}
+          <select bind:value={form.llm_model} onchange={() => saveLlm("llm_model")}>
+            <option value="">{$t("ai.default_model", { model: llmStatus.model })}</option>
+            {#each llmStatus.models as m}<option value={m}>{m}</option>{/each}
+          </select>
+        {:else}
+          <input type="text" bind:value={form.llm_model} onchange={() => saveLlm("llm_model")} placeholder={llmStatus?.model ?? ""} />
+        {/if}
+      </label>
+      <label class="field">
+        <span>{$t("ai.base_url")}<small class="faint">{$t("ai.base_url_help")}</small></span>
+        <input type="text" bind:value={form.llm_base_url} onchange={() => saveLlm("llm_base_url")} placeholder={llmStatus?.base_url ?? ""} />
+      </label>
+      {#if form.llm_provider !== "ollama"}
+        <div class="field">
+          <span>{$t("ai.key")}<small class="faint">{settings.llm_key_set ? $t("ai.key_set") : $t("ai.key_help")}</small></span>
+          <span class="status">
+            <input type="password" autocomplete="off" bind:value={llmKey} placeholder={settings.llm_key_set ? "••••••••" : ""} />
+            <button class="small" onclick={saveKey}>{llmKey ? $t("ai.save_key") : $t("ai.remove_key")}</button>
+          </span>
+        </div>
+      {/if}
+      <div class="field">
+        <span>{$t("ai.state")}</span>
+        <span class="status">
+          {#if llmStatus}
+            {#if llmStatus.reachable}
+              <span class="chip ok">✓ {$t("ai.reachable")}</span>
+            {:else}
+              <span class="chip warn" title={llmStatus.error}>{$t("ai.unreachable")}</span>
+            {/if}
+          {/if}
+          <button class="small" disabled={testing} onclick={testLlm}>{testing ? "…" : $t("settings.check")}</button>
+        </span>
+      </div>
+      {#if llmStatus && !llmStatus.reachable && form.llm_provider === "ollama"}
+        <p class="small warn">{$t("ai.ollama_hint")}</p>
+      {/if}
     </section>
 
     <section class="card">

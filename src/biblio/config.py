@@ -38,6 +38,15 @@ models_dir = {models_dir}   # vide : dossier « models » du dossier de données
 language = {language}   # "fr", "en" ou vide (langue du système)
 theme = {theme}   # "system", "light" ou "dark"
 citation_style = {citation_style}   # style CSL de la touche « c » et des exports Markdown (vide : Vancouver)
+
+[llm]
+# Intelligence artificielle (facultative) : requête PubMed, réponse rédigée et citée, résumés.
+# Toute API « chat completions » compatible OpenAI : Ollama en local (gratuit, rien ne sort de l'ordinateur),
+# Mistral, OpenAI… La clé éventuelle est rangée dans le trousseau du système, jamais dans ce fichier.
+enabled = {llm_enabled}
+provider = {llm_provider}   # ollama, mistral ou custom
+base_url = {llm_base_url}   # vide : adresse par défaut du fournisseur
+model = {llm_model}   # vide : modèle par défaut du fournisseur
 """
 
 API_KEYS = ("ncbi", "openalex", "semanticscholar")
@@ -69,6 +78,10 @@ class Config:
     language: str = ""
     theme: str = "system"
     citation_style: str = ""
+    llm_enabled: bool = False
+    llm_provider: str = "ollama"
+    llm_base_url: str = ""
+    llm_model: str = ""
 
     @property
     def models_dir(self) -> Path:
@@ -99,7 +112,8 @@ def save(cfg: Config) -> None:
         **{name: value(cfg.api_keys.get(name, "")) for name in API_KEYS},
         watch_downloads=value(cfg.watch_downloads), downloads_dir=value(downloads), semantic=value(cfg.semantic),
         models_dir=value(cfg.models_dir_setting), language=value(cfg.language), theme=value(cfg.theme),
-        citation_style=value(cfg.citation_style),
+        citation_style=value(cfg.citation_style), llm_enabled=value(cfg.llm_enabled),
+        llm_provider=value(cfg.llm_provider), llm_base_url=value(cfg.llm_base_url), llm_model=value(cfg.llm_model),
     )  # fmt: skip
     cfg.home.mkdir(parents=True, exist_ok=True)
     tmp = cfg.path.with_suffix(".tmp")
@@ -116,7 +130,7 @@ def load() -> Config:
                     api_keys={}))  # fmt: skip
     data = tomllib.loads(path.read_text(encoding="utf-8"))
     server, sources, inbox = data.get("server", {}), data.get("sources", {}), data.get("inbox", {})
-    semantic, ui = data.get("semantic", {}), data.get("ui", {})
+    semantic, ui, llm = data.get("semantic", {}), data.get("ui", {}), data.get("llm", {})
     return Config(
         home=root,
         host=server.get("host", "127.0.0.1"),
@@ -131,4 +145,8 @@ def load() -> Config:
         language=ui.get("language", ""),
         theme=ui.get("theme", "system"),
         citation_style=ui.get("citation_style", ""),
+        llm_enabled=bool(llm.get("enabled", False)),
+        llm_provider=llm.get("provider", "ollama"),
+        llm_base_url=llm.get("base_url", ""),
+        llm_model=llm.get("model", ""),
     )

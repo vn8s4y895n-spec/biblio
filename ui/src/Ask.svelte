@@ -2,11 +2,13 @@
   import { onMount, tick, untrack } from "svelte";
   import SourceCard from "./SourceCard.svelte";
   import { addRecord, copyCitation, makePackage, sendToZotero } from "./lib/actions.js";
-  import { api } from "./lib/api.js";
+  import Synthesis from "./lib/Synthesis.svelte";
+  import { api, apiStream } from "./lib/api.js";
   import { fmt, t } from "./lib/i18n.js";
   import { toast } from "./lib/toast.js";
 
-  let { route } = $props();
+  let { route, aiEnabled = false } = $props();
+  let synthesis = $state(null); // réponse rédigée par l'IA : { text, sentences?, model?, streaming, error? }
 
   let question = $state("");
   let scope = $state("online");
@@ -80,12 +82,30 @@
       if (ticket !== runs) return;
       result = out;
       editedQuery = result.query ?? "";
+      for (const w of out.warnings ?? []) toast(w, "warn", 7000);
+      synthesis = null;
+      if (aiEnabled && out.sources.length) write(ticket);
       selected = 0;
       if (location.hash.startsWith("#/search/")) history.replaceState(null, "", "#/");
     } catch (e) {
       if (ticket === runs) error = e.message;
     } finally {
       if (ticket === runs) loading = false;
+    }
+  }
+
+  // Réponse rédigée par l'IA, affichée au fil de l'eau puis vérifiée phrase par phrase.
+  async function write(ticket) {
+    synthesis = { text: "", streaming: true };
+    try {
+      await apiStream("/ask/answer", { question: question.trim(), sources: result.sources }, (event) => {
+        if (ticket !== runs) return;
+        if (event.delta) synthesis.text += event.delta;
+        if (event.error) synthesis = { ...synthesis, error: event.error, streaming: false };
+        if (event.done) synthesis = { text: event.text, sentences: event.sentences, model: event.model, streaming: false };
+      });
+    } catch (e) {
+      if (ticket === runs) synthesis = { ...synthesis, error: e.message, streaming: false };
     }
   }
 
@@ -96,6 +116,7 @@
       scope = s.scope;
       editedQuery = s.query ?? "";
       result = { scope: s.scope, query: s.query, answer: s.answer, sources: s.sources, hidden: {}, total: s.sources.length };
+      synthesis = s.synthesis;
       savedInfo = s;
       selected = 0;
     } catch (e) {
@@ -106,7 +127,10 @@
   async function save() {
     const s = await api("/searches", {
       method: "POST",
-      body: { question: question.trim(), scope: result.scope, query: result.query, answer: result.answer, sources: result.sources },
+      body: {
+        question: question.trim(), scope: result.scope, query: result.query, answer: result.answer, sources: result.sources,
+        synthesis: synthesis?.sentences ? { text: synthesis.text, sentences: synthesis.sentences, model: synthesis.model } : null,
+      },
     });
     savedInfo = s;
     history.replaceState(null, "", `#/search/${s.id}`);
@@ -151,6 +175,13 @@
 
   async function addAll() {
     for (let i = 0; i < result.sources.length; i++) await add(i);
+  }
+
+  async function citeNumber(n) {
+    selected = n - 1;
+    highlight = null;
+    await tick();
+    document.getElementById(`source-${n}`)?.scrollIntoView({ block: "start", behavior: "smooth" });
   }
 
   async function cite(sentence) {
@@ -202,7 +233,7 @@
         {/if}
         <div class="grow"></div>
         <button class="primary" type="submit" disabled={loading || !question.trim()}>
-          {loading ? $t("ask.searching") : $t("ask.submit")} <span class="kbd">⏎</span>
+          {loading ? $t(aiEnabled && scope === "online" ? "ai.planning" : "ask.searching") : $t("ask.submit")} <span class="kbd">⏎</span>
         </button>
       </div>
     </form>
@@ -214,7 +245,7 @@
     {#if result}
       {#if result.query}
         <details class="query">
-          <summary class="small muted">{$t("ask.query")}</summary>
+          <summary class="small muted">{$t(result.query_by === "ai" ? "ask.query_ai" : "ask.query")}</summary>
           <form class="row" onsubmit={(e) => { e.preventDefault(); run(editedQuery); }}>
             <input class="grow mono" type="text" bind:value={editedQuery} />
             <button type="submit" disabled={loading}>{$t("ask.rerun")}</button>
@@ -230,8 +261,39 @@
         </p>
       {/if}
 
-      <div class="answer">
-        <div class="eyebrow">{$t("ask.answer")}</div>
+      {#if synthesis}
+        <div class="answer">
+          <div class="row">
+            <span class="eyebrow grow">{$t("ai.answer")}</span>
+            {#if synthesis.model}<span class="small faint">{synthesis.model}</span>{/if}
+          </div>
+          {#if synthesis.error}
+            <p class="error small">{synthesis.error}</p>
+          {:else if !synthesis.text}
+            <p class="muted small">{$t("ai.writing")}</p>
+          {:else}
+            <Synthesis {synthesis} oncite={citeNumber} />
+          {/if}
+          {#if synthesis.sentences}
+            {@const flagged = synthesis.sentences.filter((x) => !["ok", "pending"].includes(x.status)).length}
+            <p class="small faint">
+              {flagged ? `⚠ ${$t("ai.flagged", { n: flagged })}` : `✓ ${$t("ai.all_checked")}`} · {$t("ai.disclaimer")}
+            </p>
+          {/if}
+        </div>
+      {/if}
+
+      {#if result.related?.length}
+        <div class="row wrap related">
+          <span class="small muted">{$t("ai.related")}</span>
+          {#each result.related as q}
+            <button class="chip" onclick={() => { question = q; run(); }}>{q}</button>
+          {/each}
+        </div>
+      {/if}
+
+      <details class="answer" open={!synthesis}>
+        <summary class="eyebrow">{$t(synthesis ? "ai.extracts" : "ask.answer")}</summary>
         {#if result.answer.length}
           <ul>
             {#each result.answer as sentence}
@@ -248,7 +310,7 @@
         {:else}
           <p class="muted">{$t("ask.no_answer")}</p>
         {/if}
-      </div>
+      </details>
 
       <div class="row wrap">
         <button onclick={save} disabled={!!savedInfo || !result.sources.length}>{savedInfo ? `✓ ${$t("ask.saved_short")}` : $t("ask.save")}</button>
@@ -319,6 +381,7 @@
             selected={selected === i}
             highlight={highlight?.source === i + 1 ? highlight.text : null}
             adding={adding[i]}
+            {aiEnabled}
             onadd={() => add(i)}
             onselect={() => (selected = i)}
           />
@@ -360,6 +423,10 @@
   .saved-banner { background: var(--accent-soft); color: var(--accent); padding: 6px 12px; border-radius: 8px; margin: 0; }
   .answer ul { margin: 8px 0 6px; padding: 0; list-style: none; display: grid; gap: 12px; }
   .answer li { font-family: var(--serif); font-size: 16px; line-height: 1.55; padding-left: 14px; border-left: 2px solid var(--border); }
+  .answer > summary { cursor: pointer; }
+  .related { gap: 6px; }
+  .related .chip { border: none; cursor: pointer; text-align: left; white-space: normal; }
+  .related .chip:hover { background: var(--accent-soft); color: var(--accent); }
   .cite {
     font: 650 11px var(--font); padding: 0 6px; border-radius: 5px; vertical-align: 2px; margin-left: 3px;
     background: var(--accent-soft); color: var(--accent); border: none;

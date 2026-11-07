@@ -105,29 +105,56 @@ def _decorate(rec: dict) -> dict:
 def ask_online(conn: sqlite3.Connection, question: str, filters: search.Filters, limit: int = 20,
                query: str | None = None) -> dict:  # fmt: skip
     """`query` : requête corrigée à la main (envoyée telle quelle) ; la question sert toujours à choisir les phrases.
-    Sinon, une question en langage courant devient une liste de mots-clés (voir question.py), assouplie si elle
-    trouve trop peu, et les sources qui ne contiennent pas au moins la moitié des mots-clés sont écartées
-    (`off_topic`)."""
+    Sinon, avec un modèle de langue configuré, il écrit la requête PubMed et propose des questions liées
+    (`query_by` = ai). Sans modèle (ou s'il échoue), la question devient une liste de mots-clés (voir question.py),
+    assouplie si elle trouve trop peu, et les sources qui ne contiennent pas au moins la moitié des mots-clés sont
+    écartées (`off_topic`)."""
+    from . import ai, llm  # import local : ai importe ce module
+
     terms = None if query or questions.is_syntax(question) else questions.keywords(question)
     if terms is not None and not terms:
         terms = None
+    related, warnings, query_by = [], [], "user" if query else "keywords"
+    if terms and ai.enabled():
+        try:  # requête écrite par le modèle (traduction, MeSH, synonymes) ; sinon, mots-clés
+            planned = ai.plan(question)
+            query, related, query_by, terms = planned["query"], planned["related"], "ai", None
+        except llm.LLMError as exc:
+            warnings.append(str(exc))
     query = query or (" ".join(terms) if terms else question)
     found = search.search(conn, query, limit=limit * 3, filters=filters)
+    if query_by == "ai" and found["total"] < RELAX_BELOW:  # requête du modèle trop étroite : mots-clés
+        terms = questions.keywords(question)
+        query, query_by = " ".join(terms), "keywords"
+        found = search.search(conn, query, limit=limit * 3, filters=filters)
     if terms and len(terms) >= 3 and found["total"] < RELAX_BELOW:
         query = questions.relaxed(terms)
         found = search.search(conn, query, limit=limit * 3, filters=filters)
     results = found["results"]
     off_topic = 0
-    if terms and len(terms) >= 2:
-        kept = [r for r in results if questions.coverage(terms, r) >= MIN_COVERAGE]
+    if query_by == "ai":  # concepts de la requête de l'IA : il peut en manquer un au plus
+        groups = questions.concept_groups(query)
+        need = (len(groups) - 1) / len(groups) if len(groups) > 1 else 1.0
+
+        def cover(r: dict) -> float:
+            return questions.group_coverage(groups, r)
+    elif terms and len(terms) >= 2:
+        need = MIN_COVERAGE
+
+        def cover(r: dict) -> float:
+            return questions.coverage(terms, r)
+    else:
+        cover = None
+    if cover is not None:
+        kept = [r for r in results if cover(r) >= need]
         off_topic = len(results) - len(kept)
-        # À rang égal dans les bases, la source qui contient le plus de mots-clés passe devant.
-        kept.sort(key=lambda r: -(r["score"] + questions.coverage(terms, r) / search.RRF_K))
+        # À rang égal dans les bases, la source qui couvre le plus la question passe devant.
+        kept.sort(key=lambda r: -(r["score"] + cover(r) / search.RRF_K))
         results = kept
     sources = [_decorate(rec) for rec in results[:limit]]
-    return {"scope": "online", "question": question, "query": query, "total": len(results), "hidden": found["hidden"],
-            "off_topic": off_topic, "status": found["sources"], "answer": compose(question, sources),
-            "sources": sources}  # fmt: skip
+    return {"scope": "online", "question": question, "query": query, "query_by": query_by, "related": related,
+            "warnings": warnings, "total": len(results), "hidden": found["hidden"], "off_topic": off_topic,
+            "status": found["sources"], "answer": compose(question, sources), "sources": sources}  # fmt: skip
 
 
 def ask_library(conn: sqlite3.Connection, question: str, limit: int = 20) -> dict:

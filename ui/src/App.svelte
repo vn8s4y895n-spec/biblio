@@ -122,9 +122,9 @@
 
     <div class="body">
       {#if view === "ask"}
-        <Ask {route} />
+        <Ask {route} aiEnabled={!!settings?.llm_enabled} />
       {:else if view === "library"}
-        <Library {route} version={libraryVersion} />
+        <Library {route} version={libraryVersion} aiEnabled={!!settings?.llm_enabled} />
       {:else if view === "watch"}
         <Watch onchange={(n) => (unseen = n)} />
       {:else if settings}

@@ -55,7 +55,8 @@
     "off_topic_help": "Résultats qui contiennent moins de la moitié des mots-clés de la question",
     "history": "Questions récentes",
     "clear_history": "Effacer l'historique",
-    "forget": "Retirer de l'historique"
+    "forget": "Retirer de l'historique",
+    "query_ai": "Requête PubMed rédigée par l'IA (modifiable)"
   },
   "source": {
     "summary": "Résumé Biblio",
@@ -309,5 +310,44 @@
     "last_run": "relancée le {date}",
     "run_now": "Relancer",
     "read_notice": "lire l'avis"
+  },
+  "ai": {
+    "answer": "Réponse rédigée par l'IA",
+    "writing": "Rédaction en cours…",
+    "extracts": "Phrases des sources (sans IA)",
+    "flagged": "{n} phrase(s) soulignée(s) : rien d'approchant dans les sources citées",
+    "all_checked": "Chaque phrase a été retrouvée dans les sources citées",
+    "disclaimer": "vérifie toujours dans l'article",
+    "related": "Questions liées :",
+    "check": {
+      "weak": "Les sources citées ne disent rien d'approchant",
+      "unsourced": "Phrase sans source",
+      "invalid": "Cite une source qui n'existe pas"
+    },
+    "summary": "Résumé IA",
+    "summarizing": "Résumé en cours…",
+    "title": "Intelligence artificielle",
+    "help": "Facultative. Elle écrit la requête PubMed (en anglais, avec MeSH), rédige une réponse citée à partir des sources trouvées, et résume les articles. Avec Ollama, le modèle tourne sur ton ordinateur : rien n'est envoyé.",
+    "enable": "Activée",
+    "provider": "Fournisseur",
+    "ollama": "Ollama (local, gratuit)",
+    "custom": "Autre (API compatible OpenAI)",
+    "model": "Modèle",
+    "model_help": "Ollama : modèles téléchargés.",
+    "default_model": "Par défaut ({model})",
+    "base_url": "Adresse",
+    "base_url_help": "Vide : adresse habituelle du fournisseur.",
+    "key": "Clé d'API",
+    "key_help": "Rangée dans le trousseau macOS, jamais dans un fichier.",
+    "key_set": "Enregistrée dans le trousseau.",
+    "save_key": "Enregistrer",
+    "remove_key": "Supprimer",
+    "key_saved": "Clé enregistrée dans le trousseau",
+    "key_removed": "Clé supprimée",
+    "state": "État",
+    "reachable": "joignable",
+    "unreachable": "injoignable",
+    "ollama_hint": "Ollama ne répond pas : ouvre l'application Ollama (dossier Applications).",
+    "planning": "L'IA prépare la requête…"
   }
 }

@@ -1,9 +1,10 @@
 <script>
+  import AiSummary from "./lib/AiSummary.svelte";
   import Badges from "./lib/Badges.svelte";
   import { authorsShort, doiUrl, sourceLine, splitAround } from "./lib/format.js";
   import { t } from "./lib/i18n.js";
 
-  let { rec, n, selected = false, highlight = null, adding = false, onadd, onselect } = $props();
+  let { rec, n, selected = false, highlight = null, adding = false, aiEnabled = false, onadd, onselect } = $props();
   let open = $state(false); // résumé complet
   let showSummary = $state(true);
   let el;
@@ -49,6 +50,8 @@
     </button>
     {#if showSummary}<p class="summary">{rec.summary}</p>{/if}
   {/if}
+
+  {#if aiEnabled}<div class="aisum"><AiSummary {rec} /></div>{/if}
 
   {#if rec.abstract}
     <button class="ghost small toggle" onclick={(e) => { e.stopPropagation(); open = !open; }}>
@@ -97,7 +100,7 @@
   .meta { margin-top: 2px; }
   .badges { margin: 8px 0 2px 32px; }
   .toggle { margin: 6px 0 0 24px; }
-  .summary, .abstract, .passages { margin: 4px 0 0 32px; }
+  .summary, .abstract, .passages, .aisum { margin: 4px 0 0 32px; }
   .summary { font-size: 13.5px; }
   .abstract { font-size: 13px; color: var(--muted); white-space: pre-line; }
   .passages { padding: 0; list-style: none; display: grid; gap: 6px; }

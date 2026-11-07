@@ -132,9 +132,11 @@ def forget_question(conn: sqlite3.Connection, question: str | None = None, scope
 def save_search(conn: sqlite3.Connection, data: dict) -> dict:
     with db.transaction(conn):
         cur = conn.execute(
-            "INSERT INTO saved_searches (question, origin, scope, query, answer_json, sources_json) VALUES (?, ?, ?, ?, ?, ?)",
+            "INSERT INTO saved_searches (question, origin, scope, query, answer_json, sources_json, synthesis_json)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?)",
             (data["question"], data.get("origin", "biblio"), data.get("scope", "online"), data.get("query"),
-             json.dumps(data.get("answer", []), ensure_ascii=False), json.dumps(data.get("sources", []), ensure_ascii=False)),
+             json.dumps(data.get("answer", []), ensure_ascii=False), json.dumps(data.get("sources", []), ensure_ascii=False),
+             json.dumps(data["synthesis"], ensure_ascii=False) if data.get("synthesis") else None),
         )  # fmt: skip
     return get_search(conn, cur.lastrowid)
 
@@ -152,7 +154,8 @@ def get_search(conn: sqlite3.Connection, search_id: int) -> dict:
     if row is None:
         raise core.NotFound(f"Recherche enregistrée inconnue : {search_id}")
     out = {k: row[k] for k in row.keys() if not k.endswith("_json")}
-    return {**out, "answer": json.loads(row["answer_json"]), "sources": json.loads(row["sources_json"])}
+    return {**out, "answer": json.loads(row["answer_json"]), "sources": json.loads(row["sources_json"]),
+            "synthesis": json.loads(row["synthesis_json"]) if row["synthesis_json"] else None}
 
 
 def delete_search(conn: sqlite3.Connection, search_id: int) -> None:

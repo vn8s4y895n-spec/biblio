@@ -55,7 +55,8 @@
     "off_topic_help": "Results containing fewer than half of the question's keywords",
     "history": "Recent questions",
     "clear_history": "Clear history",
-    "forget": "Remove from history"
+    "forget": "Remove from history",
+    "query_ai": "PubMed query written by AI (editable)"
   },
   "source": {
     "summary": "Biblio summary",
@@ -309,5 +310,44 @@
     "last_run": "run on {date}",
     "run_now": "Run now",
     "read_notice": "read the notice"
+  },
+  "ai": {
+    "answer": "Answer written by AI",
+    "writing": "Writing…",
+    "extracts": "Sentences from the sources (no AI)",
+    "flagged": "{n} sentence(s) underlined: nothing similar in the cited sources",
+    "all_checked": "Every sentence was found in the cited sources",
+    "disclaimer": "always check the article",
+    "related": "Related questions:",
+    "check": {
+      "weak": "The cited sources say nothing similar",
+      "unsourced": "Sentence without a source",
+      "invalid": "Cites a source that does not exist"
+    },
+    "summary": "AI summary",
+    "summarizing": "Summarizing…",
+    "title": "Artificial intelligence",
+    "help": "Optional. It writes the PubMed query (in English, with MeSH), writes a cited answer from the sources found, and summarizes articles. With Ollama the model runs on your computer: nothing is sent.",
+    "enable": "Enabled",
+    "provider": "Provider",
+    "ollama": "Ollama (local, free)",
+    "custom": "Other (OpenAI-compatible API)",
+    "model": "Model",
+    "model_help": "Ollama: downloaded models.",
+    "default_model": "Default ({model})",
+    "base_url": "Address",
+    "base_url_help": "Empty: the provider's usual address.",
+    "key": "API key",
+    "key_help": "Stored in the macOS keychain, never in a file.",
+    "key_set": "Stored in the keychain.",
+    "save_key": "Save",
+    "remove_key": "Remove",
+    "key_saved": "Key stored in the keychain",
+    "key_removed": "Key removed",
+    "state": "Status",
+    "reachable": "reachable",
+    "unreachable": "unreachable",
+    "ollama_hint": "Ollama does not answer: open the Ollama app (Applications folder).",
+    "planning": "AI is writing the query…"
   }
 }
