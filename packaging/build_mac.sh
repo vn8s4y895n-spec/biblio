@@ -1,5 +1,6 @@
 #!/bin/sh
-# Construit dist/Biblio.app et dist/Biblio-<version>.dmg (Mac, Apple Silicon). Signature ad hoc : sans compte
+# Construit dist.noindex/Biblio.app et dist.noindex/Biblio-<version>.dmg (Mac, Apple Silicon). Les dossiers en
+# « .noindex » ne sont pas indexés par Spotlight : seul le Biblio installé dans Applications y apparaît. Signature ad hoc : sans compte
 # Apple Developer, un Mac qui reçoit l'app par Internet demande une confirmation au premier lancement (README).
 set -e
 cd "$(dirname "$0")/.."
@@ -15,11 +16,13 @@ done
 iconutil -c icns packaging/build/Biblio.iconset -o packaging/build/Biblio.icns
 
 cd packaging
-uv run pyinstaller --noconfirm --clean --distpath ../dist --workpath build/pyinstaller biblio.spec
+uv run pyinstaller --noconfirm --clean --distpath build/app.noindex --workpath build/pyinstaller.noindex biblio.spec
 cd ..
-rm -rf dist/Biblio   # dossier intermédiaire : seul Biblio.app sert
-rm -f "dist/Biblio-$VERSION.dmg"
-mkdir -p packaging/build/dmg && rm -rf packaging/build/dmg/* && cp -R dist/Biblio.app packaging/build/dmg/
-ln -s /Applications packaging/build/dmg/Applications
-hdiutil create -volname Biblio -srcfolder packaging/build/dmg -ov -format UDZO "dist/Biblio-$VERSION.dmg" >/dev/null
-echo "✓ dist/Biblio.app et dist/Biblio-$VERSION.dmg"
+OUT=dist.noindex
+STAGE=packaging/build/dmg.noindex
+rm -rf "$OUT" "$STAGE" && mkdir -p "$OUT" "$STAGE"
+cp -R packaging/build/app.noindex/Biblio.app "$OUT/"
+cp -R "$OUT/Biblio.app" "$STAGE/" && ln -s /Applications "$STAGE/Applications"
+hdiutil create -volname Biblio -srcfolder "$STAGE" -ov -format UDZO "$OUT/Biblio-$VERSION.dmg" >/dev/null
+rm -rf "$STAGE" packaging/build/app.noindex
+echo "✓ $OUT/Biblio.app et $OUT/Biblio-$VERSION.dmg"

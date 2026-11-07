@@ -17,7 +17,7 @@ Licence : [GPL-3.0](LICENSE).
 ### Construire l'application
 
 ```bash
-./packaging/build_mac.sh    # dist/Biblio.app et dist/Biblio-<version>.dmg (Mac)
+./packaging/build_mac.sh    # dist.noindex/Biblio.app et dist.noindex/Biblio-<version>.dmg (Mac ; dossier ignoré par Spotlight)
 ```
 
 Windows : `packaging\build_windows.ps1` (PyInstaller, puis installeur Inno Setup qui associe les fichiers `.biblio`). L'application empaquetée est aussi la CLI : `Biblio.app/Contents/MacOS/Biblio serve | mcp | backup…`.

@@ -41,7 +41,7 @@ jobs:
           node-version: 24
       - run: npm --prefix ui ci
       - run: ./packaging/build_mac.sh
-      - run: gh release upload "${{ github.event.release.tag_name }}" dist/*.dmg --clobber
+      - run: gh release upload "${{ github.event.release.tag_name }}" dist.noindex/*.dmg --clobber
         env:
           GH_TOKEN: ${{ github.token }}
       - name: Titre de la version (sinon GitHub affiche le message du dernier commit)
