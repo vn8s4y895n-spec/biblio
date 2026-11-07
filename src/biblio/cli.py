@@ -5,7 +5,6 @@ import json
 import logging
 import re
 import subprocess
-import sys
 import time
 import webbrowser
 from pathlib import Path
@@ -14,7 +13,7 @@ from typing import Annotated
 import httpx
 import typer
 
-from . import config
+from . import command, config
 
 XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
@@ -44,7 +43,7 @@ def _is_biblio(client: httpx.Client) -> bool:
 def _start_server(client: httpx.Client, cfg: config.Config) -> None:
     """Lance `biblio serve` en arrière-plan s'il ne tourne pas, puis attend qu'il réponde."""
     log = (cfg.home / "server.log").open("a")
-    subprocess.Popen([sys.executable, "-m", "biblio", "serve"], stdout=log, stderr=log, start_new_session=True)
+    subprocess.Popen([*command(), "serve"], stdout=log, stderr=log, start_new_session=True)
     for _ in range(75):
         if _is_biblio(client):
             return
@@ -111,12 +110,13 @@ def serve(
 
 @app.command("app")
 def open_app(
+    paths: Annotated[list[Path] | None, typer.Argument(help="Paquets .biblio à ouvrir (aperçu avant import)")] = None,
     browser: Annotated[bool, typer.Option("--browser", help="Ouvrir dans le navigateur plutôt que dans une fenêtre")] = False,
 ) -> None:
     """Ouvre Biblio dans sa fenêtre (démarre le serveur au besoin)."""
     from .app import run
 
-    run(browser)
+    run(browser, [str(p.resolve()) for p in paths or []])
 
 
 @app.command()

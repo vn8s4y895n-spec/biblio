@@ -562,6 +562,21 @@ async def import_package(request: Request, conn: Conn, data: Annotated[bytes, De
     return packages.import_package(conn, home(request), data)
 
 
+class LocalFile(BaseModel):
+    path: str
+
+
+@router.post("/packages/file", summary="Lire un paquet .biblio de l'ordinateur (ouvert par double-clic)",
+             response_class=Response)  # fmt: skip
+def package_file(body: LocalFile):
+    """La fenêtre reçoit le chemin du fichier ouvert dans le Finder ; l'interface en lit le contenu ici, puis suit le
+    chemin habituel (aperçu, import). Seuls les fichiers .biblio sont lus."""
+    path = Path(body.path).expanduser()
+    if path.suffix.lower() != ".biblio" or not path.is_file():
+        raise HTTPException(422, f"Pas un paquet .biblio : {path.name}")
+    return Response(path.read_bytes(), media_type="application/x-biblio")
+
+
 class WatchRequest(BaseModel):
     days: int | None  # intervalle de relance ; null : ne plus suivre
 

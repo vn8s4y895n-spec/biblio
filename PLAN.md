@@ -399,7 +399,13 @@ Chaque phase se termine par : tests verts (aucun appel réseau, réponses enregi
      - pas d'écriture de `claude_desktop_config.json` : l'extension `.mcpb` s'installe d'un double-clic, le repli n'est pas nécessaire ;
      - pas de clés de « moteurs IA externes » dans les connecteurs : aucun n'a d'API publique utilisable (voir phase 9) ;
      - la restauration est une commande (`biblio restore`) et non un bouton : elle doit arrêter le serveur.
-11. **Application à double-cliquer.** Paquet macOS (`.app` dans un `.dmg`), puis Windows (`.exe`), association des fichiers `.biblio` pour l'ouverture par double-clic, mise à jour de l'application. README et guide d'installation pour les collègues (FR + EN).
+11. ✅ **Application à double-cliquer.** Paquet macOS (`.app` dans un `.dmg`), puis Windows (`.exe`), association des fichiers `.biblio` pour l'ouverture par double-clic, mise à jour de l'application. README et guide d'installation pour les collègues (FR + EN).
+   - *Bilan* : 195 tests verts. **PyInstaller** retenu (onnxruntime, pywebview, sqlite-vec et le SDK MCP sont pris en charge sans réglage particulier). `Biblio.app` : 165 Mo, `.dmg` : 73 Mo. Essais réels de l'app construite, sur un dossier de données d'essai : serveur et interface, sauvegarde du jour, ajout de MERINO, modèle sémantique chargé et recherche par le sens, serveur MCP lancé par l'app (13 outils), paquet créé puis **ouvert par le Finder au lancement et quand Biblio est déjà ouvert** (aperçu affiché).
+   - *Fait* : un seul exécutable pour la fenêtre et la CLI (`Biblio mcp` pour Claude Desktop, `Biblio serve` lancé par la fenêtre) ; type de fichier `.biblio` déclaré dans l'app (Mac) et dans l'installeur (Windows, registre de l'utilisateur) ; icône ; `.dmg` avec raccourci Applications ; INSTALL.md (FR + EN).
+   - *Écarts au plan* :
+     - **Windows non essayé** (pas de PC) : recette PyInstaller + Inno Setup écrite, à essayer sur un PC. Limite connue : l'exécutable sans console ne convient pas au MCP en stdio sous Windows (`biblio mcp --http` à la place, ou un second exécutable console à ajouter) ;
+     - **pas de mise à jour automatique** : il faudrait un endroit où publier les versions (dépôt GitHub public par exemple). La mise à jour consiste à remplacer l'application ; les données sont migrées au lancement ;
+     - **signature ad hoc** seulement (pas de compte Apple Developer) : premier lancement par Réglages Système → Confidentialité et sécurité → « Ouvrir quand même » (le clic droit → Ouvrir ne suffit plus depuis macOS 15).
 
 Tu peux utiliser Biblio dès la fin de la phase 1 (CLI), avec l'interface dès la phase 6.
 

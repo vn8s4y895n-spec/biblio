@@ -9,7 +9,6 @@ import functools
 import html
 import re
 from datetime import datetime
-from pathlib import Path
 from typing import Annotated, Literal
 
 import httpx
@@ -410,10 +409,9 @@ def http_port(cfg: config.Config) -> int:
 
 def connectors(cfg: config.Config) -> dict:
     """Ce que l'écran Connecteurs montre : commandes et configurations à copier pour chaque client MCP."""
-    import shutil
-    import sys
+    from . import command
 
-    exe = shutil.which("biblio") or str(Path(sys.executable).with_name("biblio"))
+    exe = command()[0]
     stdio = {"command": exe, "args": ["mcp"]}
     http_url = f"http://127.0.0.1:{http_port(cfg)}/mcp"
     return {

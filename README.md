@@ -3,6 +3,18 @@
 Gestionnaire de bibliographie local, autonome et ouvert, pensé pour la recherche en santé.
 Le projet avance par phases : voir [PLAN.md](PLAN.md). Ce README décrit ce qui fonctionne **aujourd'hui** (phases 1 à 9).
 
+## Installation
+
+Pour utiliser Biblio : voir [INSTALL.md](INSTALL.md) (Mac et Windows, FR + EN).
+
+### Construire l'application
+
+```bash
+./packaging/build_mac.sh    # dist/Biblio.app et dist/Biblio-<version>.dmg (Mac)
+```
+
+Windows : `packaging\build_windows.ps1` (PyInstaller, puis installeur Inno Setup qui associe les fichiers `.biblio`). L'application empaquetée est aussi la CLI : `Biblio.app/Contents/MacOS/Biblio serve | mcp | backup…`.
+
 ## Installation (développement)
 
 Biblio utilise [uv](https://docs.astral.sh/uv/) et Python 3.13.

@@ -196,3 +196,16 @@ def test_cite_online_record_and_search_only_package(api):
     search = api.post("/api/v1/searches", json={"question": "BLSE ?", "sources": [rec]}).json()
     data = api.post("/api/v1/packages", json={"searches": [search["id"]]}).content
     assert json.loads(zipfile.ZipFile(io.BytesIO(data)).read("works.json")) == []
+
+
+def test_package_opened_from_finder(api, tmp_path):
+    """Double-clic sur un .biblio : la fenêtre passe le chemin, l'interface lit le fichier par l'API."""
+    api.post("/api/v1/works", json={"identifier": MERINO_DOI})
+    data = api.post("/api/v1/packages", json={"works": [MERINO_DOI]}).content
+    path = tmp_path / "Pour Marie.biblio"
+    path.write_bytes(data)
+    assert api.post("/api/v1/packages/file", json={"path": str(path)}).content == data
+    other = tmp_path / "note.txt"
+    other.write_text("secret")
+    assert api.post("/api/v1/packages/file", json={"path": str(other)}).status_code == 422
+    assert api.post("/api/v1/packages/file", json={"path": str(tmp_path / "absent.biblio")}).status_code == 422

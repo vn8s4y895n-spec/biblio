@@ -36,6 +36,16 @@
     addEventListener("hashchange", onHash);
     if (token) api("/settings").then(applyPrefs).catch((e) => toast(e.message, "error"));
     refreshAlerts();
+    // Paquet .biblio ouvert par double-clic : la fenêtre (app.py) appelle biblioOpen(chemin).
+    window.biblioOpen = async (path) => {
+      try {
+        const blob = await api("/packages/file", { method: "POST", body: { path } });
+        const file = new File([blob], path.split(/[\\/]/).pop());
+        incoming = { file, preview: await api("/packages/preview", { method: "POST", body: file }) };
+      } catch (e) {
+        toast(e.message, "error", 8000);
+      }
+    };
     const timer = setInterval(refreshAlerts, 60_000);
     return () => { removeEventListener("hashchange", onHash); clearInterval(timer); };
   });

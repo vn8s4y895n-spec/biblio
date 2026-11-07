@@ -15,3 +15,4 @@ graphify-out/
 ui/node_modules
 ui/node_modules.nosync/
 src/biblio/web/
+packaging/build/
