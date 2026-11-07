@@ -260,7 +260,14 @@
     "title": "Export"
   },
   "zotero": {
-    "sent": "{n} sent to Zotero ({pdfs} PDFs) → {where}"
+    "sent": "{n} sent to Zotero ({pdfs} PDFs) → {where}",
+    "rdf_button": "↓ Zotero",
+    "rdf_label": "Zotero RDF export",
+    "rdf_help": "Import a Zotero RDF export. In Zotero: right-click a collection → Export Collection… → “Zotero RDF” format, tick “Export Notes” and “Export Files”, then choose here the .rdf file of the exported folder. Records, PDFs, notes, tags and collections are imported.",
+    "rdf_importing": "Importing the Zotero export…",
+    "rdf_done": "Zotero: {created} added, {completed} completed, {pdfs} PDFs, {notes} notes, {collections} collections",
+    "rdf_missing": "{n} PDFs missing from the export: in Zotero, tick “Export Files”",
+    "rdf_browser": "In a browser, Biblio only receives the .rdf file: PDFs are only imported from the Biblio window."
   },
   "package": {
     "make": ".biblio package",

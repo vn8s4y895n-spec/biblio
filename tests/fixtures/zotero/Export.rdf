@@ -1,0 +1,94 @@
+<rdf:RDF
+ xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+ xmlns:z="http://www.zotero.org/namespaces/export#"
+ xmlns:dcterms="http://purl.org/dc/terms/"
+ xmlns:bib="http://purl.org/net/biblio#"
+ xmlns:foaf="http://xmlns.com/foaf/0.1/"
+ xmlns:link="http://purl.org/rss/1.0/modules/link/"
+ xmlns:dc="http://purl.org/dc/elements/1.1/"
+ xmlns:prism="http://prismstandard.org/namespaces/1.2/basic/">
+    <bib:Article rdf:about="https://jamanetwork.com/journals/jama/fullarticle/2702142">
+        <z:itemType>journalArticle</z:itemType>
+        <dcterms:isPartOf rdf:resource="urn:issn:0098-7484"/>
+        <bib:authors>
+            <rdf:Seq>
+                <rdf:li>
+                    <foaf:Person>
+                        <foaf:surname>Harris</foaf:surname>
+                        <foaf:givenName>Patrick N. A.</foaf:givenName>
+                    </foaf:Person>
+                </rdf:li>
+                <rdf:li>
+                    <foaf:Person>
+                        <foaf:surname>Tambyah</foaf:surname>
+                        <foaf:givenName>Paul A.</foaf:givenName>
+                    </foaf:Person>
+                </rdf:li>
+            </rdf:Seq>
+        </bib:authors>
+        <dcterms:isReferencedBy rdf:resource="#item_24"/>
+        <link:link rdf:resource="#item_23"/>
+        <dc:subject>BLSE</dc:subject>
+        <dc:subject>
+           <z:AutomaticTag>
+               <rdf:value>Anti-Bacterial Agents</rdf:value>
+           </z:AutomaticTag>
+        </dc:subject>
+        <dc:title>Effect of Piperacillin-Tazobactam vs Meropenem on 30-Day Mortality for Patients With E coli or Klebsiella pneumoniae Bloodstream Infection and Ceftriaxone Resistance</dc:title>
+        <dcterms:abstract>Among 391 patients, piperacillin-tazobactam did not result in noninferior 30-day mortality.</dcterms:abstract>
+        <dc:date>2018-09-11</dc:date>
+        <z:language>en</z:language>
+        <dc:identifier>
+            <dcterms:URI>
+               <rdf:value>https://jamanetwork.com/journals/jama/fullarticle/2702142</rdf:value>
+            </dcterms:URI>
+        </dc:identifier>
+        <bib:pages>984-994</bib:pages>
+        <dc:description>PMID: 30208454</dc:description>
+    </bib:Article>
+    <bib:Journal rdf:about="urn:issn:0098-7484">
+        <prism:volume>320</prism:volume>
+        <dc:title>JAMA</dc:title>
+        <dc:identifier>DOI 10.1001/jama.2018.12163</dc:identifier>
+        <prism:number>10</prism:number>
+        <dcterms:alternative>JAMA</dcterms:alternative>
+        <dc:identifier>ISSN 0098-7484</dc:identifier>
+    </bib:Journal>
+    <bib:Memo rdf:about="#item_24">
+       <rdf:value>&lt;p&gt;Essai &lt;strong&gt;MERINO&lt;/strong&gt; : non-infériorité non démontrée.&lt;/p&gt;&lt;p&gt;À relire.&lt;/p&gt;</rdf:value>
+    </bib:Memo>
+    <z:Attachment rdf:about="#item_23">
+        <z:itemType>attachment</z:itemType>
+        <rdf:resource rdf:resource="files/23/Harris%20et%20al.%20-%202018.pdf"/>
+        <dc:title>Full Text PDF</dc:title>
+        <link:type>application/pdf</link:type>
+    </z:Attachment>
+    <bib:Article rdf:about="#item_30">
+        <z:itemType>journalArticle</z:itemType>
+        <dcterms:isPartOf>
+            <bib:Journal><dc:title>Clinical Microbiology and Infection</dc:title><prism:volume>23</prism:volume></bib:Journal>
+        </dcterms:isPartOf>
+        <bib:authors><rdf:Seq><rdf:li><foaf:Person><foaf:surname>Haverkate</foaf:surname><foaf:givenName>M. R.</foaf:givenName></foaf:Person></rdf:li></rdf:Seq></bib:authors>
+        <link:link rdf:resource="#item_31"/>
+        <dc:title>Quantifying within-household transmission of extended-spectrum β-lactamase-producing bacteria</dc:title>
+        <dc:date>janvier 2017</dc:date>
+    </bib:Article>
+    <z:Attachment rdf:about="#item_31">
+        <z:itemType>attachment</z:itemType>
+        <rdf:resource rdf:resource="files/31/absent.pdf"/>
+        <link:type>application/pdf</link:type>
+    </z:Attachment>
+    <bib:Memo rdf:about="#item_40">
+       <z:itemType>note</z:itemType>
+       <rdf:value>&lt;p&gt;Note isolée&lt;/p&gt;</rdf:value>
+    </bib:Memo>
+    <z:Collection rdf:about="#collection_5">
+        <dc:title>BLSE</dc:title>
+        <dcterms:hasPart rdf:resource="https://jamanetwork.com/journals/jama/fullarticle/2702142"/>
+        <dcterms:hasPart rdf:resource="#collection_6"/>
+    </z:Collection>
+    <z:Collection rdf:about="#collection_6">
+        <dc:title>Foyers</dc:title>
+        <dcterms:hasPart rdf:resource="#item_30"/>
+    </z:Collection>
+</rdf:RDF>

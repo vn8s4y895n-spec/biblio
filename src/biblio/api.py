@@ -23,7 +23,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from . import (__version__, command, ai, ask, backup, config, core, db, exports, formats, importer, journals, library, notes,
-               organize, llm, packages, search, semantic, trace, watch, webhooks, zotero)
+               organize, llm, packages, search, semantic, trace, watch, webhooks, zotero, zotero_rdf)
 from .config import Config
 from .sources import http
 from .sources.http import SourceError
@@ -265,11 +265,32 @@ def add_manual(body: ManualWork, response: Response, conn: Conn, client: Client)
 
 @router.post("/import", summary="Importer un fichier BibTeX, RIS, MEDLINE (.nbib) ou CSL-JSON",
              openapi_extra=binary_body("text/plain"))  # fmt: skip
-async def import_file(conn: Conn, client: Client, data: Annotated[bytes, Depends(raw_body)],
+async def import_file(request: Request, conn: Conn, client: Client, data: Annotated[bytes, Depends(raw_body)],
                       format: Literal[formats.FORMATS] | None = None):  # type: ignore[valid-type]  # fmt: skip
     """Corps : le fichier tel quel (format détecté si `format` est omis). Import hors ligne : les notices déjà
-    présentes sont complétées, les doublons probables signalés (voir /duplicates)."""
+    présentes sont complétées, les doublons probables signalés (voir /duplicates). Un export Zotero RDF envoyé
+    ainsi est lu sans ses PDF (ils sont dans le dossier de l'export : voir POST /import/zotero-rdf)."""
+    if b"<rdf:RDF" in data[:4000] and b"zotero.org/namespaces/export" in data[:4000]:
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "export.rdf").write_bytes(data)
+            return {**zotero_rdf.import_rdf(conn, home(request), Path(tmp) / "export.rdf"), "format": "zotero-rdf"}
     return importer.import_bibliography(conn, data.decode("utf-8-sig", errors="replace"), format, client)
+
+
+class LocalPath(BaseModel):
+    path: str
+
+
+@router.post("/import/zotero-rdf", summary="Importer un export Zotero RDF (chemin du fichier .rdf sur cet ordinateur)")
+def import_zotero_rdf(body: LocalPath, request: Request, conn: Conn):
+    """Notices, PDF (dossier files/ de l'export), notes, tags et collections. Dans Zotero : Exporter… → Zotero RDF,
+    avec « Exporter les fichiers » et « Exporter les notes ». Un article déjà présent est complété, pas dupliqué."""
+    path = Path(body.path).expanduser()
+    if path.suffix.lower() != ".rdf" or not path.is_file():
+        raise HTTPException(422, f"Pas un export Zotero RDF : {path.name}")
+    return {**zotero_rdf.import_rdf(conn, home(request), path), "format": "zotero-rdf"}
 
 
 @router.post("/files", summary="Déposer un PDF", openapi_extra=binary_body("application/pdf"))

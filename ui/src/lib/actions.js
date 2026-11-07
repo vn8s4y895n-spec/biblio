@@ -90,3 +90,45 @@ export async function download(path, filename, method = "GET") {
     toast(e.message, "error", 8000);
   }
 }
+
+// Export Zotero RDF (Zotero : Exporter… → Zotero RDF, avec les fichiers et les notes). Dans la fenêtre de Biblio, le
+// sélecteur du Mac donne le chemin du .rdf : Biblio lit aussi les PDF du dossier de l'export. Dans un navigateur, le
+// fichier seul est envoyé : notices, notes, tags et collections, sans les PDF.
+export async function importZoteroRdf() {
+  const tr = get(t);
+  const native = window.pywebview?.api?.choose_file;
+  let out;
+  try {
+    if (native) {
+      const path = await native(tr("zotero.rdf_label"), "rdf");
+      if (!path) return null;
+      const busy = toast(tr("zotero.rdf_importing"), "info", 600_000);
+      try {
+        out = await api("/import/zotero-rdf", { method: "POST", body: { path } });
+      } finally {
+        busy();
+      }
+    } else {
+      const file = await pickFile(".rdf");
+      if (!file) return null;
+      out = await api("/import", { method: "POST", body: file });
+      toast(tr("zotero.rdf_browser"), "info", 10_000);
+    }
+  } catch (e) {
+    toast(e.message, "error", 12_000);
+    return null;
+  }
+  toast(tr("zotero.rdf_done", { created: out.created.length, completed: out.completed.length, pdfs: out.pdfs,
+                               notes: out.notes, collections: out.collections }), "ok", 10_000);
+  if (native && out.missing_pdfs) toast(tr("zotero.rdf_missing", { n: out.missing_pdfs }), "warn", 12_000);
+  for (const err of out.errors) toast(`${err.title} : ${err.error}`, "error", 12_000);
+  return out;
+}
+
+function pickFile(accept) {
+  return new Promise((resolve) => {
+    const input = Object.assign(document.createElement("input"), { type: "file", accept });
+    input.onchange = () => resolve(input.files[0] ?? null);
+    input.click();
+  });
+}

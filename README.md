@@ -139,6 +139,11 @@ uv run biblio pdf harris2018effect --open          # l'ouvrir, ou ouvrir la page
 - **Notice déjà présente** : même identifiant, ou même titre, année et premier auteur sans identifiant. Elle est complétée, jamais dupliquée.
 - **Même titre avec un identifiant différent** : c'est un doublon probable. Il est signalé, à fusionner ou à écarter.
 
+**Export Zotero RDF** (tout reprendre de Zotero) : dans Zotero, clic droit sur une collection → *Exporter la collection…* (ou *Fichier → Exporter la bibliothèque…*) → format **Zotero RDF**, cocher *Exporter les notes* et *Exporter les fichiers*. Puis dans Biblio : Bibliothèque → « ↓ Zotero » et choisir le fichier `.rdf` du dossier exporté (ou `biblio import Export.rdf`).
+- Repris : notices (DOI, PMID de la zone « Extra »), PDF du dossier `files/`, notes, tags posés à la main (les tags automatiques sont laissés), collections et sous-collections (« Parent / Enfant »).
+- Un article déjà présent est complété, jamais dupliqué ; un réimport n'ajoute ni PDF ni note en double.
+- Envoyé comme simple fichier (navigateur, `POST /import`), le `.rdf` est lu sans ses PDF.
+
 **Notes** : elles sont rangées dans `notes/<clé>.md`, un dossier qui s'ouvre comme coffre Obsidian.
 - **Modifications** : celles faites hors de Biblio (Obsidian, autre éditeur) sont réindexées automatiquement.
 - **Liens** : les liens `[[clé]]` donnent les rétroliens (« citée par »).
@@ -307,6 +312,7 @@ curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:8765/api/v1/works/10.100
 | GET / POST | `/api/v1/styles` | Styles disponibles / ajouter un .csl (corps brut, `?filename=`) |
 | POST | `/api/v1/export` | Exporter (`{"works"` ou `"label", "format": "bibtex"\|"ris"\|"csljson"\|"markdown", "style"}` ; vide : toute la bibliothèque) |
 | GET / POST | `/api/v1/zotero` | Zotero ouvert ? / envoyer (`{"works"` ou `"label", "pdf"}` ; 503 si Zotero est fermé) |
+| POST | `/api/v1/import/zotero-rdf` | Importer un export Zotero RDF : `{"path"}` du fichier `.rdf` (notices, PDF, notes, tags, collections) |
 | POST | `/api/v1/packages` | Créer un paquet .biblio (`{"works"` ou `"label", "title", "searches"}`) |
 | POST | `/api/v1/packages/preview` | Aperçu d'un paquet (corps brut) |
 | POST | `/api/v1/packages/import` | Importer un paquet (corps brut) |

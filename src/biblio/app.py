@@ -31,7 +31,9 @@ def run(browser: bool = False, paths: list[str] | None = None) -> None:
     import webview
 
     webview.settings["ALLOW_DOWNLOADS"] = True  # exports, paquets .biblio
-    window = webview.create_window("Biblio", url, width=1440, height=920, min_size=(960, 600))
+    bridge = Bridge()
+    window = webview.create_window("Biblio", url, width=1440, height=920, min_size=(960, 600), js_api=bridge)
+    bridge._window = window
     pending = list(paths or [])
     loaded = threading.Event()
 
@@ -57,6 +59,19 @@ def run(browser: bool = False, paths: list[str] | None = None) -> None:
     webview.start()
     if started_here:  # la fenêtre a lancé le serveur : elle l'arrête en se fermant
         client.post("/api/v1/shutdown")
+
+
+class Bridge:
+    """Fonctions de la fenêtre appelées par l'interface (window.pywebview.api) : ce qu'une page web ne sait pas faire,
+    comme donner le chemin d'un fichier choisi (un export Zotero RDF a ses PDF dans le même dossier)."""
+
+    _window = None  # « _ » : pywebview n'expose pas cet attribut à la page
+
+    def choose_file(self, label: str, extension: str) -> str | None:
+        import webview
+
+        chosen = self._window.create_file_dialog(webview.FileDialog.OPEN, file_types=(f"{label} (*.{extension})",))
+        return chosen[0] if chosen else None
 
 
 def _replace_foreign_server(probe, cfg) -> None:

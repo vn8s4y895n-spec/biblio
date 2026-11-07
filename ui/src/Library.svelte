@@ -2,7 +2,7 @@
   import { onMount } from "svelte";
   import WorkDetail from "./WorkDetail.svelte";
   import Badges from "./lib/Badges.svelte";
-  import { EXPORTS, exportWorks, makePackage, sendToZotero } from "./lib/actions.js";
+  import { EXPORTS, exportWorks, importZoteroRdf, makePackage, sendToZotero } from "./lib/actions.js";
   import { api } from "./lib/api.js";
   import { fmt, t } from "./lib/i18n.js";
   import { toast } from "./lib/toast.js";
@@ -174,6 +174,10 @@
     {#each [["collection", collections, "library.collections"], ["tag", tags, "library.tags"]] as [kind, list, title]}
       <div class="group row">
         <span class="eyebrow grow">{$t(title)}</span>
+        {#if kind === "collection"}
+          <button class="ghost small" title={$t("zotero.rdf_help")}
+            onclick={async () => { if (await importZoteroRdf()) { refresh(); refreshLabels(); } }}>{$t("zotero.rdf_button")}</button>
+        {/if}
         <button class="ghost small" title={$t("library.new")} onclick={() => { newLabel = kind; newName = ""; }}>＋</button>
       </div>
       {#if newLabel === kind}

@@ -150,11 +150,20 @@ def add(
 
 @app.command("import")
 def import_(
-    paths: Annotated[list[Path], typer.Argument(exists=True, dir_okay=False, help="PDF, .bib, .ris, .nbib ou .json")],
+    paths: Annotated[list[Path], typer.Argument(exists=True, dir_okay=False, help="PDF, .bib, .ris, .nbib, .json ou .rdf")],
 ) -> None:
-    """Importe des PDF (DOI repéré automatiquement), des fichiers bibliographiques (BibTeX, RIS, MEDLINE, CSL-JSON)
-    ou des paquets .biblio reçus d'un autre Biblio."""
+    """Importe des PDF (DOI repéré automatiquement), des fichiers bibliographiques (BibTeX, RIS, MEDLINE, CSL-JSON),
+    un export Zotero RDF (avec ses PDF, notes, tags et collections) ou des paquets .biblio reçus d'un autre Biblio."""
     for path in paths:
+        if path.suffix.lower() == ".rdf":
+            r = _call("POST", "/api/v1/import/zotero-rdf", json={"path": str(path.resolve())}).json()
+            typer.echo(f"✓ {path.name} (Zotero RDF) : {r['read']} articles lus, {len(r['created'])} créés, "
+                       f"{len(r['completed'])} déjà présents, {r['pdfs']} PDF, {r['notes']} notes, {r['collections']} collections")  # fmt: skip
+            if r["missing_pdfs"]:
+                typer.secho(f"  ⚠ {r['missing_pdfs']} PDF absents de l'export (cocher « Exporter les fichiers » dans Zotero)", fg="yellow")
+            for e in r["errors"]:
+                typer.secho(f"  ⚠ {e['title']} : {e['error']}", fg="yellow")
+            continue
         if path.suffix.lower() == ".biblio":
             r = _call("POST", "/api/v1/packages/import", content=path.read_bytes(),
                       headers={"Content-Type": "application/x-biblio"}).json()  # fmt: skip
