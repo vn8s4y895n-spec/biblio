@@ -56,7 +56,10 @@
     "history": "Recent questions",
     "clear_history": "Clear history",
     "forget": "Remove from history",
-    "query_ai": "PubMed query written by AI (editable)"
+    "query_ai": "PubMed query written by AI (editable)",
+    "continue_claude": "Continue in Claude",
+    "continue_help": "Copies a prompt to paste into Claude Desktop (Biblio extension installed): it carries the question and these sources",
+    "claude_prompt": "Question: {question}\nPubMed query already used in Biblio: {query}\nSources already found (Biblio tool ids):\n{sources}\n\nUsing the Biblio tools, read these sources (get_summary), extend the search if needed (search_online, search_library), answer citing every sentence, then save the synthesis with save_synthesis."
   },
   "source": {
     "summary": "Biblio summary",

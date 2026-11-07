@@ -56,7 +56,10 @@
     "history": "Questions récentes",
     "clear_history": "Effacer l'historique",
     "forget": "Retirer de l'historique",
-    "query_ai": "Requête PubMed rédigée par l'IA (modifiable)"
+    "query_ai": "Requête PubMed rédigée par l'IA (modifiable)",
+    "continue_claude": "Continuer dans Claude",
+    "continue_help": "Copie un prompt à coller dans Claude Desktop (extension Biblio installée) : il reprend la question et ces sources",
+    "claude_prompt": "Question : {question}\nRequête PubMed déjà utilisée dans Biblio : {query}\nSources déjà trouvées (ids des outils Biblio) :\n{sources}\n\nAvec les outils Biblio, lis ces sources (get_summary), complète si besoin la recherche (search_online, search_library), réponds en citant chaque phrase, puis enregistre la synthèse avec save_synthesis."
   },
   "source": {
     "summary": "Résumé Biblio",

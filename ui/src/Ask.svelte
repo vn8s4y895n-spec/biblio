@@ -1,7 +1,7 @@
 <script>
   import { onMount, tick, untrack } from "svelte";
   import SourceCard from "./SourceCard.svelte";
-  import { addRecord, copyCitation, makePackage, sendToZotero } from "./lib/actions.js";
+  import { addRecord, copy, copyCitation, makePackage, sendToZotero } from "./lib/actions.js";
   import Synthesis from "./lib/Synthesis.svelte";
   import { api, apiStream } from "./lib/api.js";
   import { fmt, t } from "./lib/i18n.js";
@@ -173,6 +173,15 @@
     makePackage({ works, searches: [savedInfo.id], title: question.trim() }, question.trim().slice(0, 60));
   }
 
+  // Prompt à coller dans Claude Desktop : il reprend les sources par leur identifiant (outils MCP de Biblio).
+  function continueInClaude() {
+    const ids = result.sources.slice(0, 10).map((s, i) => {
+      const id = s.identifiers?.doi ? `doi:${s.identifiers.doi}` : s.identifiers?.pmid ? `pmid:${s.identifiers.pmid}` : s.citekey ?? s.title;
+      return `[${i + 1}] ${id}`;
+    });
+    copy($t("ask.claude_prompt", { question: question.trim(), query: result.query ?? "", sources: ids.join("\n") }));
+  }
+
   async function addAll() {
     for (let i = 0; i < result.sources.length; i++) await add(i);
   }
@@ -323,6 +332,7 @@
         {#if savedInfo}
           <button onclick={sendPackage} title={$t("package.search_help")}>{$t("package.send_search")}</button>
         {/if}
+        <button onclick={continueInClaude} disabled={!result.sources.length} title={$t("ask.continue_help")}>{$t("ask.continue_claude")}</button>
       </div>
     {:else}
       <div class="intro">

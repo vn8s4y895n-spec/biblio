@@ -33,7 +33,7 @@ uv run biblio app              # fenêtre native (démarre le serveur ; l'arrêt
 uv run biblio app --browser    # même interface dans le navigateur
 ```
 
-- **Question** : une question en langage courant (ou une requête PubMed), dans les bases en ligne ou dans ta bibliothèque. Une question en langage courant est réduite à ses mots-clés, traduits en anglais pour les termes courants d'infectiologie (vancomycine → vancomycin, BLSE → ESBL, E. faecium → Enterococcus faecium) ; la requête est assouplie si elle trouve moins de 10 résultats, et les sources qui contiennent moins de la moitié des mots-clés sont écartées. Une requête en syntaxe PubMed est envoyée telle quelle. La réponse est faite des phrases des résumés les plus proches de la question, chacune avec le numéro de sa source ; cliquer le numéro fait défiler jusqu'à la source et surligne la phrase. Sans IA pour l'instant (phase 9).
+- **Question** : une question en langage courant (ou une requête PubMed), dans les bases en ligne ou dans ta bibliothèque. Une question en langage courant est réduite à ses mots-clés, traduits en anglais pour les termes courants d'infectiologie (vancomycine → vancomycin, BLSE → ESBL, E. faecium → Enterococcus faecium) ; la requête est assouplie si elle trouve moins de 10 résultats, et les sources qui contiennent moins de la moitié des mots-clés sont écartées. Une requête en syntaxe PubMed est envoyée telle quelle. La réponse est faite des phrases des résumés les plus proches de la question, chacune avec le numéro de sa source ; cliquer le numéro fait défiler jusqu'à la source et surligne la phrase.
 - **Sources**, à droite : statut de revue (filtre « revues recommandées » actif par défaut ; les résultats masqués sont comptés), accès libre, type d'étude, effectif, **résumé Biblio** (la conclusion des auteurs), ajout à la bibliothèque (`＋` ou « Tout ajouter »). La requête envoyée aux bases est modifiable.
 - **Question d'origine** : un article ajouté depuis l'écran Question garde la question posée ; sa fiche l'affiche (« Ajouté depuis la question »), et un clic la repose.
 - **Intelligence artificielle** (facultative, Réglages → Intelligence artificielle) :
@@ -298,6 +298,12 @@ curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:8765/api/v1/works/10.100
 | GET | `/api/v1/works/{ref}/neighbours` | Articles proches et articles citants (OpenAlex) |
 | POST | `/api/v1/works/{ref}/supersede` | Remplacer un preprint par sa version publiée (`{"doi"}`) |
 | GET / PUT | `/api/v1/settings` | Réglages de l'interface (PUT : champs omis inchangés ; écrit `config.toml`) |
+| GET | `/api/v1/works/{ref}/passages` | Passages d'une notice (`q` : les plus proches) |
+| GET / POST / PATCH / DELETE | `/api/v1/webhooks` | Webhooks ; `POST /webhooks/{id}/test` envoie un essai |
+| GET / POST | `/api/v1/backups` | Sauvegardes ; POST : sauvegarder maintenant |
+| POST | `/api/v1/export/full` | Export complet (.zip, formats ouverts) |
+| GET | `/api/v1/connectors` | Configurations MCP à copier ; `/connectors/claude/biblio.mcpb` et `/biblio-skill.zip` |
+| GET | `/llms.txt` | Résumé de l'API pour un modèle de langue (sans jeton) |
 
 L'en-tête facultatif `X-Biblio-Client` (`api`, `cli`, `web`, `mcp`…) est inscrit dans le journal des modifications.
 
@@ -311,7 +317,26 @@ Dossier de données : `~/Library/Application Support/Biblio` (macOS), `%APPDATA%
 
 ## Sauvegarde
 
-En attendant `biblio backup` (phase 10) : arrêtez le serveur (`biblio stop`), puis copiez le dossier de données entier.
+Une sauvegarde est faite chaque jour dans `backups/` (les 7 dernières sont gardées) : base (copie cohérente), PDF, notes, styles, listes des revues et `config.toml` (qui contient le jeton et les clés : l'archive est lisible par toi seul). Le modèle sémantique n'y est pas, il se retélécharge.
+
+```bash
+biblio backup                 # maintenant, dans backups/
+biblio backup ~/Desktop       # ou dans un autre dossier (disque externe…)
+biblio restore backups/biblio-2026-11-07-120000.tar.gz   # arrête le serveur ; les données actuelles sont mises de côté
+biblio export-all -o export.zip   # export complet lisible sans Biblio : CSL-JSON, BibTeX, RIS, notes, PDF, recherches
+```
+
+## Claude et les autres clients MCP
+
+`biblio mcp` est un serveur MCP (stdio ; `biblio mcp --http` pour les clients qui se connectent à une adresse, jeton exigé). Il propose 13 outils (recherche en ligne filtrée par la liste des revues, bibliothèque, résumés, passages, ajout, tags, collections, notes, `save_synthesis`, bibliographie, paquet, veille), 4 prompts et des instructions de méthode transmises au client.
+
+- **Claude Desktop** : Réglages → Connecteurs → « Extension .mcpb », puis double-clic sur le fichier. Le skill « Biblio » (même écran) s'importe dans Claude : Réglages → Capacités → Skills.
+- **Claude Code** : `claude mcp add biblio -- <chemin>/biblio mcp` (commande exacte dans Réglages → Connecteurs).
+- Les synthèses enregistrées par Claude apparaissent dans l'écran Question (recherches enregistrées, origine « claude »), avec chaque phrase vérifiée contre ses sources. Depuis une recherche, « Continuer dans Claude » copie un prompt qui reprend la question et les sources.
+
+## Webhooks
+
+Réglages → Connecteurs → Webhooks, ou `POST /api/v1/webhooks {"url", "events"}`. Événements : `work.created`, `search.saved`, `alert.created`. Chaque envoi est un POST JSON `{"event", "at", "data"}` avec l'en-tête `X-Biblio-Signature: sha256=<HMAC-SHA256 du corps avec le secret>`.
 
 ## Tests
 
