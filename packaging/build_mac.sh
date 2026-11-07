@@ -5,6 +5,11 @@
 set -e
 cd "$(dirname "$0")/.."
 export PATH="$HOME/Library/Python/3.14/bin:$HOME/.local/bin:$PATH"
+# Construction sur un Mac (hors GitHub Actions, qui met le numéro de la version publiée) : même numéro que la
+# dernière version publiée, pour que l'app ne propose pas en « mise à jour » une version plus ancienne qu'elle.
+if [ -z "$GITHUB_ACTIONS" ] && git fetch -q --tags 2>/dev/null; TAG=$(git tag --list 'v*' --sort=-v:refname | head -1) && [ -n "$TAG" ]; then
+  python3 packaging/set_version.py "$TAG"
+fi
 VERSION=$(uv run python -c "import biblio; print(biblio.__version__)")
 
 npm --prefix ui run build
