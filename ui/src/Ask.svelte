@@ -1,8 +1,8 @@
 <script>
   import { onMount, tick, untrack } from "svelte";
   import SourceCard from "./SourceCard.svelte";
-  import { copyCitation, makePackage, sendToZotero } from "./lib/actions.js";
-  import { api, identifierOf } from "./lib/api.js";
+  import { addRecord, copyCitation, makePackage, sendToZotero } from "./lib/actions.js";
+  import { api } from "./lib/api.js";
   import { fmt, t } from "./lib/i18n.js";
   import { toast } from "./lib/toast.js";
 
@@ -113,20 +113,7 @@
     if (rec.in_library || adding[i]) return;
     adding[i] = true;
     try {
-      const id = identifierOf(rec);
-      const out = id
-        ? await api("/works", { method: "POST", body: { identifier: id, question: question.trim(), scope: result.scope } })
-        : await api("/works/manual", {
-            method: "POST",
-            body: {
-              title: rec.title, year: rec.year, container_title: rec.container_title, abstract: rec.abstract,
-              authors: (rec.authors ?? []).map((a) => [a.family, a.given].filter(Boolean).join(", ")),
-              question: question.trim(),
-            },
-          });
-      result.sources[i] = { ...rec, in_library: out.work.citekey };
-      const warn = out.warnings?.length ? ` (${out.warnings.join(" ; ")})` : "";
-      toast(`${$t("ask.added")} ${out.work.citekey}${warn}`, warn ? "warn" : "ok");
+      result.sources[i] = { ...rec, in_library: await addRecord(rec, question.trim(), result.scope) };
     } catch (e) {
       toast(e.message, "error");
     } finally {
@@ -138,6 +125,11 @@
   async function toZotero(i) {
     if (!result.sources[i].in_library) await add(i);
     if (result.sources[i].in_library) sendToZotero({ works: [result.sources[i].in_library] });
+  }
+
+  async function follow(on) {
+    savedInfo = await api(`/searches/${savedInfo.id}/watch`, { method: "PUT", body: { days: on ? 7 : null } });
+    toast(on ? $t("watch.followed") : $t("watch.unfollowed"), "ok");
   }
 
   function sendPackage() {
@@ -248,6 +240,12 @@
 
       <div class="row wrap">
         <button onclick={save} disabled={!!savedInfo || !result.sources.length}>{savedInfo ? `✓ ${$t("ask.saved_short")}` : $t("ask.save")}</button>
+        {#if savedInfo && savedInfo.scope === "online"}
+          <label class="row small follow">
+            <input type="checkbox" checked={!!savedInfo.watch_days} onchange={(e) => follow(e.target.checked)} />
+            {$t("watch.follow")}
+          </label>
+        {/if}
         {#if savedInfo}
           <button onclick={sendPackage} title={$t("package.search_help")}>{$t("package.send_search")}</button>
         {/if}

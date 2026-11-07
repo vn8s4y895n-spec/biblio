@@ -3,6 +3,7 @@
   import Ask from "./Ask.svelte";
   import Library from "./Library.svelte";
   import Settings from "./Settings.svelte";
+  import Watch from "./Watch.svelte";
   import { api, token } from "./lib/api.js";
   import { lang, systemLang, t } from "./lib/i18n.js";
   import { toast, toasts } from "./lib/toast.js";
@@ -15,7 +16,14 @@
   let incoming = $state(null); // paquet .biblio déposé : { file, preview }
   let importing = $state(false);
 
-  const view = $derived(route.startsWith("/library") ? "library" : route.startsWith("/settings") ? "settings" : "ask");
+  const view = $derived(
+    route.startsWith("/library") ? "library" : route.startsWith("/settings") ? "settings" : route.startsWith("/watch") ? "watch" : "ask",
+  );
+  let unseen = $state(0); // alertes de veille non lues
+
+  async function refreshAlerts() {
+    try { unseen = (await api("/alerts", { params: { unseen_only: true } })).unseen; } catch {}
+  }
 
   function applyPrefs(s) {
     settings = s;
@@ -27,7 +35,9 @@
     const onHash = () => (route = location.hash.slice(1) || "/");
     addEventListener("hashchange", onHash);
     if (token) api("/settings").then(applyPrefs).catch((e) => toast(e.message, "error"));
-    return () => removeEventListener("hashchange", onHash);
+    refreshAlerts();
+    const timer = setInterval(refreshAlerts, 60_000);
+    return () => { removeEventListener("hashchange", onHash); clearInterval(timer); };
   });
 
   $effect(() => {
@@ -97,6 +107,7 @@
       <nav>
         <a href="#/" class:active={view === "ask"}>{$t("nav.ask")}</a>
         <a href="#/library" class:active={view === "library"}>{$t("nav.library")}</a>
+        <a href="#/watch" class:active={view === "watch"}>{$t("nav.watch")}{#if unseen}<span class="count">{unseen}</span>{/if}</a>
       </nav>
       <div class="grow"></div>
       <div class="lang" role="group" aria-label={$t("settings.language")}>
@@ -114,6 +125,8 @@
         <Ask {route} />
       {:else if view === "library"}
         <Library {route} version={libraryVersion} />
+      {:else if view === "watch"}
+        <Watch onchange={(n) => (unseen = n)} />
       {:else if settings}
         <Settings {settings} onchange={applyPrefs} />
       {/if}
@@ -184,6 +197,10 @@
   nav a:hover, .gear:hover { background: var(--surface-2); color: var(--text); text-decoration: none; }
   nav a.active, .gear.active { color: var(--text); background: var(--surface-2); }
   .gear { display: grid; place-items: center; padding: 6px; }
+  .count {
+    margin-left: 6px; background: var(--danger); color: white; border-radius: 99px; font-size: 11px; font-weight: 700;
+    padding: 0 6px; line-height: 17px; display: inline-block;
+  }
   .lang { display: flex; }
   .lang .on { color: var(--text); font-weight: 650; }
   .body { flex: 1; min-height: 0; }

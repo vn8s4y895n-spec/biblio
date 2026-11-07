@@ -114,7 +114,7 @@ def save_search(conn: sqlite3.Connection, data: dict) -> dict:
 
 def searches(conn: sqlite3.Connection) -> list[dict]:
     rows = conn.execute(
-        "SELECT id, question, origin, scope, created_at, json_array_length(sources_json) AS count"
+        "SELECT id, question, origin, scope, created_at, watch_days, last_run, json_array_length(sources_json) AS count"
         " FROM saved_searches ORDER BY created_at DESC, id DESC"
     )
     return [dict(r) for r in rows]

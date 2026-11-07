@@ -108,6 +108,23 @@ def _matches(rec: dict, f: Filters) -> bool:
     return True
 
 
+def journal_status(conn: sqlite3.Connection, rec: dict) -> dict:
+    return journals.lookup(conn, issn=rec.get("issn_print"), issn_e=rec.get("issn_e"), nlmid=rec.get("nlmid"),
+                           abbrev=rec.get("container_abbrev"), csl_type=rec.get("csl_type") or "article-journal")  # fmt: skip
+
+
+def in_library(conn: sqlite3.Connection, rec: dict) -> str | None:
+    """Clé de citation de la notice si l'article est déjà dans la bibliothèque."""
+    work_id = core.find_by_identifiers(conn, rec["identifiers"])
+    return conn.execute("SELECT citekey FROM works WHERE id = ?", (work_id,)).fetchone()[0] if work_id else None
+
+
+def result_key(rec: dict) -> str:
+    """Identité stable d'un résultat (DOI > PMID > PMCID > titre + année), pour savoir s'il a déjà été vu."""
+    keys = _keys(rec)
+    return ":".join(map(str, keys[0])) if keys else f"title:{core.normalize(rec.get('title'))}"
+
+
 def search(conn: sqlite3.Connection, text: str, sources: list[str] | None = None, per_source: int = 25,
            limit: int = 50, filters: Filters | None = None, rerank: bool = True) -> dict:  # fmt: skip
     """Recherche fédérée. Les filtres de date et de MeSH sont transmis aux sources qui les comprennent,
@@ -126,18 +143,14 @@ def search(conn: sqlite3.Connection, text: str, sources: list[str] | None = None
 
     results, hidden = [], {}
     for rec in merge_results(by_source):
-        rec["journal_status"] = journals.lookup(
-            conn, issn=rec.get("issn_print"), issn_e=rec.get("issn_e"), nlmid=rec.get("nlmid"),
-            abbrev=rec.get("container_abbrev"), csl_type=rec.get("csl_type") or "article-journal",
-        )  # fmt: skip
+        rec["journal_status"] = journal_status(conn, rec)
         if not _matches(rec, filters):
             continue
         status = rec["journal_status"]["status"]
         if filters.journal_status and status not in filters.journal_status:
             hidden[status] = hidden.get(status, 0) + 1
             continue
-        work_id = core.find_by_identifiers(conn, rec["identifiers"])
-        rec["in_library"] = conn.execute("SELECT citekey FROM works WHERE id = ?", (work_id,)).fetchone()[0] if work_id else None
+        rec["in_library"] = in_library(conn, rec)
         results.append(rec)
 
     reranked = rerank and _semantic_rerank(text, results)

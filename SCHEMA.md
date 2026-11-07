@@ -4,7 +4,7 @@ SQLite en mode WAL, clés étrangères actives. Les migrations sont dans `src/bi
 
 Ce document décrit le schéma **réellement en place**. Les tables prévues pour les phases suivantes sont dans [PLAN.md](PLAN.md).
 
-## `schema_migrations` (version actuelle : 8)
+## `schema_migrations` (version actuelle : 9)
 
 | Colonne | Type | Rôle |
 |---|---|---|
@@ -164,6 +164,14 @@ Les sources sont copiées telles quelles : une recherche enregistrée se relit �
 
 La question posée sur l'écran Question qui a mené à ajouter l'article : `(work_id, question)` en clé primaire, `scope` (`online` ou `library`), `added_at`. Un article ajouté de nouveau depuis une autre question en garde une ligne de plus ; la même question n'est gardée qu'une fois. Reprises à la fusion de deux notices.
 
+## Veille (migration 9)
+
+- `saved_searches` reçoit `watch_days` (NULL : non suivie ; sinon intervalle de relance en jours) et `last_run`.
+- `search_seen (search_id, key, first_seen)` : résultats déjà vus d'une recherche suivie. `key` : `doi:…`, `pmid:…`, `pmcid:…` ou titre normalisé + année. Les sources enregistrées avec la recherche comptent comme vues.
+- `work_updates (work_id, kind, notice_doi, date, source, found_at)` : avis sur un article. `kind` : type Crossref (`retraction`, `expression_of_concern`, `correction`, `erratum`…) ou `published` (version publiée d'un preprint, `notice_doi` = DOI de la revue). `source` : `retraction-watch`, `publisher`, `crossref`. Les avis sont repris à la fusion de deux notices, sauf `published`.
+- `alerts (id, kind, work_id, search_id, data_json, created_at, seen_at)` : alertes à lire. `kind` : `new_results` (`data_json` : question, nombre, notices nouvelles), `retraction`, `concern`, `correction`, `published` (`data_json` : DOI de l'avis, date, source). Une seule alerte non lue par article et par type.
+- Identifiant `preprint-doi` : DOI d'un preprint fusionné dans sa version publiée.
+
 ## Liste des revues recommandées (migration 2)
 
 Source : la liste de la Conférence des doyens et du CNU santé, publiée par Sorbonne Université. Chaque version téléchargée ou importée est conservée. La version **en vigueur** est la dernière enregistrée (`max(id)`).
@@ -235,6 +243,7 @@ Cache des recherches en ligne (un jour) et des réponses Unpaywall (sept jours).
 | `journals.last_error` | Dernière erreur de vérification (supprimée après une vérification réussie) |
 | `index.version` | Version de la méthode d'extraction du texte des PDF ; si elle change, les PDF sont réindexés au démarrage |
 | `librarybib.state` | État de la bibliothèque (dernier changement, nombre de notices) lors de la dernière écriture de `library.bib` |
+| `watch.library_check` | Dernière vérification des articles de la bibliothèque (rétractations, preprints publiés) |
 | `downloads.since` | Début de la surveillance des Téléchargements (horodatage Unix) : les fichiers plus anciens sont ignorés |
 
 ## Exemples de requêtes

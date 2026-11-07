@@ -57,6 +57,7 @@
         if (filter.type === "read_status") params.read_status = filter.value;
         if (filter.type === "label") params.label = filter.value;
         if (filter.type === "journal") params.journal_status = filter.value;
+        if (filter.type === "retracted") params.retracted = true;
         const out = await api("/works", { params });
         items = more ? [...items, ...out.items] : out.items;
         total = out.total;
@@ -196,6 +197,7 @@
     {#each ["recommended", "not_listed", "withdrawn", "preprint"] as value}
       <button class="item" class:on={isOn({ type: "journal", value })} onclick={() => choose({ type: "journal", value })}>{$t(`status.${value}.label`)}</button>
     {/each}
+    <button class="item" class:on={isOn({ type: "retracted" })} onclick={() => choose({ type: "retracted" })}>⚠ {$t("watch.retracted_plural")}</button>
   </nav>
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div class="splitter" onpointerdown={(e) => resize(0, e)}></div>

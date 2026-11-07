@@ -24,6 +24,33 @@ def fetch(doi: str) -> dict | None:
     return parse(response.json()["message"]) if response else None
 
 
+NOTICES_BATCH = 40  # DOI par requête (filtre « doi:… » répété)
+NOTICES_TTL = 24 * 3600
+
+
+def _date(parts: dict | None) -> str | None:
+    values = ((parts or {}).get("date-parts") or [[None]])[0]
+    return "-".join(f"{int(v):02d}" for v in values if v) or None
+
+
+def notices(dois: list[str]) -> dict[str, dict]:
+    """Pour chaque DOI : les avis publiés à son sujet (`updates` : rétractation, correction, expression de
+    préoccupation… ; Crossref intègre les données de Retraction Watch) et, pour un preprint, le DOI de sa version
+    publiée (`published`). Les DOI sont interrogés par lots."""
+    out: dict[str, dict] = {}
+    for i in range(0, len(dois), NOTICES_BATCH):
+        chunk = dois[i : i + NOTICES_BATCH]
+        response = http.get(API.rstrip("/"), {"filter": ",".join(f"doi:{d}" for d in chunk), "rows": len(chunk)}, ttl=NOTICES_TTL)
+        for item in response.json()["message"]["items"] if response else []:
+            updates = {}
+            for u in item.get("updated-by") or []:
+                key = (u.get("type") or "update", (u.get("DOI") or "").lower())
+                updates.setdefault(key, {"kind": key[0], "doi": key[1], "date": _date(u.get("updated")), "source": u.get("source")})
+            published = [r["id"].lower() for r in (item.get("relation") or {}).get("is-preprint-of", []) if r.get("id-type") == "doi"]
+            out[item["DOI"].lower()] = {"updates": list(updates.values()), "published": published}
+    return out
+
+
 def search(q: Query) -> list[dict]:
     """Crossref ne comprend que le texte libre : la requête est simplifiée."""
     params = {"query.bibliographic": q.plain, "rows": q.limit}

@@ -1,7 +1,7 @@
 # Biblio
 
 Gestionnaire de bibliographie local, autonome et ouvert, pensé pour la recherche en santé.
-Le projet avance par phases : voir [PLAN.md](PLAN.md). Ce README décrit ce qui fonctionne **aujourd'hui** (phases 1 à 7).
+Le projet avance par phases : voir [PLAN.md](PLAN.md). Ce README décrit ce qui fonctionne **aujourd'hui** (phases 1 à 8).
 
 ## Installation (développement)
 
@@ -40,6 +40,11 @@ uv run biblio app --browser    # même interface dans le navigateur
 - **Bibliothèque** en trois panneaux redimensionnables : filtres (statut de lecture, collections, tags, statut de revue), liste (recherche plein texte et par le sens, sélection multiple, glisser une notice sur une collection), fiche (statut de lecture, note étoilée, tags, collections, résumé, MeSH, **lecteur PDF**, **note Markdown**).
 - **Glisser-déposer** n'importe où : PDF, ou fichiers .bib, .ris, .nbib, .json.
 - **Citer, exporter, envoyer** : la fiche affiche la référence dans le style choisi (Vancouver par défaut) ; boutons et sélection multiple pour exporter (BibTeX, RIS, CSL-JSON, liste Markdown), envoyer dans Zotero ou créer un paquet `.biblio`. Une recherche enregistrée s'envoie aussi en paquet. Un paquet `.biblio` déposé sur la fenêtre s'ouvre en aperçu avant import.
+- **Veille** (onglet de l'en-tête, avec le nombre d'alertes non lues) :
+  - **recherches suivies** : une recherche enregistrée se suit (chaque jour, semaine ou mois) ; seuls les articles jamais vus sont signalés, avec un bouton d'ajout ;
+  - **articles de la bibliothèque**, vérifiés chaque semaine : rétractation, expression de préoccupation, correction (Crossref, qui intègre les données de Retraction Watch), et version publiée d'un preprint (Crossref, et l'API de bioRxiv / medRxiv, qui ne déclarent pas ce lien à Crossref). Un preprint se remplace d'un clic par sa version publiée (fusion ; son DOI reste connu sous `preprint-doi`) ;
+  - un article rétracté porte un badge « ⚠ Rétracté », un bandeau dans sa fiche, et un filtre dans la bibliothèque.
+- **Articles proches** (fiche) : articles du même sujet et articles récents qui le citent (OpenAlex).
 - **Clavier** : `/` question ou recherche, `j` / `k` élément suivant / précédent, `a` ajouter la source, `c` copier la citation, `z` envoyer dans Zotero, `x` sélectionner, `Échap` quitter le champ, `⌘S` enregistrer la note.
 - **Réglages** : langue (français, anglais ou celle du système), thème (clair, sombre ou celui du système), e-mail de contact et clés des bases, surveillance des Téléchargements, téléchargement du modèle sémantique et avancement de l'indexation, vérification de la liste des revues. Ils sont écrits dans `config.toml`.
 - **Jeton** : l'interface le reçoit dans l'adresse (`#token=…`, partie jamais envoyée au serveur). Les fichiers de l'interface sont servis sans jeton ; aucune donnée ne l'est.
@@ -248,7 +253,7 @@ curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:8765/api/v1/works/10.100
 | POST | `/api/v1/duplicates/dismiss` | Écarter (`{"a", "b"}`) |
 | POST | `/api/v1/notes/sync` | Réindexer les notes modifiées hors de Biblio |
 | POST | `/api/v1/inbox/scan` | Traiter la boîte d'entrée (et les Téléchargements si activé) maintenant |
-| GET | `/api/v1/works?limit=&offset=&journal_status=&label=&read_status=` | Lister (statut de revue répétable, collection ou tag, statut de lecture ou `unread`) |
+| GET | `/api/v1/works?limit=&offset=&journal_status=&label=&read_status=&retracted=` | Lister (statut de revue répétable, collection ou tag, statut de lecture ou `unread`, rétractés) |
 | GET | `/api/v1/works/{ref}` | Lire (id, clé, DOI, PMID) |
 | GET | `/api/v1/works/{ref}/changes` | Journal des modifications |
 | GET | `/api/v1/search/online?q=&source=&per_source=&limit=&year_from=&year_to=&study_type=&open_access=&mesh=&journal=&journal_status=&all_journals=` | Recherche fédérée |
@@ -273,6 +278,13 @@ curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:8765/api/v1/works/10.100
 | POST | `/api/v1/packages` | Créer un paquet .biblio (`{"works"` ou `"label", "title", "searches"}`) |
 | POST | `/api/v1/packages/preview` | Aperçu d'un paquet (corps brut) |
 | POST | `/api/v1/packages/import` | Importer un paquet (corps brut) |
+| PUT | `/api/v1/searches/{id}/watch` | Suivre une recherche (`{"days": 7}` ; `null` : ne plus suivre) |
+| POST | `/api/v1/searches/{id}/run` | Relancer maintenant (nouveaux résultats) |
+| GET | `/api/v1/alerts?unseen_only=` | Alertes de veille |
+| POST | `/api/v1/alerts/seen` | Marquer comme lues (`{"ids"}` ; vide : toutes) |
+| POST | `/api/v1/watch/library` | Vérifier maintenant les articles de la bibliothèque |
+| GET | `/api/v1/works/{ref}/neighbours` | Articles proches et articles citants (OpenAlex) |
+| POST | `/api/v1/works/{ref}/supersede` | Remplacer un preprint par sa version publiée (`{"doi"}`) |
 | GET / PUT | `/api/v1/settings` | Réglages de l'interface (PUT : champs omis inchangés ; écrit `config.toml`) |
 
 L'en-tête facultatif `X-Biblio-Client` (`api`, `cli`, `web`, `mcp`…) est inscrit dans le journal des modifications.
@@ -297,7 +309,7 @@ uv run pytest
 
 Les tests n'accèdent jamais au réseau :
 - les réponses de Crossref et PubMed sont enregistrées dans `tests/fixtures/` (essai MERINO, JAMA 2018) ;
-- une recherche réelle auprès des 5 sources est enregistrée dans `tests/fixtures/search/`. La réponse de Semantic Scholar est écrite à la main d'après son format documenté, le service ayant refusé toutes les requêtes sans clé ;
+- une recherche réelle auprès des 5 sources est enregistrée dans `tests/fixtures/search/`, et les réponses réelles de la veille (Crossref : article Surgisphere rétracté, preprint publié ; OpenAlex : articles proches de MERINO ; medRxiv) dans `tests/fixtures/watch/`. La réponse de Semantic Scholar est écrite à la main d'après son format documenté, le service ayant refusé toutes les requêtes sans clé ;
 - le site de Sorbonne Université est simulé, avec des fichiers .xlsx générés par les tests ;
 - les PDF de test sont générés par les tests (`make_pdf` dans `tests/conftest.py`) : texte réel, titre, DOI en XMP ;
 - les deux fichiers de traduction (`ui/src/locales/fr.json`, `en.json`) doivent avoir les mêmes clés, et toute clé utilisée dans l'interface doit exister ;

@@ -1,6 +1,6 @@
 # Biblio — Plan
 
-Statut : **plan validé le 2026-11-06. Phases 1 à 7 terminées** (phases 6 et 7 : 2026-11-07). Prochaine étape : phase 8.
+Statut : **plan validé le 2026-11-06. Phases 1 à 8 terminées** (phases 6 à 8 : 2026-11-07). Prochaine étape : phase 9.
 
 ## Objectif
 
@@ -362,7 +362,19 @@ Chaque phase se termine par : tests verts (aucun appel réseau, réponses enregi
    - *Constats et corrections* :
      - les auteurs collectifs (« MERINO Trial Investigators and the … ») étaient coupés à « and » en BibTeX et lus comme « Prénom Nom » en RIS : protégés à l'export, reconnus à l'import ;
      - un paquet contenant un PDF dont l'empreinte ne correspond pas est importé sans ce PDF, avec un avertissement.
-8. **Veille et suivi.** Recherches relancées périodiquement, articles proches (OpenAlex / Semantic Scholar), preprint → publié, rétractations (Crossref / Retraction Watch).
+8. ✅ **Veille et suivi.** Recherches relancées périodiquement, articles proches (OpenAlex / Semantic Scholar), preprint → publié, rétractations (Crossref / Retraction Watch).
+   - *Bilan* : 168 tests verts. Écran **Veille** (alertes, recherches suivies), badge et filtre « Rétracté », bandeau d'avis dans la fiche, articles proches, remplacement d'un preprint par sa version publiée.
+   - *Démo réelle* (bibliothèque d'essai) :
+     - vérification de 10 articles en une requête Crossref (0,4 s) : l'article Surgisphere du Lancet (2020) est signalé rétracté (Retraction Watch), avec son expression de préoccupation et sa correction ; un preprint medRxiv est signalé publié (Artif Intell Med 2024), puis remplacé d'un clic par sa version publiée, PDF compris ;
+     - recherche suivie relancée en 2 s ; articles proches de l'étude Surgisphere : l'essai RECOVERY (NEJM) en tête.
+   - *Écarts au plan* :
+     - **bioRxiv et medRxiv par leur propre API** : ils ne déclarent pas la version publiée à Crossref (0 lien trouvé), alors que ce sont les principaux serveurs de preprints en santé ;
+     - **articles proches par OpenAlex seul** (même sujet + articles citants récents) : Semantic Scholar refuse sans clé ; à ajouter quand tu auras ta clé ;
+     - les preprints arXiv ne sont pas suivis (pas de lien dans Crossref) ;
+     - Retraction Watch est interrogé à travers Crossref (qui intègre sa base depuis 2023) : pas de téléchargement de la base complète.
+   - *Constats et corrections* :
+     - Crossref publie parfois plusieurs avis pour un même article (7 pour l'étude Surgisphere, dont des errata) : une seule alerte par article et par type, un seul bandeau dans la fiche (le plus grave, Retraction Watch en priorité), les autres repliés ;
+     - **la page de l'interface restait en cache** : après une mise à jour, la fenêtre pouvait afficher l'ancienne version. Elle est maintenant revalidée à chaque ouverture.
 9. **IA.** Module LLM interchangeable, question → requête PubMed, réponse rédigée avec citations vérifiées, résumé rédigé, adaptateurs des moteurs IA externes (selon les API disponibles, voir les risques).
 10. **Interopérabilité et connecteurs.** OpenAPI complet, `openapi.json` + `llms.txt`, serveur MCP (stdio + HTTP) avec outils, instructions, prompts et ressources, écran Réglages → Connecteurs, **intégration Claude** (extension `.mcpb`, skill, commande Claude Code, synthèses visibles dans Biblio), webhooks signés HMAC, `backup` / `restore` testés, export complet en formats ouverts. Test de bout en bout : un client MCP simulé déroule le skill (recherche → filtre → enregistrement de la synthèse) et on vérifie le résultat en base.
 11. **Application à double-cliquer.** Paquet macOS (`.app` dans un `.dmg`), puis Windows (`.exe`), association des fichiers `.biblio` pour l'ouverture par double-clic, mise à jour de l'application. README et guide d'installation pour les collègues (FR + EN).

@@ -1,6 +1,6 @@
 // Actions communes aux écrans : citation, export, Zotero, paquets .biblio.
 import { get } from "svelte/store";
-import { api } from "./api.js";
+import { api, identifierOf } from "./api.js";
 import { t } from "./i18n.js";
 import { toast } from "./toast.js";
 
@@ -59,4 +59,21 @@ export async function copyCitation(target) {
   } catch (e) {
     toast(e.message, "error");
   }
+}
+
+// Ajoute une notice trouvée en ligne (par identifiant, ou saisie manuelle sans identifiant). Renvoie sa clé.
+export async function addRecord(rec, question = null, scope = "online") {
+  const id = identifierOf(rec);
+  const out = id
+    ? await api("/works", { method: "POST", body: { identifier: id, question, scope } })
+    : await api("/works/manual", {
+        method: "POST",
+        body: {
+          title: rec.title, year: rec.year, container_title: rec.container_title, abstract: rec.abstract, question,
+          authors: (rec.authors ?? []).map((a) => [a.family, a.given].filter(Boolean).join(", ")),
+        },
+      });
+  const warn = out.warnings?.length ? ` (${out.warnings.join(" ; ")})` : "";
+  toast(`${get(t)("ask.added")} ${out.work.citekey}${warn}`, warn ? "warn" : "ok");
+  return out.work.citekey;
 }

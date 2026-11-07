@@ -1,6 +1,7 @@
 <script>
   import { onDestroy, onMount } from "svelte";
   import Badges from "./lib/Badges.svelte";
+  import RecordList from "./lib/RecordList.svelte";
   import { EXPORTS, copyCitation, exportWorks, makePackage, sendToZotero } from "./lib/actions.js";
   import { api } from "./lib/api.js";
   import { doiUrl } from "./lib/format.js";
@@ -21,6 +22,8 @@
   let styles = $state([]);
   let style = $state("");
   let cited = $state("");
+  let neighbours = $state(null);
+  let loadingNeighbours = $state(false);
 
   const collectionsOf = $derived(new Set(work?.labels.filter((l) => l.kind === "collection").map((l) => l.id)));
   const tagsOf = $derived(work?.labels.filter((l) => l.kind === "tag") ?? []);
@@ -41,6 +44,17 @@
     if (pdfUrl) URL.revokeObjectURL(pdfUrl);
     if (!noteSaved) saveNote();
   });
+
+  async function loadNeighbours() {
+    loadingNeighbours = true;
+    try {
+      neighbours = await api(`/works/${work.id}/neighbours`);
+    } catch (e) {
+      toast(e.message, "error");
+    } finally {
+      loadingNeighbours = false;
+    }
+  }
 
   async function cite() {
     const out = await api(`/works/${work.id}/citation`, { params: { style } });
@@ -105,6 +119,16 @@
     navigator.clipboard.writeText(text).then(() => toast($t("detail.copied"), "ok"));
   }
 
+  // Avis publiés sur l'article, le plus grave d'abord (Retraction Watch avant l'éditeur à gravité égale).
+  const TONES = { retraction: 0, removal: 0, withdrawal: 0, expression_of_concern: 1 };
+  const notices = $derived(
+    (work?.updates ?? [])
+      .filter((u) => u.kind !== "published")
+      .map((u) => ({ ...u, rank: TONES[u.kind] ?? 2, tone: ["retraction", "concern", "correction"][TONES[u.kind] ?? 2] }))
+      .sort((a, b) => a.rank - b.rank || (b.source === "retraction-watch") - (a.source === "retraction-watch")),
+  );
+  const noticeLine = (u) => [u.date && $fmt.date(u.date), u.source === "retraction-watch" && "Retraction Watch"].filter(Boolean).join(" · ");
+
   const authors = $derived(work?.authors.map((a) => [a.given, a.family].filter(Boolean).join(" ")).join(", "));
 </script>
 
@@ -113,6 +137,20 @@
 {#if work}
   <div class="detail">
     <header>
+      {#if notices.length}
+        <div class="notice {notices[0].tone}">
+          <strong>{$t(`watch.notice.${notices[0].tone}`)}</strong> · {noticeLine(notices[0])}
+          · <a href="https://doi.org/{notices[0].notice_doi}" target="_blank" rel="noreferrer">{$t("watch.read_notice")} ↗</a>
+          {#if notices.length > 1}
+            <details>
+              <summary>{$t("detail.other_notices", { n: notices.length - 1 })}</summary>
+              {#each notices.slice(1) as u}
+                <div>{$t(`watch.notice.${u.tone}`)} · {noticeLine(u)} · <a href="https://doi.org/{u.notice_doi}" target="_blank" rel="noreferrer">{u.notice_doi}</a></div>
+              {/each}
+            </details>
+          {/if}
+        </div>
+      {/if}
       <h2 class="title-serif">{work.title}</h2>
       <p class="muted small authors">{authors}</p>
       <p class="small">
@@ -224,6 +262,24 @@
             </div>
           </div>
         {/if}
+        {#if work.identifiers.doi}
+          <div class="block">
+            <div class="eyebrow">{$t("detail.neighbours")}</div>
+            {#if neighbours}
+              {#if neighbours.related.length}
+                <div class="small muted">{$t("detail.related")}</div>
+                <RecordList bind:records={neighbours.related} />
+              {/if}
+              {#if neighbours.citing.length}
+                <div class="small muted">{$t("detail.citing")}</div>
+                <RecordList bind:records={neighbours.citing} />
+              {/if}
+              {#if !neighbours.related.length && !neighbours.citing.length}<p class="small muted">{$t("detail.no_neighbours")}</p>{/if}
+            {:else}
+              <button class="small" disabled={loadingNeighbours} onclick={loadNeighbours}>{loadingNeighbours ? "…" : $t("detail.show_neighbours")}</button>
+            {/if}
+          </div>
+        {/if}
         <p class="small faint">{$t("detail.added_on", { date: $fmt.date(work.created_at) })}</p>
       {:else if tab === "pdf"}
         {#if pdfUrl}
@@ -271,6 +327,11 @@
   header p { margin: 0; }
   .authors { max-height: 3em; overflow: hidden; }
   .ids { gap: 6px; }
+  .notice { font-size: 13px; padding: 7px 11px; border-radius: 7px; background: var(--grey-soft); }
+  .notice.retraction { background: color-mix(in srgb, var(--danger) 14%, transparent); color: var(--danger); }
+  .notice.concern { background: var(--warn-soft); color: var(--warn); }
+  .notice details { margin-top: 4px; color: var(--muted); }
+  .notice summary { cursor: pointer; }
   .actions { gap: 6px; margin-top: 4px; }
   select.small { padding: 2px 6px; font-size: 12.5px; max-width: 220px; }
   .cited { margin: 0; font-size: 13.5px; background: var(--surface-2); padding: 8px 10px; border-radius: 7px; user-select: text; }

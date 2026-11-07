@@ -5,7 +5,8 @@
   "nav": {
     "ask": "Ask",
     "library": "Library",
-    "settings": "Settings"
+    "settings": "Settings",
+    "watch": "Watch"
   },
   "common": {
     "cancel": "Cancel",
@@ -164,7 +165,13 @@
     "links": "Cites",
     "backlinks": "Cited by",
     "questions": "Added from the question",
-    "ask_again": "Ask this question again"
+    "ask_again": "Ask this question again",
+    "neighbours": "Related articles",
+    "related": "On the same topic (OpenAlex)",
+    "citing": "Recent articles citing it",
+    "no_neighbours": "OpenAlex knows no related article.",
+    "show_neighbours": "Show related articles",
+    "other_notices": "{n} other notice(s)"
   },
   "drop": {
     "hint": "Drop to import into Biblio",
@@ -257,5 +264,48 @@
     "rules": "An article already present is completed, never duplicated. A note different from yours is appended. Your reading status and stars do not change.",
     "import": "Import",
     "imported": "Package imported: {created} added, {completed} completed, {pdfs} PDFs, {notes} notes"
+  },
+  "watch": {
+    "follow": "Follow (weekly)",
+    "followed": "Search followed: new articles will show in Watch",
+    "unfollowed": "Search no longer followed",
+    "retracted": "Retracted",
+    "retracted_plural": "Retracted",
+    "retracted_help": "Retracted article (published notice; Crossref and Retraction Watch data)",
+    "never": "Not followed",
+    "daily": "Daily",
+    "weekly": "Weekly",
+    "monthly": "Monthly",
+    "interval": "Frequency",
+    "checked": "{n} articles checked · {alerts} new alert(s)",
+    "new_found": "{n} new articles",
+    "superseded": "Published version added, preprint merged: {key}",
+    "all_seen": "Mark all as read",
+    "alerts": "Alerts",
+    "library_checked": "Library checked on {date}",
+    "check_library": "Check now",
+    "no_alerts": "No alerts. The library is checked weekly (retractions, corrections, published preprints), and followed searches at their frequency.",
+    "kind": {
+      "new_results": "New articles",
+      "retraction": "Retraction",
+      "concern": "Expression of concern",
+      "correction": "Correction",
+      "published": "Preprint published"
+    },
+    "mark_seen": "Mark as read",
+    "new_results": "{n} new articles for the search",
+    "show_results": "Show articles",
+    "notice": {
+      "retraction": "Article retracted",
+      "concern": "Expression of concern published",
+      "correction": "Correction published",
+      "published": "Published in a journal"
+    },
+    "supersede": "Replace with the published version",
+    "followed_searches": "Followed searches",
+    "no_searches": "No saved searches. Save a search from the Ask screen, then choose its frequency here.",
+    "last_run": "run on {date}",
+    "run_now": "Run now",
+    "read_notice": "read the notice"
   }
 }

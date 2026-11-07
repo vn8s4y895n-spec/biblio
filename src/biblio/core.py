@@ -20,6 +20,7 @@ FIELDS = (
     "title", "abstract", "csl_type", "study_type", "container_title", "container_abbrev",
     "issn_print", "issn_e", "nlmid", "year", "issued", "volume", "issue", "pages", "language", "license",
 )  # fmt: skip
+RETRACTED = ("retraction", "removal", "withdrawal")  # avis Crossref qui retirent un article
 CLIENTS = {"api", "cli", "web", "mcp", "inbox", "worker", "package"}
 
 STOPWORDS = set(
@@ -378,6 +379,8 @@ def merge_works(conn: sqlite3.Connection, home: Path, keep: str | int, drop: str
                      (keep_id, drop_id))  # fmt: skip
         conn.execute("INSERT OR IGNORE INTO work_questions SELECT ?, question, scope, added_at FROM work_questions"
                      " WHERE work_id = ?", (keep_id, drop_id))  # fmt: skip
+        conn.execute("INSERT OR IGNORE INTO work_updates SELECT ?, kind, notice_doi, date, source, found_at FROM work_updates"
+                     " WHERE work_id = ? AND kind != 'published'", (keep_id, drop_id))  # fmt: skip
         notes.absorb(conn, home, keep_id, drop_id)
         conn.execute("UPDATE changes SET work_id = ? WHERE work_id = ?", (keep_id, drop_id))
         _log(conn, keep_id, client, "merge", None, old, None)
@@ -428,6 +431,11 @@ def get_work(conn: sqlite3.Connection, ref: str | int) -> dict:
             "SELECT l.id, l.kind, l.name FROM work_labels wl JOIN labels l ON l.id = wl.label_id"
             " WHERE wl.work_id = ? ORDER BY l.kind, l.name", (work_id,))
     ]  # fmt: skip
+    work["updates"] = [
+        dict(r) for r in conn.execute(
+            "SELECT kind, notice_doi, date, source FROM work_updates WHERE work_id = ? ORDER BY date", (work_id,))
+    ]  # fmt: skip
+    work["retracted"] = any(u["kind"] in RETRACTED for u in work["updates"])
     work["questions"] = [
         dict(r) for r in conn.execute(
             "SELECT question, scope, added_at FROM work_questions WHERE work_id = ? ORDER BY added_at", (work_id,))
@@ -436,7 +444,7 @@ def get_work(conn: sqlite3.Connection, ref: str | int) -> dict:
 
 
 def list_works(conn: sqlite3.Connection, limit: int = 50, offset: int = 0, journal_status: list[str] | None = None,
-               label: int | None = None, read_status: str | None = None) -> dict:  # fmt: skip
+               label: int | None = None, read_status: str | None = None, retracted: bool = False) -> dict:  # fmt: skip
     """Notices les plus récentes d'abord ; filtres : statut de revue (voir journals.STATUSES), collection ou tag
     (`label`), statut de lecture (`unread` : sans statut)."""
     if unknown := set(journal_status or ()) - set(journals.STATUSES):
@@ -453,18 +461,21 @@ def list_works(conn: sqlite3.Connection, limit: int = 50, offset: int = 0, journ
     elif read_status:
         where.append("w.read_status = ?")
         params.append(read_status)
+    flagged = f"EXISTS (SELECT 1 FROM work_updates WHERE work_id = w.id AND kind IN ({', '.join(repr(k) for k in RETRACTED)}))"
+    if retracted:
+        where.append(flagged)
     base = f"FROM works w JOIN work_journal_status s ON s.work_id = w.id {'WHERE ' + ' AND '.join(where) if where else ''}"
     rows = conn.execute(
         f"""SELECT w.id, w.citekey, w.title, w.year, w.container_title, w.study_type, s.status AS journal_status,
                    w.read_status, w.rating,
                    (SELECT family FROM work_authors WHERE work_id = w.id AND position = 0) AS first_author,
                    (SELECT value FROM identifiers WHERE work_id = w.id AND scheme = 'doi') AS doi,
-                   EXISTS (SELECT 1 FROM work_files WHERE work_id = w.id) AS has_pdf
+                   EXISTS (SELECT 1 FROM work_files WHERE work_id = w.id) AS has_pdf, {flagged} AS retracted
             {base} ORDER BY w.created_at DESC, w.id DESC LIMIT ? OFFSET ?""",
         [*params, limit, offset],
     )
     total = conn.execute(f"SELECT count(*) {base}", params).fetchone()[0]
-    return {"total": total, "items": [{**dict(r), "has_pdf": bool(r["has_pdf"])} for r in rows]}
+    return {"total": total, "items": [{**dict(r), "has_pdf": bool(r["has_pdf"]), "retracted": bool(r["retracted"])} for r in rows]}
 
 
 def get_changes(conn: sqlite3.Connection, ref: str | int) -> list[dict]:

@@ -110,6 +110,7 @@ def sorbonne():
 
 
 SEARCH = FIXTURES / "search"
+WATCH = FIXTURES / "watch"
 SEARCH_PMIDS = "31822301,29550142,33421572,27927087,27596534"
 
 
@@ -121,12 +122,19 @@ def _search_sources(request: httpx.Request) -> httpx.Response | None:
     if url.path.endswith("efetch.fcgi") and url.params["id"] == SEARCH_PMIDS:
         return httpx.Response(200, content=(SEARCH / "pubmed_efetch.xml").read_bytes())
     if url.host == "api.crossref.org" and url.path == "/works":
+        if url.params.get("filter", "").startswith("doi:"):  # avis sur des DOI (veille), réponse réelle enregistrée
+            return httpx.Response(200, content=(WATCH / "crossref_notices.json").read_bytes())
         return httpx.Response(200, content=(SEARCH / "crossref.json").read_bytes())
     if url.host == "www.ebi.ac.uk":
         return httpx.Response(200, content=(SEARCH / "europepmc.json").read_bytes())
     if url.host == "europepmc.org" and url.path == "/articles/PMC6143100":
         return httpx.Response(200, content=MERINO_PDF, headers={"content-type": "application/pdf"})
     if url.host == "api.openalex.org":
+        if url.path == f"/works/doi:{MERINO_DOI}" and url.params.get("select") == "id,related_works":
+            return httpx.Response(200, content=(WATCH / "openalex_merino.json").read_bytes())
+        if url.params.get("filter", "").startswith(("ids.openalex:", "cites:")):  # articles proches, articles citants
+            name = "related" if url.params["filter"].startswith("ids") else "citing"
+            return httpx.Response(200, content=(WATCH / f"openalex_{name}.json").read_bytes())
         if url.path != "/works":  # notice unique (/works/doi:…) : inconnue d'OpenAlex dans ces tests
             return httpx.Response(404, json={"error": "not found"})
         return httpx.Response(200, content=(SEARCH / "openalex.json").read_bytes())
@@ -134,6 +142,10 @@ def _search_sources(request: httpx.Request) -> httpx.Response | None:
         if SORBONNE["s2_status"] == 429:
             return httpx.Response(429, content=(SEARCH / "s2_429.json").read_bytes(), headers={"retry-after": "0"})
         return httpx.Response(200, content=(SEARCH / "s2.json").read_bytes())
+    if url.host == "api.biorxiv.org":  # réponse réelle enregistrée pour un preprint medRxiv publié depuis
+        if url.path == "/details/medrxiv/10.1101/2022.12.07.22282726":
+            return httpx.Response(200, content=(WATCH / "medrxiv_details.json").read_bytes())
+        return httpx.Response(200, json={"messages": [{"status": "no posts found"}], "collection": []})
     if url.host == "api.unpaywall.org":
         if url.path.endswith("10.1016/j.cmi.2016.08.021"):
             return httpx.Response(200, content=(SEARCH / "unpaywall_haverkate.json").read_bytes())

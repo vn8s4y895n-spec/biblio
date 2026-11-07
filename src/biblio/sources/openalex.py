@@ -9,15 +9,35 @@ CSL_TYPES = {"article": "article-journal", "review": "article-journal", "preprin
 
 
 def search(q: Query) -> list[dict]:
-    params = {"search": q.boolean, "per-page": q.limit}
+    params = {"search": q.boolean, "per-page": q.limit, **_auth()}
     if years := q.years:
         params["filter"] = f"from_publication_date:{years[0]}-01-01,to_publication_date:{years[1]}-12-31"
-    if key := http.api_keys.get("openalex"):
-        params["api_key"] = key
-    elif http.contact_email:
-        params["mailto"] = http.contact_email
     response = http.get(API, params, ttl=SEARCH_TTL)
     return [parse(w) for w in response.json()["results"] if w.get("title")] if response else []
+
+
+def _auth() -> dict:
+    if key := http.api_keys.get("openalex"):
+        return {"api_key": key}
+    return {"mailto": http.contact_email} if http.contact_email else {}
+
+
+def neighbours(doi: str, limit: int = 10) -> dict[str, list[dict]]:
+    """Articles proches d'un article (`related` : choisis par OpenAlex d'après les concepts et les références) et
+    articles récents qui le citent (`citing`)."""
+    response = http.get(f"{API}/doi:{doi}", {"select": "id,related_works", **_auth()}, ttl=7 * 24 * 3600)
+    if response is None:
+        return {"related": [], "citing": []}
+    work = response.json()
+    ids = [_strip(u, "/") for u in work.get("related_works") or []][:limit]
+    related, citing = [], []
+    if ids:
+        r = http.get(API, {"filter": f"ids.openalex:{'|'.join(ids)}", "per-page": limit, **_auth()}, ttl=7 * 24 * 3600)
+        related = [parse(w) for w in r.json()["results"] if w.get("title")] if r else []
+    r = http.get(API, {"filter": f"cites:{_strip(work['id'], '/')}", "sort": "publication_date:desc", "per-page": limit,
+                       **_auth()}, ttl=24 * 3600)  # fmt: skip
+    citing = [parse(w) for w in r.json()["results"] if w.get("title")] if r else []
+    return {"related": related, "citing": citing}
 
 
 def find_pdf(doi: str) -> dict | None:

@@ -87,7 +87,7 @@ def test_saved_searches(api):
     assert saved["answer"] == body["answer"] and saved["origin"] == "biblio"
     assert api.get("/api/v1/searches").json()[0] | {"created_at": None} == {
         "id": saved["id"], "question": "Transmission des BLSE ?", "origin": "biblio", "scope": "online",
-        "created_at": None, "count": 2}  # fmt: skip
+        "created_at": None, "count": 2, "watch_days": None, "last_run": None}  # fmt: skip
     assert api.get(f"/api/v1/searches/{saved['id']}").json()["sources"][1]["title"] == "B"
     assert api.delete(f"/api/v1/searches/{saved['id']}").status_code == 204
     assert api.get(f"/api/v1/searches/{saved['id']}").status_code == 404
@@ -151,6 +151,7 @@ def test_web_ui_is_served_without_token(api):
         pytest.skip("interface non compilée (npm --prefix ui run build)")
     page = api.get("/", headers={"Authorization": ""})
     assert page.status_code == 200 and "<div id=\"app\">" in page.text
+    assert page.headers["cache-control"] == "no-cache"  # une mise à jour de l'interface est vue tout de suite
     assert api.get("/api/v1/works", headers={"Authorization": ""}).status_code == 401  # les données restent protégées
 
 

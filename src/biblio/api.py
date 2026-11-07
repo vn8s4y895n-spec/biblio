@@ -19,7 +19,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from . import (__version__, ask, config, core, db, exports, formats, importer, journals, library, notes, organize,
-               packages, search, semantic, zotero)
+               packages, search, semantic, watch, zotero)
 from .config import Config
 from .sources import http
 from .sources.http import SourceError
@@ -481,6 +481,44 @@ async def import_package(request: Request, conn: Conn, data: Annotated[bytes, De
     return packages.import_package(conn, home(request), data)
 
 
+class WatchRequest(BaseModel):
+    days: int | None  # intervalle de relance ; null : ne plus suivre
+
+
+class SeenRequest(BaseModel):
+    ids: list[int] | None = None  # omis : toutes
+
+
+class SupersedeRequest(BaseModel):
+    doi: str  # DOI de la version publiée
+
+
+@router.put("/searches/{search_id}/watch", summary="Suivre une recherche enregistrée (relance tous les `days` jours)")
+def watch_search(search_id: int, body: WatchRequest, conn: Conn):
+    """Les sources déjà enregistrées comptent comme vues : seuls les nouveaux articles seront signalés."""
+    return watch.set_watch(conn, search_id, body.days)
+
+
+@router.post("/searches/{search_id}/run", summary="Relancer maintenant une recherche suivie (nouveaux résultats)")
+def run_search(search_id: int, conn: Conn):
+    return {"new": watch.run_search(conn, search_id)}
+
+
+@router.get("/alerts", summary="Alertes de veille : nouveaux résultats, rétractations, corrections, preprints publiés")
+def list_alerts(conn: Conn, unseen_only: bool = False):
+    return watch.alerts(conn, unseen_only)
+
+
+@router.post("/alerts/seen", summary="Marquer des alertes comme lues (`ids` omis : toutes)")
+def alerts_seen(body: SeenRequest, conn: Conn):
+    return {"seen": watch.mark_seen(conn, body.ids)}
+
+
+@router.post("/watch/library", summary="Vérifier maintenant les articles de la bibliothèque (Crossref, Retraction Watch)")
+def check_library(conn: Conn):
+    return watch.check_library(conn)
+
+
 JournalStatus = Literal[journals.STATUSES]  # type: ignore[valid-type]
 
 
@@ -492,8 +530,9 @@ def list_works(
     journal_status: Annotated[list[JournalStatus] | None, Query(description="Filtre sur le statut de revue (répétable)")] = None,
     label: Annotated[int | None, Query(description="Collection ou tag (id)")] = None,
     read_status: Literal[(*organize.READ_STATUSES, "unread")] | None = None,  # type: ignore[valid-type]
+    retracted: Annotated[bool, Query(description="Seulement les articles rétractés")] = False,
 ):
-    return core.list_works(conn, limit, offset, journal_status, label, read_status)
+    return core.list_works(conn, limit, offset, journal_status, label, read_status, retracted)
 
 
 SourceName = Literal[tuple(search.SOURCES)]  # type: ignore[valid-type]
@@ -601,6 +640,16 @@ def get_citation(ref: str, request: Request, conn: Conn, style: str | None = Non
     return {"style": style, "text": exports.citation(work, home(request), style)}
 
 
+@router.get("/works/{ref:path}/neighbours", summary="Articles proches et articles récents qui la citent (OpenAlex)")
+def get_neighbours(ref: str, conn: Conn):
+    return watch.neighbours(conn, ref)
+
+
+@router.post("/works/{ref:path}/supersede", summary="Remplacer un preprint par sa version publiée (fusion)")
+def supersede(ref: str, body: SupersedeRequest, request: Request, conn: Conn, client: Client):
+    return watch.supersede(conn, home(request), ref, body.doi, client)
+
+
 @router.get("/works/{ref:path}/note", summary="Lire la note Markdown d'une notice")
 def get_note(ref: str, request: Request, conn: Conn):
     """`links` : notices citées par [[clé]] ; `backlinks` : notices dont la note cite celle-ci."""
@@ -628,9 +677,10 @@ def update_work(ref: str, body: WorkUpdate, conn: Conn, client: Client):
 
 def _background(app: FastAPI) -> None:
     """Toutes les 5 s : boîte d'entrée, Téléchargements (si activé), notes modifiées hors de Biblio, library.bib.
+    Toutes les heures : veille (recherches suivies arrivées à échéance, bibliothèque chaque semaine).
     Toutes les 6 h : liste des revues. Les réglages sont relus à chaque tour (écran de réglages)."""
     # ponytail: boucle dans un thread ; passera par la file de tâches de la phase 5.
-    next_journal_check = 0.0
+    next_journal_check = next_watch = 0.0
     while True:
         config = app.state.config
         conn = db.connect(config.db_path)
@@ -640,6 +690,9 @@ def _background(app: FastAPI) -> None:
                 importer.scan_downloads(conn, config.downloads_dir, config.home)
             notes.sync(conn, config.home)
             exports.sync_library_bib(conn, config.home)
+            if time.monotonic() >= next_watch:  # recherches suivies et bibliothèque : chaque heure, selon échéance
+                next_watch = time.monotonic() + 3600
+                watch.run_due(conn)
             if time.monotonic() >= next_journal_check:
                 next_journal_check = time.monotonic() + 6 * 3600
                 if result := journals.update_if_stale(conn, config.home):
@@ -651,6 +704,17 @@ def _background(app: FastAPI) -> None:
         finally:
             conn.close()
         time.sleep(5)
+
+
+class WebFiles(StaticFiles):
+    """Fichiers de l'interface. index.html est revalidé à chaque ouverture : après une mise à jour, la fenêtre charge
+    la nouvelle interface (les autres fichiers changent de nom à chaque compilation et restent en cache)."""
+
+    async def get_response(self, path: str, scope):
+        response = await super().get_response(path, scope)
+        if not path.startswith("assets/"):
+            response.headers["Cache-Control"] = "no-cache"
+        return response
 
 
 def create_app(config: Config, background: bool = False) -> FastAPI:
@@ -689,5 +753,5 @@ def create_app(config: Config, background: bool = False) -> FastAPI:
     # reçoit le jeton dans l'adresse (#token=…), qui n'est jamais envoyée au serveur.
     web = files("biblio") / "web"
     if web.is_dir():
-        app.mount("/", StaticFiles(directory=str(web), html=True), name="web")
+        app.mount("/", WebFiles(directory=str(web), html=True), name="web")
     return app

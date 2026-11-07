@@ -5,7 +5,8 @@
   "nav": {
     "ask": "Question",
     "library": "Bibliothèque",
-    "settings": "Réglages"
+    "settings": "Réglages",
+    "watch": "Veille"
   },
   "common": {
     "cancel": "Annuler",
@@ -164,7 +165,13 @@
     "links": "Cite",
     "backlinks": "Cité par",
     "questions": "Ajouté depuis la question",
-    "ask_again": "Poser à nouveau cette question"
+    "ask_again": "Poser à nouveau cette question",
+    "neighbours": "Articles proches",
+    "related": "Sur le même sujet (OpenAlex)",
+    "citing": "Articles récents qui le citent",
+    "no_neighbours": "OpenAlex ne connaît pas d'article proche.",
+    "show_neighbours": "Afficher les articles proches",
+    "other_notices": "{n} autre(s) avis"
   },
   "drop": {
     "hint": "Dépose pour importer dans Biblio",
@@ -257,5 +264,48 @@
     "rules": "Un article déjà présent est complété, jamais dupliqué. Une note différente de la tienne est ajoutée à la suite. Ton statut de lecture et tes étoiles ne changent pas.",
     "import": "Importer",
     "imported": "Paquet importé : {created} ajoutés, {completed} complétés, {pdfs} PDF, {notes} notes"
+  },
+  "watch": {
+    "follow": "Suivre (chaque semaine)",
+    "followed": "Recherche suivie : les nouveaux articles seront signalés dans Veille",
+    "unfollowed": "Recherche plus suivie",
+    "retracted": "Rétracté",
+    "retracted_plural": "Rétractés",
+    "retracted_help": "Article rétracté (avis publié ; données Crossref et Retraction Watch)",
+    "never": "Non suivie",
+    "daily": "Chaque jour",
+    "weekly": "Chaque semaine",
+    "monthly": "Chaque mois",
+    "interval": "Fréquence",
+    "checked": "{n} articles vérifiés · {alerts} nouvelle(s) alerte(s)",
+    "new_found": "{n} nouveaux articles",
+    "superseded": "Version publiée ajoutée, preprint fusionné : {key}",
+    "all_seen": "Tout marquer comme lu",
+    "alerts": "Alertes",
+    "library_checked": "Bibliothèque vérifiée le {date}",
+    "check_library": "Vérifier maintenant",
+    "no_alerts": "Aucune alerte. La bibliothèque est vérifiée chaque semaine (rétractations, corrections, preprints publiés), et les recherches suivies selon leur fréquence.",
+    "kind": {
+      "new_results": "Nouveaux articles",
+      "retraction": "Rétractation",
+      "concern": "Expression de préoccupation",
+      "correction": "Correction",
+      "published": "Preprint publié"
+    },
+    "mark_seen": "Marquer comme lu",
+    "new_results": "{n} nouveaux articles pour la recherche",
+    "show_results": "Voir les articles",
+    "notice": {
+      "retraction": "Article rétracté",
+      "concern": "Expression de préoccupation publiée",
+      "correction": "Correction publiée",
+      "published": "Version publiée dans une revue"
+    },
+    "supersede": "Remplacer par la version publiée",
+    "followed_searches": "Recherches suivies",
+    "no_searches": "Aucune recherche enregistrée. Enregistre une recherche depuis l'écran Question, puis choisis sa fréquence ici.",
+    "last_run": "relancée le {date}",
+    "run_now": "Relancer",
+    "read_notice": "lire l'avis"
   }
 }
