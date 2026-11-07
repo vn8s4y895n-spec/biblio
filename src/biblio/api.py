@@ -22,7 +22,7 @@ from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, Str
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import (__version__, ai, ask, backup, config, core, db, exports, formats, importer, journals, library, notes,
+from . import (__version__, command, ai, ask, backup, config, core, db, exports, formats, importer, journals, library, notes,
                organize, llm, packages, search, semantic, trace, watch, webhooks, zotero)
 from .config import Config
 from .sources import http
@@ -1003,7 +1003,8 @@ def create_app(config: Config, background: bool = False) -> FastAPI:
 
     @app.get("/api/v1/health", summary="État du serveur (sans authentification)")
     def health():
-        return {"app": "biblio", "version": __version__, "status": "ok"}
+        """`executable` : le programme qui a lancé ce serveur (l'app installée, ou Biblio en développement)."""
+        return {"app": "biblio", "version": __version__, "status": "ok", "executable": command()[0]}
 
     app.include_router(router)
 

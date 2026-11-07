@@ -155,3 +155,9 @@ def test_semantic_routes(api, monkeypatch):
     assert api.post("/api/v1/semantic/download").status_code == 202 and len(started) == 1
     assert api.get("/api/v1/search/library", params={"q": "x", "engine": "semantic"}).status_code == 422
     assert api.get("/api/v1/search/library", params={"q": "x"}).json()["engine"] == "lexical"
+
+
+def test_health_names_the_executable(api):
+    from biblio import command
+
+    assert api.get("/api/v1/health").json()["executable"] == command()[0]

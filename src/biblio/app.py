@@ -8,10 +8,11 @@ sur Mac, par le Finder (événement « ouvrir des documents »), y compris quand
 import json
 import sys
 import threading
+import time
 import webbrowser
 from importlib.resources import files
 
-from . import cli, config
+from . import cli, command, config
 
 
 def run(browser: bool = False, paths: list[str] | None = None) -> None:
@@ -19,6 +20,7 @@ def run(browser: bool = False, paths: list[str] | None = None) -> None:
         cli._fail("Interface non compilée : lancer « npm --prefix ui install && npm --prefix ui run build ».")
     cfg = config.load()
     probe = cli.httpx.Client(base_url=cfg.client_url, timeout=2)
+    _replace_foreign_server(probe, cfg)
     started_here = not cli._is_biblio(probe)
     client = cli.client()  # démarre le serveur s'il ne tourne pas
     # Le jeton passe dans le fragment (#…), qui n'est jamais envoyé au serveur ni écrit dans ses journaux.
@@ -55,6 +57,22 @@ def run(browser: bool = False, paths: list[str] | None = None) -> None:
     webview.start()
     if started_here:  # la fenêtre a lancé le serveur : elle l'arrête en se fermant
         client.post("/api/v1/shutdown")
+
+
+def _replace_foreign_server(probe, cfg) -> None:
+    """Un serveur lancé par une autre installation (ancienne version, dossier de développement) ne connaît pas
+    forcément l'interface de cette app : il est arrêté, et l'app lance le sien."""
+    try:
+        running = probe.get("/api/v1/health").json()
+    except (cli.httpx.HTTPError, ValueError):
+        return
+    if running.get("app") != "biblio" or running.get("executable") == command()[0]:
+        return
+    probe.post("/api/v1/shutdown", headers={"Authorization": f"Bearer {cfg.token}"})
+    for _ in range(50):
+        if not cli._is_biblio(probe):
+            return
+        time.sleep(0.1)
 
 
 def _accept_finder_documents(on_open) -> None:
