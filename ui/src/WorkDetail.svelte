@@ -193,6 +193,8 @@
               <button class:on={work.read_status === s} onclick={() => update({ read_status: work.read_status === s ? null : s })}>{$t(`read.${s}`)}</button>
             {/each}
           </div>
+          <button class="ghost fav" class:on={work.favorite} aria-pressed={!!work.favorite}
+            title={$t(work.favorite ? "library.unfavorite" : "library.favorite")} onclick={() => update({ favorite: !work.favorite })}>♥</button>
           <div class="stars" role="radiogroup" aria-label={$t("detail.rating")}>
             {#each [1, 2, 3, 4, 5] as n}
               <button class="ghost star" class:on={(work.rating ?? 0) >= n} aria-label="{n}/5"
@@ -323,6 +325,8 @@
 {/if}
 
 <style>
+  .fav { font-size: 17px; color: var(--faint); }
+  .fav.on { color: var(--danger); }
   .detail { display: flex; flex-direction: column; height: 100%; }
   header { padding: 18px 22px 10px; display: grid; gap: 6px; }
   h2 { margin: 0; font-size: 20px; line-height: 1.3; }

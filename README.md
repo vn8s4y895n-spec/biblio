@@ -63,7 +63,9 @@ uv run biblio app --browser    # même interface dans le navigateur
   - la réponse rédigée est enregistrée avec la recherche.
 - **Questions récentes** : l'écran d'accueil liste les questions déjà posées (la plus récente d'abord) ; un clic la repose, ✕ la retire, « Effacer l'historique » vide la liste.
 - **Enregistrer la recherche** garde la question, la réponse et les sources ; les recherches enregistrées s'affichent en dessous.
-- **Bibliothèque** en trois panneaux redimensionnables : filtres (statut de lecture, collections, tags, statut de revue), liste (recherche plein texte et par le sens, sélection multiple, glisser une notice sur une collection), fiche (statut de lecture, note étoilée, tags, collections, résumé, MeSH, **lecteur PDF**, **note Markdown**).
+- **Bibliothèque** en trois panneaux redimensionnables : filtres (statut de lecture, favoris, collections, tags, statut de revue), liste (recherche plein texte et par le sens, sélection multiple, glisser une notice sur une collection), fiche (statut de lecture, favori, note étoilée, tags, collections, résumé, MeSH, **lecteur PDF**, **note Markdown**).
+  - **Vue par défaut, « Sans statut »** : les articles à trier, c'est-à-dire sans statut de lecture et rangés dans aucune collection (un tag ne compte pas). Un article rangé ou lu en sort, sauf s'il est **favori** (♥) : les favoris y restent, et sont en tête de toutes les listes.
+  - **Sélection multiple** : statut de lecture (à lire, à relire, lu, sans statut), favori, collection ou tag, export, Zotero, paquet.
 - **Glisser-déposer** n'importe où : PDF, ou fichiers .bib, .ris, .nbib, .json.
 - **Citer, exporter, envoyer** : la fiche affiche la référence dans le style choisi (Vancouver par défaut) ; boutons et sélection multiple pour exporter (BibTeX, RIS, CSL-JSON, liste Markdown), envoyer dans Zotero ou créer un paquet `.biblio`. Une recherche enregistrée s'envoie aussi en paquet. Un paquet `.biblio` déposé sur la fenêtre s'ouvre en aperçu avant import.
 - **Veille** (onglet de l'en-tête, avec le nombre d'alertes non lues) :

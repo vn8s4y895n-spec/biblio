@@ -144,7 +144,6 @@
     "count": "{n} articles",
     "selected": "{n} selected",
     "add_to": "Add to…",
-    "mark_read": "Mark read",
     "select": "Select",
     "batch_done": "{n} articles updated",
     "added_to": "{n} added to “{name}”",
@@ -153,7 +152,13 @@
     "more": "Show more",
     "pick": "Pick an article from the list.",
     "drop_hint": "Drop PDFs or .bib, .ris, .nbib files anywhere to import them. Drag an article onto a collection to file it.",
-    "select_all": "Select all"
+    "select_all": "Select all",
+    "favorites": "Favorites",
+    "favorite": "Favorite",
+    "unfavorite": "Remove from favorites",
+    "set_status": "Reading status…",
+    "inbox_help": "Articles to sort: no reading status and in no collection. Favorites always stay here, at the top.",
+    "inbox_empty": "Everything is sorted: each article has a reading status or a collection. Favorites show here."
   },
   "detail": {
     "record": "Record",

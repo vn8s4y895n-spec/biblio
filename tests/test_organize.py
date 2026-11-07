@@ -203,3 +203,27 @@ def test_question_history(api):
     assert [h["question"] for h in api.get("/api/v1/history").json()] == ["Transmission des BLSE ?"]
     assert api.post("/api/v1/history/forget", json={}).json() == {"removed": 1}
     assert api.get("/api/v1/history").json() == []
+
+
+def test_favorites_and_inbox(api, network):
+    """Vue « Sans statut » : les articles à trier (sans statut, dans aucune collection) et les favoris, en tête."""
+    from conftest import MERINO_DOI
+
+    merino = api.post("/api/v1/works", json={"identifier": MERINO_DOI}).json()["work"]
+    other = api.post("/api/v1/works/manual", json={"title": "Un autre article"}).json()["work"]
+    inbox = lambda: [w["id"] for w in api.get("/api/v1/works", params={"inbox": True}).json()["items"]]  # noqa: E731
+    assert inbox() == [other["id"], merino["id"]]
+    coll = api.post("/api/v1/labels", json={"kind": "collection", "name": "BLSE"}).json()
+    tag = api.post("/api/v1/labels", json={"kind": "tag", "name": "lu en staff"}).json()
+    api.post(f"/api/v1/labels/{coll['id']}/works", json={"works": [str(merino["id"])]})
+    api.post(f"/api/v1/labels/{tag['id']}/works", json={"works": [str(other["id"])]})  # un tag ne range pas
+    assert inbox() == [other["id"]]
+    assert api.patch(f"/api/v1/works/{merino['id']}", json={"favorite": True}).json()["favorite"] == 1
+    assert inbox() == [merino["id"], other["id"]]  # favori : de retour, et en tête
+    api.patch(f"/api/v1/works/{other['id']}", json={"read_status": "to_read"})
+    assert inbox() == [merino["id"]]
+    listing = api.get("/api/v1/works").json()["items"]
+    assert listing[0]["id"] == merino["id"] and listing[0]["favorite"] is True
+    assert [w["id"] for w in api.get("/api/v1/works", params={"favorite": True}).json()["items"]] == [merino["id"]]
+    api.patch(f"/api/v1/works/{merino['id']}", json={"favorite": False})
+    assert inbox() == []

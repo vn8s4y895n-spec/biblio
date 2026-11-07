@@ -4,7 +4,7 @@ SQLite en mode WAL, clés étrangères actives. Les migrations sont dans `src/bi
 
 Ce document décrit le schéma **réellement en place**.
 
-## `schema_migrations` (version actuelle : 12)
+## `schema_migrations` (version actuelle : 13)
 
 | Colonne | Type | Rôle |
 |---|---|---|
@@ -29,6 +29,7 @@ Ce document décrit le schéma **réellement en place**.
 | license | TEXT | URL de la licence (Crossref) |
 | read_status | TEXT | `to_read`, `read`, `to_reread` ou NULL |
 | rating | INTEGER | 1 à 5 ou NULL |
+| favorite | INTEGER | 1 : favori (migration 13) : en tête des listes, et toujours dans la vue « Sans statut » |
 | fingerprint | TEXT, indexé | `titre normalisé|année|premier auteur`, pour repérer les doublons sans identifiant commun (phase 4) |
 | created_at, updated_at | TEXT | |
 

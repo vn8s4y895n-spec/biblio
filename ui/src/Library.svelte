@@ -11,7 +11,8 @@
 
   const PAGE = 100;
   let labels = $state([]);
-  let filter = $state({ type: "all" }); // all | read_status | label | journal
+  // inbox (« Sans statut », vue par défaut : à trier + favoris) | all | favorite | read_status | label | journal
+  let filter = $state({ type: "inbox" });
   let q = $state("");
   let items = $state([]);
   let total = $state(0);
@@ -54,6 +55,8 @@
         total = out.total;
       } else {
         const params = { limit: PAGE, offset: more ? items.length : 0 };
+        if (filter.type === "inbox") params.inbox = true;
+        if (filter.type === "favorite") params.favorite = true;
         if (filter.type === "read_status") params.read_status = filter.value;
         if (filter.type === "label") params.label = filter.value;
         if (filter.type === "journal") params.journal_status = filter.value;
@@ -97,7 +100,7 @@
   async function removeLabel(label) {
     if (!confirm($t("library.confirm_delete_label", { name: label.name }))) return;
     await api(`/labels/${label.id}`, { method: "DELETE" });
-    if (filter.type === "label" && filter.value === label.id) choose({ type: "all" });
+    if (filter.type === "label" && filter.value === label.id) choose({ type: "inbox" });
     refreshLabels();
   }
 
@@ -109,9 +112,15 @@
     refresh();
   }
 
-  async function batchRead(status) {
-    for (const id of checked) await api(`/works/${id}`, { method: "PATCH", body: { read_status: status } });
+  // Statut de lecture ou favori des notices cochées ("" : sans statut).
+  async function batchUpdate(changes) {
+    for (const id of checked) await api(`/works/${id}`, { method: "PATCH", body: changes });
     toast($t("library.batch_done", { n: checked.size }), "ok");
+    refresh();
+  }
+
+  async function toggleFavorite(work) {
+    await api(`/works/${work.id}`, { method: "PATCH", body: { favorite: !work.favorite } });
     refresh();
   }
 
@@ -168,10 +177,12 @@
 
 <div class="library" style="grid-template-columns: {widths[0]}px 5px {widths[1]}px 5px minmax(0, 1fr)">
   <nav class="filters scroll">
-    <button class="item" class:on={isOn({ type: "all" })} onclick={() => choose({ type: "all" })}>{$t("library.all")}</button>
-    {#each [["unread", "library.unread"], ["to_read", "read.to_read"], ["read", "read.read"], ["to_reread", "read.to_reread"]] as [value, key]}
+    <button class="item" class:on={isOn({ type: "inbox" })} title={$t("library.inbox_help")} onclick={() => choose({ type: "inbox" })}>{$t("library.unread")}</button>
+    {#each [["to_read", "read.to_read"], ["to_reread", "read.to_reread"], ["read", "read.read"]] as [value, key]}
       <button class="item" class:on={isOn({ type: "read_status", value })} onclick={() => choose({ type: "read_status", value })}>{$t(key)}</button>
     {/each}
+    <button class="item" class:on={isOn({ type: "favorite" })} onclick={() => choose({ type: "favorite" })}>♥ {$t("library.favorites")}</button>
+    <button class="item" class:on={isOn({ type: "all" })} onclick={() => choose({ type: "all" })}>{$t("library.all")}</button>
 
     {#each [["collection", collections, "library.collections"], ["tag", tags, "library.tags"]] as [kind, list, title]}
       <div class="group row">
@@ -225,7 +236,12 @@
           <option value="">{$t("library.add_to")}</option>
           {#each labels as label}<option value={label.id}>{label.kind === "tag" ? "#" : ""}{label.name}</option>{/each}
         </select>
-        <button class="small" onclick={() => batchRead("read")}>{$t("library.mark_read")}</button>
+        <select onchange={(e) => { batchUpdate({ read_status: e.target.value || null }); e.target.value = "-"; }}>
+          <option value="-">{$t("library.set_status")}</option>
+          {#each ["to_read", "to_reread", "read"] as s}<option value={s}>{$t(`read.${s}`)}</option>{/each}
+          <option value="">{$t("library.unread")}</option>
+        </select>
+        <button class="small" onclick={() => batchUpdate({ favorite: !items.filter((w) => checked.has(w.id)).every((w) => w.favorite) })}>♥ {$t("library.favorite")}</button>
         <select onchange={(e) => { exportWorks({ works: [...checked].map(String) }, e.target.value); e.target.value = ""; }}>
           <option value="">{$t("export.title")}…</option>
           {#each EXPORTS as [format, label]}<option value={format}>{label}</option>{/each}
@@ -238,7 +254,11 @@
     <ul class="scroll">
       {#each items as work (work.id)}
         <li class:on={work.citekey === current} draggable="true" ondragstart={(e) => drag(e, work)}>
-          <input type="checkbox" checked={checked.has(work.id)} onchange={() => toggle(work.id)} aria-label={$t("library.select")} />
+          <span class="side">
+            <input type="checkbox" checked={checked.has(work.id)} onchange={() => toggle(work.id)} aria-label={$t("library.select")} />
+            <button class="ghost fav" class:on={work.favorite} title={$t(work.favorite ? "library.unfavorite" : "library.favorite")}
+              aria-pressed={!!work.favorite} onclick={() => toggleFavorite(work)}>♥</button>
+          </span>
           <button class="row-btn" onclick={() => open(work)}>
             <span class="t title-serif">{work.title}</span>
             <span class="small muted">{work.first_author ?? ""}{work.year ? ` · ${work.year}` : ""}{work.container_title ? ` · ${work.container_title}` : ""}</span>
@@ -253,7 +273,7 @@
           </button>
         </li>
       {:else}
-        <li class="empty muted">{loading ? "" : q ? $t("library.no_match") : $t("library.empty")}</li>
+        <li class="empty muted">{loading ? "" : q ? $t("library.no_match") : filter.type === "inbox" && total === 0 ? $t("library.inbox_empty") : $t("library.empty")}</li>
       {/each}
       {#if !q && items.length < total}
         <li class="more"><button class="small" onclick={() => refresh(true)}>{$t("library.more")}</button></li>
@@ -312,6 +332,10 @@
   li { display: flex; align-items: flex-start; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--border); }
   li.on { background: var(--accent-soft); }
   li input { margin-top: 4px; }
+  .side { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+  .fav { padding: 0 2px; font-size: 14px; line-height: 1; color: var(--faint); opacity: 0.35; }
+  .fav:hover { opacity: 1; }
+  .fav.on { color: var(--danger); opacity: 1; }
   .row-btn {
     border: none; background: transparent; padding: 0; text-align: left; display: flex; flex-direction: column;
     align-items: stretch; gap: 3px; white-space: normal; flex: 1; min-width: 0;

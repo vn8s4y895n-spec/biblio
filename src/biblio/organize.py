@@ -74,15 +74,17 @@ def set_label(conn: sqlite3.Connection, label_id: int, refs: list[str | int], on
 
 
 def update_work(conn: sqlite3.Connection, ref: str | int, changes: dict, client: str) -> dict:
-    """Statut de lecture et note (1 à 5) ; None efface la valeur."""
+    """Statut de lecture, note (1 à 5) et favori ; None efface le statut ou la note."""
     work_id = core.resolve(conn, ref)
     if (status := changes.get("read_status")) is not None and status not in READ_STATUSES:
         raise ValueError(f"Statut de lecture inconnu : {status}")
     if (rating := changes.get("rating")) is not None and rating not in range(1, 6):
         raise ValueError("La note va de 1 à 5")
-    row = conn.execute("SELECT read_status, rating FROM works WHERE id = ?", (work_id,)).fetchone()
+    if "favorite" in changes:
+        changes = {**changes, "favorite": int(bool(changes["favorite"]))}
+    row = conn.execute("SELECT read_status, rating, favorite FROM works WHERE id = ?", (work_id,)).fetchone()
     with db.transaction(conn):
-        for field in ("read_status", "rating"):
+        for field in ("read_status", "rating", "favorite"):
             if field in changes and changes[field] != row[field]:
                 conn.execute(f"UPDATE works SET {field} = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')"
                              " WHERE id = ?", (changes[field], work_id))  # fmt: skip

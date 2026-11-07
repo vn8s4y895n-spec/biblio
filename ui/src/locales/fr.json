@@ -144,7 +144,6 @@
     "count": "{n} articles",
     "selected": "{n} sélectionnés",
     "add_to": "Ranger dans…",
-    "mark_read": "Marquer lus",
     "select": "Sélectionner",
     "batch_done": "{n} articles mis à jour",
     "added_to": "{n} ajoutés à « {name} »",
@@ -153,7 +152,13 @@
     "more": "Afficher plus",
     "pick": "Choisis un article dans la liste.",
     "drop_hint": "Dépose des PDF ou des fichiers .bib, .ris, .nbib n'importe où pour les importer. Glisse un article sur une collection pour l'y ranger.",
-    "select_all": "Tout sélectionner"
+    "select_all": "Tout sélectionner",
+    "favorites": "Favoris",
+    "favorite": "Favori",
+    "unfavorite": "Retirer des favoris",
+    "set_status": "Statut de lecture…",
+    "inbox_help": "Articles à trier : sans statut de lecture et rangés dans aucune collection. Les favoris y restent toujours, en tête.",
+    "inbox_empty": "Tout est trié : chaque article a un statut de lecture ou une collection. Les favoris s'affichent ici."
   },
   "detail": {
     "record": "Notice",

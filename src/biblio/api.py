@@ -115,6 +115,7 @@ class NoteBody(BaseModel):
 class WorkUpdate(BaseModel):
     read_status: Literal[organize.READ_STATUSES] | None = None  # type: ignore[valid-type]
     rating: int | None = None
+    favorite: bool | None = None
 
 
 class LabelCreate(BaseModel):
@@ -690,8 +691,12 @@ def list_works(
     label: Annotated[int | None, Query(description="Collection ou tag (id)")] = None,
     read_status: Literal[(*organize.READ_STATUSES, "unread")] | None = None,  # type: ignore[valid-type]
     retracted: Annotated[bool, Query(description="Seulement les articles rétractés")] = False,
+    favorite: Annotated[bool, Query(description="Seulement les favoris")] = False,
+    inbox: Annotated[bool, Query(description="Vue « Sans statut » : sans statut de lecture et pas encore rangés dans "
+                                             "une collection, plus les favoris")] = False,  # fmt: skip
 ):
-    return core.list_works(conn, limit, offset, journal_status, label, read_status, retracted)
+    """Les favoris d'abord, puis les plus récents."""
+    return core.list_works(conn, limit, offset, journal_status, label, read_status, retracted, favorite, inbox)
 
 
 SourceName = Literal[tuple(search.SOURCES)]  # type: ignore[valid-type]
@@ -843,7 +848,7 @@ def get_work(ref: str, conn: Conn):
     return core.get_work(conn, ref)
 
 
-@router.patch("/works/{ref:path}", summary="Statut de lecture et note (1 à 5) ; null efface")
+@router.patch("/works/{ref:path}", summary="Statut de lecture, note (1 à 5), favori ; null efface")
 def update_work(ref: str, body: WorkUpdate, conn: Conn, client: Client):
     return organize.update_work(conn, ref, body.model_dump(exclude_unset=True), client)
 
