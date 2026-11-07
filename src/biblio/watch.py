@@ -10,7 +10,7 @@ import sqlite3
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from . import core, db, importer, organize, search
+from . import core, db, importer, organize, search, webhooks
 from .sources import biorxiv, crossref, openalex
 from .sources.http import SourceError
 
@@ -30,6 +30,7 @@ def _now() -> str:
 def _alert(conn: sqlite3.Connection, kind: str, data: dict, work_id: int | None = None, search_id: int | None = None) -> None:
     conn.execute("INSERT INTO alerts (kind, work_id, search_id, data_json) VALUES (?, ?, ?, ?)",
                  (kind, work_id, search_id, json.dumps(data, ensure_ascii=False)))  # fmt: skip
+    webhooks.emit(conn, "alert.created", {"kind": kind, "work_id": work_id, "search_id": search_id, **data})
 
 
 # --- Recherches suivies ---------------------------------------------------------------------------------

@@ -1,5 +1,6 @@
 <script>
   import { onDestroy, onMount } from "svelte";
+  import Connectors from "./Connectors.svelte";
   import { api } from "./lib/api.js";
   import { fmt, t } from "./lib/i18n.js";
   import { toast } from "./lib/toast.js";
@@ -13,7 +14,6 @@
   let checking = $state(false);
   let restartNeeded = $state(false);
   let styles = $state([]);
-  let zotero = $state(null);
   let llmStatus = $state(null);
   let llmKey = $state("");
   let testing = $state(false);
@@ -26,7 +26,7 @@
   ];
 
   onMount(async () => {
-    [semantic, journals, styles, zotero] = await Promise.all([api("/semantic"), api("/journals"), api("/styles"), api("/zotero")]);
+    [semantic, journals, styles] = await Promise.all([api("/semantic"), api("/journals"), api("/styles")]);
     if (settings.llm_enabled) testLlm();
     poll = setInterval(async () => {
       if (semantic?.status === "downloading" || (semantic?.status === "ready" && semantic.progress < 1)) semantic = await api("/semantic");
@@ -279,21 +279,7 @@
       {#if journals?.last_error}<p class="small warn">{journals.last_error}</p>{/if}
     </section>
 
-    <section class="card">
-      <h2>{$t("settings.connectors")}</h2>
-      <div class="field">
-        <span>Zotero<small class="faint">{$t("settings.zotero_help")}</small></span>
-        <span class="status">
-          {#if zotero?.running}
-            <span class="chip ok">✓ {$t("settings.zotero_on", { where: zotero.collection ?? zotero.library })}</span>
-          {:else}
-            <span class="chip">{$t("settings.zotero_off")}</span>
-          {/if}
-          <button class="small" onclick={async () => (zotero = await api("/zotero"))}>{$t("settings.check")}</button>
-        </span>
-      </div>
-      <p class="muted small">{$t("settings.connectors_soon")}</p>
-    </section>
+    <Connectors />
 
     <p class="small faint about">Biblio {settings.version} · {$t("settings.data", { path: settings.home })}</p>
   </div>

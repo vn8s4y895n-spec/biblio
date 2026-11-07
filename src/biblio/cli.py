@@ -52,11 +52,12 @@ def _start_server(client: httpx.Client, cfg: config.Config) -> None:
     _fail(f"Le serveur ne démarre pas ; voir {cfg.home / 'server.log'}")
 
 
-def client() -> httpx.Client:
+def client(name: str = "cli") -> httpx.Client:
+    """Client de l'API (démarre le serveur au besoin) ; `name` est inscrit au journal des modifications."""
     cfg = config.load()
     c = httpx.Client(
         base_url=cfg.client_url,
-        headers={"Authorization": f"Bearer {cfg.token}", "X-Biblio-Client": "cli"},
+        headers={"Authorization": f"Bearer {cfg.token}", "X-Biblio-Client": name},
         timeout=300,  # envoi vers Zotero, paquets volumineux
     )
     if not _is_biblio(c):
@@ -589,6 +590,77 @@ def pack(
 ) -> None:
     """Crée un paquet .biblio (notices, PDF, notes, tags, questions) à envoyer à un autre Biblio."""
     data = _call("POST", "/api/v1/packages", json={**_selection(refs, collection), "title": title}).content
+    output.write_bytes(data)
+    typer.echo(f"✓ {output} ({len(data) / 1e6:.1f} Mo)")
+
+
+@app.command()
+def mcp(
+    http: Annotated[bool, typer.Option("--http", help="Transport HTTP (port du serveur + 1, adresse /mcp) au lieu de stdio")] = False,
+) -> None:
+    """Serveur MCP pour Claude Desktop, Claude Code ou un autre client (stdio par défaut)."""
+    from . import mcp_server
+
+    cfg = config.load()
+    client("mcp").close()  # démarre le serveur de Biblio s'il ne tourne pas : les outils passent par son API
+    if not http:
+        mcp_server.server.run("stdio")
+        return
+    import uvicorn
+
+    host = "127.0.0.1" if cfg.host in ("0.0.0.0", "::") else cfg.host
+    uvicorn.run(mcp_server.http_app(cfg.token), host=host, port=mcp_server.http_port(cfg))
+
+
+@app.command()
+def backup(
+    dest: Annotated[Path | None, typer.Argument(help="Dossier où écrire l'archive (défaut : backups/ du dossier de données)")] = None,
+) -> None:
+    """Sauvegarde la base, les PDF, les notes, les styles et config.toml dans une archive .tar.gz."""
+    if dest:
+        from . import backup as backups
+
+        cfg = config.load()
+        path = backups.create(cfg.db_path, cfg.home, dest.expanduser())
+        typer.echo(f"✓ {path} ({path.stat().st_size / 1e6:.1f} Mo)")
+        return
+    r = _call("POST", "/api/v1/backups").json()
+    typer.echo(f"✓ {r['path']} ({r['size'] / 1e6:.1f} Mo)")
+
+
+@app.command()
+def restore(
+    archive: Annotated[Path, typer.Argument(exists=True, dir_okay=False, help="Archive biblio-….tar.gz")],
+    yes: Annotated[bool, typer.Option("--yes", help="Ne pas demander confirmation")] = False,
+) -> None:
+    """Restaure une sauvegarde. Le serveur est arrêté ; les données actuelles sont mises de côté, pas effacées."""
+    from . import backup as backups
+
+    cfg = config.load()
+    try:
+        info = backups.check(archive)
+    except ValueError as exc:
+        _fail(str(exc))
+    if not yes:
+        typer.confirm(f"Remplacer les données de {cfg.home} par la sauvegarde du {info['created_at']} ?", abort=True)
+    stop()
+    c = httpx.Client(base_url=cfg.client_url)
+    for _ in range(50):
+        if not _is_biblio(c):
+            break
+        time.sleep(0.2)
+    else:
+        _fail("Le serveur ne s'arrête pas ; fermer Biblio puis recommencer")
+    aside = backups.restore(archive, cfg.home)
+    typer.echo(f"✓ Sauvegarde restaurée. Anciennes données mises de côté dans {aside}")
+
+
+@app.command("export-all")
+def export_all(
+    output: Annotated[Path, typer.Option("--output", "-o", help="Fichier .zip à créer")] = Path("biblio-export.zip"),
+) -> None:
+    """Export complet en formats ouverts : CSL-JSON, BibTeX, RIS, notes Markdown, PDF, recherches (JSON)."""
+    data = _call("POST", "/api/v1/export/full").content
     output.write_bytes(data)
     typer.echo(f"✓ {output} ({len(data) / 1e6:.1f} Mo)")
 

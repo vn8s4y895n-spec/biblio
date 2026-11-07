@@ -1,12 +1,16 @@
 """API REST locale (FastAPI). Documentation interactive : /docs ; schéma : /openapi.json."""
 
+import html
 import logging
 import os
+import re
+import io
 import secrets
 import signal
 import sqlite3
 import threading
 import time
+import zipfile
 from collections.abc import Iterator
 from dataclasses import replace
 from importlib.resources import files
@@ -14,12 +18,12 @@ from pathlib import Path
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, BackgroundTasks, Body, Depends, FastAPI, Header, HTTPException, Query, Request, Response
-from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import (__version__, ai, ask, config, core, db, exports, formats, importer, journals, library, notes, organize,
-               llm, packages, search, semantic, watch, zotero)
+from . import (__version__, ai, ask, backup, config, core, db, exports, formats, importer, journals, library, notes,
+               organize, llm, packages, search, semantic, watch, webhooks, zotero)
 from .config import Config
 from .sources import http
 from .sources.http import SourceError
@@ -145,7 +149,8 @@ class SavedSearch(BaseModel):
     query: str | None = None
     answer: list[dict] = []
     sources: list[dict] = []
-    synthesis: dict | None = None  # réponse rédigée : {"text", "sentences", "model"}
+    synthesis: dict | None = None  # réponse rédigée : {"text", "sentences", "model"} ; sans `sentences`, Biblio vérifie
+    origin: Literal["biblio", "claude", "mcp"] = "biblio"  # claude / mcp : synthèse écrite par un client MCP
 
 
 class Settings(BaseModel):
@@ -447,7 +452,15 @@ def list_searches(conn: Conn):
 
 @router.post("/searches", status_code=201, summary="Enregistrer une recherche : question, réponse et sources")
 def save_search(body: SavedSearch, conn: Conn):
-    return organize.save_search(conn, body.model_dump())
+    """Une synthèse envoyée sans `sentences` (Claude par MCP…) est vérifiée ici, phrase par phrase, contre les
+    sources qu'elle cite, comme les réponses du modèle de Biblio."""
+    data = body.model_dump()
+    if (synthesis := data["synthesis"]) and "sentences" not in synthesis:
+        synthesis["sentences"] = ai.verify(synthesis.get("text", ""), data["sources"])
+    saved = organize.save_search(conn, data)
+    webhooks.emit(conn, "search.saved", {"id": saved["id"], "question": saved["question"], "origin": saved["origin"],
+                                         "count": len(saved["sources"])})  # fmt: skip
+    return saved
 
 
 @router.get("/searches/{search_id}", summary="Relire une recherche enregistrée")
@@ -718,6 +731,20 @@ def supersede(ref: str, body: SupersedeRequest, request: Request, conn: Conn, cl
     return watch.supersede(conn, home(request), ref, body.doi, client)
 
 
+@router.get("/works/{ref:path}/passages", summary="Passages d'une notice (texte intégral, résumé, note)")
+def get_passages(ref: str, conn: Conn, q: str | None = None, limit: Annotated[int, Query(ge=1, le=50)] = 5):
+    """Avec `q` : les passages de cette notice les plus proches de `q` (plein texte + sens) ; sinon les premiers."""
+    work_id = core.resolve(conn, ref)
+    if q:
+        hit = next((r for r in library.search(conn, q, limit=500, per_work=limit)["results"] if r["id"] == work_id), None)
+        found = [{"origin": p["origin"], "page": p["page"], "text": html.unescape(re.sub(r"</?mark>", "", p["snippet"]))}
+                 for p in (hit or {}).get("passages", [])]  # fmt: skip
+    else:
+        found = [dict(r) for r in conn.execute(
+            "SELECT origin, page, text FROM passages WHERE work_id = ? ORDER BY id LIMIT ?", (work_id, limit))]  # fmt: skip
+    return {"work": work_id, "passages": found}
+
+
 @router.get("/works/{ref:path}/note", summary="Lire la note Markdown d'une notice")
 def get_note(ref: str, request: Request, conn: Conn):
     """`links` : notices citées par [[clé]] ; `backlinks` : notices dont la note cite celle-ci."""
@@ -743,9 +770,111 @@ def update_work(ref: str, body: WorkUpdate, conn: Conn, client: Client):
     return organize.update_work(conn, ref, body.model_dump(exclude_unset=True), client)
 
 
+class WebhookCreate(BaseModel):
+    url: str
+    events: list[Literal[webhooks.EVENTS]]  # type: ignore[valid-type]
+
+
+class WebhookUpdate(BaseModel):
+    url: str | None = None
+    events: list[Literal[webhooks.EVENTS]] | None = None  # type: ignore[valid-type]
+    active: bool | None = None
+
+
+@router.get("/webhooks", summary="Webhooks : adresses, événements, secret, dernier envoi")
+def list_webhooks(conn: Conn):
+    return {"events": webhooks.EVENTS, "items": webhooks.hooks(conn)}
+
+
+@router.post("/webhooks", status_code=201, summary="Ajouter un webhook (secret de signature tiré au hasard)")
+def create_webhook(body: WebhookCreate, conn: Conn):
+    """Envoi : POST JSON `{"event", "at", "data"}`, en-têtes `X-Biblio-Event` et `X-Biblio-Signature: sha256=<HMAC
+    du corps avec le secret>`."""
+    return webhooks.create(conn, body.url, body.events)
+
+
+@router.patch("/webhooks/{hook_id}", summary="Modifier ou désactiver un webhook")
+def update_webhook(hook_id: int, body: WebhookUpdate, conn: Conn):
+    return webhooks.update(conn, hook_id, body.url, body.events, body.active)
+
+
+@router.delete("/webhooks/{hook_id}", status_code=204, summary="Supprimer un webhook")
+def delete_webhook(hook_id: int, conn: Conn):
+    webhooks.delete(conn, hook_id)
+
+
+@router.post("/webhooks/{hook_id}/test", summary="Envoyer un événement d'essai (`ping`) et renvoyer le résultat")
+def test_webhook(hook_id: int, conn: Conn):
+    return webhooks.deliver(webhooks.get(conn, hook_id), "ping", {"message": "Essai depuis Biblio"})
+
+
+@router.get("/backups", summary="Sauvegardes du dossier backups/ (la plus récente d'abord)")
+def list_backups(request: Request):
+    return backup.backups(home(request))
+
+
+@router.post("/backups", status_code=201, summary="Sauvegarder maintenant (base, PDF, notes, styles, config)")
+def create_backup(request: Request):
+    """Restauration : `biblio restore <archive>` (le serveur doit être arrêté ; la commande s'en charge)."""
+    cfg = request.app.state.config
+    path = backup.create(cfg.db_path, cfg.home)
+    return {"name": path.name, "path": str(path), "size": path.stat().st_size}
+
+
+@router.post("/export/full", summary="Export complet en formats ouverts (zip : CSL-JSON, BibTeX, RIS, notes, PDF…)")
+def export_full(request: Request, conn: Conn):
+    """Un paquet .biblio de toute la bibliothèque et de toutes les recherches enregistrées (JSON + PDF), lisible sans
+    Biblio, auquel s'ajoutent library.json (CSL-JSON), library.bib, library.ris et notes/*.md."""
+    refs = exports.all_refs(conn)
+    ids = [s["id"] for s in organize.searches(conn)]
+    data = packages.create(conn, home(request), refs, "Export complet", ids) if refs or ids else None
+    buffer = io.BytesIO(data or b"")
+    with zipfile.ZipFile(buffer, "a" if data else "w", zipfile.ZIP_DEFLATED) as z:
+        for fmt, name in (("csljson", "library.json"), ("bibtex", "library.bib"), ("ris", "library.ris")):
+            z.writestr(name, exports.export(conn, home(request), refs, fmt)[0] if refs else "")
+        for note in sorted(notes.folder(home(request)).glob("*.md")):
+            z.write(note, f"notes/{note.name}")
+    return Response(buffer.getvalue(), media_type="application/zip",
+                    headers={"Content-Disposition": 'attachment; filename="biblio-export.zip"'})  # fmt: skip
+
+
+@router.get("/connectors", summary="Connecteurs : configurations MCP à copier, état de Zotero et du modèle de langue")
+def connectors(request: Request):
+    from . import mcp_server  # import local : le SDK MCP n'est chargé que pour l'écran Connecteurs
+
+    return mcp_server.connectors(request.app.state.config)
+
+
+@router.get("/connectors/claude/biblio.mcpb", summary="Extension Claude Desktop (double-clic pour l'installer)")
+def claude_extension(request: Request):
+    from . import claude
+
+    return Response(claude.mcpb(request.app.state.config), media_type="application/zip",
+                    headers={"Content-Disposition": 'attachment; filename="biblio.mcpb"'})  # fmt: skip
+
+
+@router.get("/connectors/claude/biblio-skill.zip", summary="Skill « Biblio » à importer dans Claude")
+def claude_skill():
+    from . import claude
+
+    return Response(claude.skill_zip(), media_type="application/zip",
+                    headers={"Content-Disposition": 'attachment; filename="biblio-skill.zip"'})  # fmt: skip
+
+
+def llms_txt(app: FastAPI) -> str:
+    """Résumé de l'API pour un modèle de langue (convention llms.txt), tiré du schéma OpenAPI."""
+    lines = ["# Biblio", "", "> Gestionnaire de bibliographie local (médecine, microbiologie). API REST sur /api/v1, "
+             "jeton `Authorization: Bearer <jeton>` (config.toml ou `biblio token`). Schéma complet : /openapi.json. "
+             "Serveur MCP : `biblio mcp` (stdio) ou `biblio mcp --http`.", "", "## Points d'accès", ""]  # fmt: skip
+    for path, operations in app.openapi()["paths"].items():
+        lines += [f"- `{method.upper()} {path}` : {op['summary']}" for method, op in operations.items()]
+    return "\n".join(lines) + "\n"
+
+
 def _background(app: FastAPI) -> None:
     """Toutes les 5 s : boîte d'entrée, Téléchargements (si activé), notes modifiées hors de Biblio, library.bib.
-    Toutes les heures : veille (recherches suivies arrivées à échéance, bibliothèque chaque semaine).
+    Toutes les heures : veille (recherches suivies arrivées à échéance, bibliothèque chaque semaine), sauvegarde
+    quotidienne.
     Toutes les 6 h : liste des revues. Les réglages sont relus à chaque tour (écran de réglages)."""
     # ponytail: boucle dans un thread ; passera par la file de tâches de la phase 5.
     next_journal_check = next_watch = 0.0
@@ -758,9 +887,11 @@ def _background(app: FastAPI) -> None:
                 importer.scan_downloads(conn, config.downloads_dir, config.home)
             notes.sync(conn, config.home)
             exports.sync_library_bib(conn, config.home)
-            if time.monotonic() >= next_watch:  # recherches suivies et bibliothèque : chaque heure, selon échéance
+            if time.monotonic() >= next_watch:  # chaque heure : veille selon échéance, sauvegarde du jour
                 next_watch = time.monotonic() + 3600
                 watch.run_due(conn)
+                if path := backup.daily(config.db_path, config.home):
+                    log.info("Sauvegarde du jour : %s", path)
             if time.monotonic() >= next_journal_check:
                 next_journal_check = time.monotonic() + 6 * 3600
                 if result := journals.update_if_stale(conn, config.home):
@@ -793,6 +924,7 @@ def create_app(config: Config, background: bool = False) -> FastAPI:
     conn.close()
     http.configure(config.contact_email, config.api_keys, config.db_path)
     llm.configure(llm.Settings.of(config))
+    webhooks.db_path = config.db_path
     app = FastAPI(
         title="Biblio",
         version=__version__,
@@ -812,6 +944,11 @@ def create_app(config: Config, background: bool = False) -> FastAPI:
         return {"app": "biblio", "version": __version__, "status": "ok"}
 
     app.include_router(router)
+
+    @app.get("/llms.txt", summary="Résumé de l'API pour un modèle de langue (sans authentification)",
+             response_class=PlainTextResponse)  # fmt: skip
+    def llms():
+        return llms_txt(app)
 
     # ValueError couvre les saisies invalides (identifiant, format de fichier, PDF refusé, fusion impossible).
     errors = {ValueError: 422, core.NotFound: 404, SourceError: 502, zotero.ZoteroError: 503, llm.LLMError: 503}

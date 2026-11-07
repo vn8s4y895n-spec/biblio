@@ -247,6 +247,10 @@ def _insert(conn: sqlite3.Connection, rec: dict, client: str) -> int:
         (work_id, work_id, print_key, work_id),
     )
     library.index_work(conn, work_id)
+    from . import webhooks  # import local : webhooks dépend de core
+
+    webhooks.emit(conn, "work.created", {"id": work_id, "citekey": values[0], "title": rec.get("title"),
+                                         "year": rec.get("year"), "identifiers": rec["identifiers"], "client": client})  # fmt: skip
     return work_id
 
 

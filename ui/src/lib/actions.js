@@ -11,7 +11,7 @@ export const EXPORTS = [
   ["markdown", "Markdown (.md)", "md"],
 ];
 
-function save(blob, filename) {
+export function save(blob, filename) {
   const url = URL.createObjectURL(blob);
   const a = Object.assign(document.createElement("a"), { href: url, download: filename });
   document.body.append(a);
@@ -76,4 +76,17 @@ export async function addRecord(rec, question = null, scope = "online") {
   const warn = out.warnings?.length ? ` (${out.warnings.join(" ; ")})` : "";
   toast(`${get(t)("ask.added")} ${out.work.citekey}${warn}`, warn ? "warn" : "ok");
   return out.work.citekey;
+}
+
+export function copy(text) {
+  navigator.clipboard.writeText(text).then(() => toast(get(t)("detail.copied"), "ok", 2000));
+}
+
+// Fichier renvoyé par l'API (GET ou POST sans corps) enregistré dans Téléchargements.
+export async function download(path, filename, method = "GET") {
+  try {
+    save(await api(path, { method }), filename);
+  } catch (e) {
+    toast(e.message, "error", 8000);
+  }
 }
