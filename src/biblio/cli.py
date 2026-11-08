@@ -71,6 +71,8 @@ def _fail(message: str) -> None:
 
 def _call(method: str, path: str, **kwargs) -> httpx.Response:
     response = client().request(method, path, **kwargs)
+    if response.status_code == 401:  # le serveur qui répond n'a pas le jeton de cette bibliothèque
+        _fail("Jeton refusé : un autre Biblio (autre dossier de données) répond sur ce port : quitter Biblio, puis le rouvrir.")
     if response.status_code >= 400:
         try:
             detail = response.json()["detail"]

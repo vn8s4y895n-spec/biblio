@@ -307,3 +307,11 @@ def test_update_download_is_verified(tmp_path, monkeypatch):
         updates._download(asset, tmp_path)  # sans empreinte publiée : refusé
     ok = updates._download({**asset, "digest": "sha256:" + hashlib.sha256(b"dmg").hexdigest()}, tmp_path)
     assert ok.read_bytes() == b"dmg"
+
+
+def test_wrong_token_says_another_biblio_answers(api, monkeypatch):
+    """Un autre Biblio (autre dossier de données) occupe le port : le message le dit, au lieu d'un « jeton invalide »."""
+    api.headers["Authorization"] = "Bearer faux"
+    monkeypatch.setattr(mcp_server, "client", lambda: api)
+    with pytest.raises(mcp_server.BiblioError, match="un autre Biblio"):
+        mcp_server._get("/api/v1/works")

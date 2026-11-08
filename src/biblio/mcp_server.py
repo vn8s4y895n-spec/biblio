@@ -55,6 +55,8 @@ def _call(method: str, path: str, **kwargs) -> httpx.Response:
         response = client().request(method, path, **kwargs)
     except httpx.HTTPError as exc:
         raise BiblioError(f"Biblio injoignable ({exc}) : ouvrir Biblio, puis réessayer") from exc
+    if response.status_code == 401:  # le serveur qui répond n'a pas le jeton de cette bibliothèque
+        raise BiblioError("Biblio : jeton refusé, un autre Biblio (autre dossier de données) répond sur ce port : quitter Biblio, puis le rouvrir")
     if response.status_code >= 400:
         try:
             detail = response.json()["detail"]
