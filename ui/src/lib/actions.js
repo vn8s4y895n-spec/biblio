@@ -78,6 +78,20 @@ export async function addRecord(rec, question = null, scope = "online") {
   return out.work.citekey;
 }
 
+// Supprime des notices après confirmation ; leur note et leurs PDF vont à la Corbeille. Renvoie true si supprimées.
+export async function deleteWorks(works, title = null) {
+  const n = works.length;
+  if (!confirm(get(t)(n === 1 && title ? "delete.confirm_one" : "delete.confirm", { n, title }))) return false;
+  try {
+    const out = await api("/works/delete", { method: "POST", body: { works: works.map(String) } });
+    toast(get(t)("delete.done", { n: out.deleted.length }), "ok");
+    return true;
+  } catch (e) {
+    toast(e.message, "error");
+    return false;
+  }
+}
+
 export function copy(text) {
   navigator.clipboard.writeText(text).then(() => toast(get(t)("detail.copied"), "ok", 2000));
 }

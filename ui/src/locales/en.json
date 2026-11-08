@@ -505,5 +505,11 @@
     },
     "answer": "Answer built from the first {n} sources",
     "interrupted": "The search was interrupted"
+  },
+  "delete": {
+    "button": "Delete",
+    "confirm_one": "Delete “{title}” from the library?\n\nIts note and PDF will go to the Trash.",
+    "confirm": "Delete {n} article(s) from the library?\n\nTheir notes and PDFs will go to the Trash.",
+    "done": "{n} article(s) deleted (notes and PDFs moved to the Trash)"
   }
 }

@@ -505,5 +505,11 @@
     },
     "answer": "Réponse composée à partir des {n} premières sources",
     "interrupted": "La recherche s'est interrompue"
+  },
+  "delete": {
+    "button": "Supprimer",
+    "confirm_one": "Supprimer « {title} » de la bibliothèque ?\n\nSa note et son PDF iront à la Corbeille.",
+    "confirm": "Supprimer {n} article(s) de la bibliothèque ?\n\nLeurs notes et leurs PDF iront à la Corbeille.",
+    "done": "{n} article(s) supprimé(s) (notes et PDF à la Corbeille)"
   }
 }

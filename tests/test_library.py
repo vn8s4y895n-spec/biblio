@@ -512,3 +512,26 @@ def test_downloads_cleanup_moves_only_stored_articles_to_trash(conn, cfg, tmp_pa
     assert sorted(trashed) == ["merino (1).pdf", "merino.pdf"]
     assert [p.name for p in downloads.iterdir()] == ["facture.pdf"]  # une facture n'est jamais touchée
     assert len(list((cfg.home / "library").rglob("*.pdf"))) == 1  # la copie est bien rangée dans Biblio
+
+
+def test_delete_works_sends_note_and_unshared_pdf_to_trash(conn, cfg, monkeypatch):
+    import send2trash
+
+    trashed = []
+    monkeypatch.setattr(send2trash, "send2trash", lambda path: (trashed.append(Path(path).suffix), Path(path).unlink()))
+    a, _ = core.add_manual(conn, {"title": "Notice à supprimer", "year": 2020}, "cli")
+    b, _ = core.add_manual(conn, {"title": "Notice qui partage le PDF", "year": 2021}, "cli")
+    c, _ = core.add_manual(conn, {"title": "Notice gardée", "year": 2022}, "cli")
+    sha, _ = library.store_pdf(conn, cfg.home, MERINO_PDF, "merino.pdf")
+    own, _ = library.store_pdf(conn, cfg.home, make_pdf("Autre article"), "autre.pdf")
+    for work, file in ((a, sha), (b, sha), (a, own)):
+        library.attach(conn, cfg.home, work["id"], file)
+    notes.write(conn, cfg.home, a["id"], "Ma note")
+
+    assert core.delete_works(conn, cfg.home, [a["citekey"], a["id"]], "ui") == [a["citekey"]]
+    assert sorted(trashed) == [".md", ".pdf"]  # la note, et le PDF que personne d'autre n'utilise
+    assert library.pdf_path(cfg.home, sha).is_file() and not library.pdf_path(cfg.home, own).exists()
+    assert [w["id"] for w in core.list_works(conn)["items"]] == [c["id"], b["id"]]
+    assert conn.execute("SELECT op FROM changes WHERE op = 'delete'").fetchone()  # trace gardée au journal
+    with pytest.raises(core.NotFound):
+        core.get_work(conn, a["id"])

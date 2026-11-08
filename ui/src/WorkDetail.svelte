@@ -3,7 +3,7 @@
   import AiSummary from "./lib/AiSummary.svelte";
   import Badges from "./lib/Badges.svelte";
   import RecordList from "./lib/RecordList.svelte";
-  import { EXPORTS, copyCitation, exportWorks, makePackage, sendToZotero } from "./lib/actions.js";
+  import { EXPORTS, copyCitation, deleteWorks, exportWorks, makePackage, sendToZotero } from "./lib/actions.js";
   import { api } from "./lib/api.js";
   import { doiUrl } from "./lib/format.js";
   import { fmt, t } from "./lib/i18n.js";
@@ -176,6 +176,7 @@
           {#each EXPORTS as [format, label]}<option value={format}>{label}</option>{/each}
         </select>
         <button class="small" onclick={() => makePackage({ works: [String(work.id)] }, work.citekey)}>{$t("package.make")}</button>
+        <button class="small danger" onclick={async () => { if (await deleteWorks([work.id], work.title)) { location.hash = "#/library"; onchange(); onlabels(); } }}>{$t("delete.button")}</button>
       </div>
     </header>
 

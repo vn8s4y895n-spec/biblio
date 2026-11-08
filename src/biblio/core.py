@@ -396,6 +396,36 @@ def merge_works(conn: sqlite3.Connection, home: Path, keep: str | int, drop: str
     return get_work(conn, keep_id)
 
 
+def delete_works(conn: sqlite3.Connection, home: Path, refs: list, client: str) -> list[str]:
+    """Supprime des notices. Leur note et leurs PDF (ceux qu'aucune autre notice n'utilise) vont à la Corbeille du
+    système : rien n'est effacé définitivement. Le journal des modifications garde la notice supprimée. Renvoie les
+    clés supprimées."""
+    from send2trash import send2trash
+
+    from . import notes  # import local : notes importe ce module
+
+    ids = list(dict.fromkeys(resolve(conn, r) for r in refs))
+    keys, files = [], []
+    with db.transaction(conn):
+        for work_id in ids:
+            old = get_work(conn, work_id)
+            if conn.execute("SELECT 1 FROM notes WHERE work_id = ?", (work_id,)).fetchone():
+                files.append(notes._path(conn, home, work_id))
+            for (sha,) in conn.execute("SELECT sha256 FROM work_files WHERE work_id = ?", (work_id,)).fetchall():
+                conn.execute("DELETE FROM work_files WHERE work_id = ? AND sha256 = ?", (work_id, sha))
+                if not conn.execute("SELECT 1 FROM work_files WHERE sha256 = ?", (sha,)).fetchone():
+                    conn.execute("DELETE FROM passages WHERE sha256 = ?", (sha,))
+                    conn.execute("DELETE FROM files WHERE sha256 = ?", (sha,))
+                    files.append(library.pdf_path(home, sha))
+            _log(conn, work_id, client, "delete", None, old, None)
+            conn.execute("DELETE FROM works WHERE id = ?", (work_id,))
+            keys.append(old["citekey"])
+    for path in files:  # après la transaction : un échec ne laisse jamais une notice sans son fichier
+        if path.exists():
+            send2trash(path)
+    return keys
+
+
 # --- Lecture -------------------------------------------------------------------------
 
 

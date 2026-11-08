@@ -2,7 +2,7 @@
   import { onMount } from "svelte";
   import WorkDetail from "./WorkDetail.svelte";
   import Badges from "./lib/Badges.svelte";
-  import { EXPORTS, exportWorks, importZoteroRdf, makePackage, sendToZotero } from "./lib/actions.js";
+  import { EXPORTS, deleteWorks, exportWorks, importZoteroRdf, makePackage, sendToZotero } from "./lib/actions.js";
   import { api } from "./lib/api.js";
   import { fmt, t } from "./lib/i18n.js";
   import { toast } from "./lib/toast.js";
@@ -576,6 +576,7 @@
         </select>
         <button class="small" onclick={() => sendToZotero({ works: [...checked].map(String) })}>Zotero</button>
         <button class="small" onclick={() => makePackage({ works: [...checked].map(String) })}>{$t("package.make")}</button>
+        <button class="small danger" onclick={async () => { if (await deleteWorks([...checked])) { if (items.some((w) => checked.has(w.id) && w.citekey === current)) location.hash = "#/library"; checked = new Set(); refreshLabels(); refresh(); } }}>{$t("delete.button")}</button>
         <button class="ghost small" onclick={() => (checked = new Set())}>{$t("common.cancel")}</button>
       </div>
     {/if}

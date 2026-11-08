@@ -365,6 +365,15 @@ def merge_duplicates(body: MergeRequest, request: Request, conn: Conn, client: C
     return core.merge_works(conn, home(request), body.keep, body.drop, client)
 
 
+class DeleteRequest(BaseModel):
+    works: list[str]  # id, clé, DOI ou PMID
+
+
+@router.post("/works/delete", summary="Supprimer des notices (note et PDF mis à la Corbeille)")
+def delete_works(body: DeleteRequest, request: Request, conn: Conn, client: Client):
+    return {"deleted": core.delete_works(conn, home(request), body.works, client)}
+
+
 @router.post("/duplicates/dismiss", status_code=204, summary="Écarter un doublon signalé (ce ne sont pas les mêmes)")
 def dismiss_duplicate(conn: Conn, a: Annotated[str, Body()], b: Annotated[str, Body()]):
     core.dismiss_duplicate(conn, a, b)
