@@ -85,6 +85,31 @@
     }
   }
 
+  // DOI, PMID ou PMCID tapé dans la recherche : on propose de l'ajouter (rangé dans la collection ouverte).
+  const IDENT = /^(?:https?:\/\/(?:dx\.)?doi\.org\/|doi:\s*)?10\.\d{4,9}\/\S+$|^(?:pmid:?\s*)?\d{1,9}$|^pmc\d+$/i;
+  const identifier = $derived(IDENT.test(q.trim()) ? q.trim() : "");
+  let adding = $state(false);
+
+  async function addIdentifier() {
+    if (!identifier || adding) return;
+    adding = true;
+    try {
+      const out = await api("/works", { method: "POST", body: { identifier } });
+      const key = out.work.citekey;
+      const warn = out.warnings?.length ? ` (${out.warnings.join(" ; ")})` : "";
+      toast(`${$t(out.created ? "ask.added" : "library.already")} ${key}${warn}`, warn ? "warn" : "ok");
+      const label = selectedCollection();
+      if (label) await api(`/labels/${label}/works`, { method: "POST", body: { works: [key] } });
+      q = "";
+      location.hash = `#/library/${encodeURIComponent(key)}`;
+      refreshLabels();
+    } catch (e) {
+      toast(e.message, "error", 8000);
+    } finally {
+      adding = false;
+    }
+  }
+
   async function refresh(more = false) {
     loading = true;
     try {
@@ -479,7 +504,13 @@
 
   <section class="list">
     <div class="search">
-      <input type="search" bind:this={searchBox} bind:value={q} placeholder={$t("library.search")} />
+      <input type="search" bind:this={searchBox} bind:value={q} placeholder={$t("library.search")}
+        onkeydown={(e) => { if (e.key === "Enter" && identifier) addIdentifier(); }} />
+      {#if identifier}
+        <button class="primary small add-id" disabled={adding} onclick={addIdentifier}>
+          {adding ? $t("library.adding") : $t("library.add_identifier", { id: identifier })}
+        </button>
+      {/if}
       <div class="row small faint count">
         <input type="checkbox" aria-label={$t("library.select_all")} title={$t("library.select_all")}
           checked={items.length > 0 && items.every((w) => checked.has(w.id))}
@@ -657,6 +688,7 @@
   .list { display: flex; flex-direction: column; background: var(--surface); }
   .search { padding: 10px 12px; border-bottom: 1px solid var(--border); }
   .search input[type="search"] { width: 100%; }
+  .add-id { margin-top: 6px; width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .count { margin-top: 5px; }
   .batch { padding: 8px 12px; background: var(--accent-soft); border-bottom: 1px solid var(--border); }
   .batch select { padding: 2px 6px; }

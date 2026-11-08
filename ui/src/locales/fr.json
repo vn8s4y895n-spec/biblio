@@ -142,7 +142,7 @@
     "no_collection": "Aucune collection",
     "no_tag": "Aucun tag",
     "confirm_delete_label": "Supprimer « {name} » ? Les articles restent dans la bibliothèque.",
-    "search": "Chercher dans la bibliothèque (texte intégral et sens)…",
+    "search": "Chercher dans la bibliothèque, ou coller un DOI / PMID à ajouter…",
     "count": "{n} articles",
     "selected": "{n} sélectionnés",
     "add_to": "Ranger dans…",
@@ -214,7 +214,10 @@
     "col_study_type": "Type",
     "col_status": "Statut",
     "col_rating": "Note",
-    "col_added": "Ajouté"
+    "col_added": "Ajouté",
+    "add_identifier": "Ajouter {id} à la bibliothèque (Entrée)",
+    "adding": "Ajout en cours…",
+    "already": "Déjà dans la bibliothèque :"
   },
   "detail": {
     "record": "Notice",

@@ -142,7 +142,7 @@
     "no_collection": "No collection",
     "no_tag": "No tag",
     "confirm_delete_label": "Delete “{name}”? The articles stay in the library.",
-    "search": "Search the library (full text and meaning)…",
+    "search": "Search the library, or paste a DOI / PMID to add…",
     "count": "{n} articles",
     "selected": "{n} selected",
     "add_to": "Add to…",
@@ -214,7 +214,10 @@
     "col_study_type": "Type",
     "col_status": "Status",
     "col_rating": "Rating",
-    "col_added": "Added"
+    "col_added": "Added",
+    "add_identifier": "Add {id} to the library (Enter)",
+    "adding": "Adding…",
+    "already": "Already in the library:"
   },
   "detail": {
     "record": "Record",
