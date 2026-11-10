@@ -1,6 +1,6 @@
 """Biblio : gestionnaire de bibliographie local, autonome et ouvert."""
 
-__version__ = "0.1.3"
+__version__ = "0.1.4"
 REPOSITORY = "vn8s4y895n-spec/biblio"  # GitHub : code, versions publiées (mises à jour)
 
 
