@@ -126,7 +126,9 @@ def _install_mac(app: Path, dmg: Path, folder: Path, version: str) -> None:
     script.write_text(f'''#!/bin/sh
 sleep 1
 pkill -f '^{exe}( serve)?$'
-sleep 2
+for i in 1 2 3 4 5 6 7 8 9 10; do pgrep -f '^{exe}( serve)?$' >/dev/null || break; sleep 0.5; done
+pkill -9 -f '^{exe}( serve)?$'  # fenêtre restée ouverte (bloquée en se fermant) : fermée de force
+sleep 1
 mv "{app}" "{folder}/old.app" && mv "{staged}" "{app}" || mv "{folder}/old.app" "{app}"
 rm -rf "{folder}/old.app"
 open "{app}"

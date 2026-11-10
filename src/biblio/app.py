@@ -59,7 +59,7 @@ def run(browser: bool = False, paths: list[str] | None = None) -> None:
     # Fenêtre non privée : les préférences d'affichage (tri, cases cochées, largeurs…) restent d'une ouverture à l'autre.
     webview.start(private_mode=False, storage_path=str(cfg.home / "webview"))
     if started_here:  # la fenêtre a lancé le serveur : elle l'arrête en se fermant
-        client.post("/api/v1/shutdown")
+        client.post("/api/v1/shutdown", timeout=5)  # serveur déjà en train de s'arrêter : ne pas garder la fenêtre
 
 
 class Bridge:
