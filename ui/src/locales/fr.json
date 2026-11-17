@@ -346,7 +346,7 @@
   "package": {
     "make": "Paquet .biblio",
     "made": "Paquet .biblio créé",
-    "send_search": "Envoyer en paquet .biblio",
+    "send_search": "Partager à un autre utilisateur de Biblio",
     "search_help": "La question, la réponse, les sources, et les articles déjà dans la bibliothèque avec leurs PDF et notes",
     "preview": "{n} articles · paquet du {date}",
     "searches": "{n} recherche(s) enregistrée(s)",
