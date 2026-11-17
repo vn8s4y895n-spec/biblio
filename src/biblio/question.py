@@ -156,11 +156,22 @@ def concept_groups(query: str) -> list[list[str]]:
     return groups
 
 
-def group_coverage(groups: list[list[str]], rec: dict) -> float:
-    """Part des concepts dont au moins un terme figure dans le titre ou le résumé (début des mots, sans accents)."""
-    text = plain(f"{rec.get('title') or ''} {rec.get('abstract') or ''}")
+def _spelling(text: str) -> str:
+    """Sans accents ni variantes d'orthographe (phosphomycin / fosfomycin, sulphate / sulfate)."""
+    return plain(text).replace("ph", "f")
+
+
+def missing_concepts(groups: list[list[str]], rec: dict) -> list[str]:
+    """Concepts dont aucun terme ne figure dans le titre ou le résumé (début des mots, sans accents) ; chacun est
+    nommé par son premier terme."""
+    text = _spelling(f"{rec.get('title') or ''} {rec.get('abstract') or ''}")
 
     def found(term: str) -> bool:
-        return all(plain(w)[:6] in text for w in term.split() if len(w) > 2)
+        return all(_spelling(w)[:6] in text for w in term.split() if len(w) > 2)
 
-    return sum(any(found(t) for t in g) for g in groups) / len(groups) if groups else 1.0
+    return [g[0] for g in groups if not any(found(t) for t in g)]
+
+
+def group_coverage(groups: list[list[str]], rec: dict) -> float:
+    """Part des concepts présents dans le titre ou le résumé."""
+    return (len(groups) - len(missing_concepts(groups, rec))) / len(groups) if groups else 1.0

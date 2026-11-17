@@ -60,7 +60,7 @@
     "add_all": "Tout ajouter",
     "added": "Ajouté :",
     "off_topic": "{n} hors sujet écartées",
-    "off_topic_help": "Résultats qui contiennent moins de la moitié des mots-clés de la question",
+    "off_topic_help": "Résultats qui ne contiennent pas les concepts de la question dans leur titre ou leur résumé",
     "history": "Questions récentes",
     "clear_history": "Effacer l'historique",
     "forget": "Retirer de l'historique",
@@ -68,7 +68,12 @@
     "continue_claude": "Continuer dans Claude",
     "continue_help": "Copie un prompt à coller dans Claude Desktop (extension Biblio installée) : il reprend la question et ces sources",
     "claude_prompt": "Question : {question}\nRequête PubMed déjà utilisée dans Biblio : {query}\nSources déjà trouvées (ids des outils Biblio) :\n{sources}\n\nAvec les outils Biblio, lis ces sources (get_summary), complète si besoin la recherche (search_online, search_library), réponds en citant chaque phrase, puis enregistre la synthèse avec save_synthesis.",
-    "history_on": "Résultat de la recherche du {date}, non relancée."
+    "history_on": "Résultat de la recherche du {date}, non relancée.",
+    "off_topic_concepts": "{n} articles écartés car ils ne parlent pas de tous ces concepts : {concepts}.",
+    "follow_up": "Approfondir",
+    "follow_up_placeholder": "Question de suivi : précise, élargis ou demande un détail (nouvelle recherche avec tout l'échange)…",
+    "follow_up_submit": "Relancer avec le contexte",
+    "turn_sources": "{n} sources de cette réponse"
   },
   "source": {
     "summary": "Résumé Biblio",
@@ -77,7 +82,8 @@
     "adding": "Ajout…",
     "open_in_library": "Dans la bibliothèque",
     "free_pdf": "PDF libre",
-    "cited_by": "cité {n} fois"
+    "cited_by": "cité {n} fois",
+    "missing": "Ne parle pas de : {concepts}"
   },
   "badge": {
     "oa": "Accès libre"

@@ -60,7 +60,7 @@
     "add_all": "Add all",
     "added": "Added:",
     "off_topic": "{n} off-topic removed",
-    "off_topic_help": "Results containing fewer than half of the question's keywords",
+    "off_topic_help": "Results whose title or abstract lacks the question's concepts",
     "history": "Recent questions",
     "clear_history": "Clear history",
     "forget": "Remove from history",
@@ -68,7 +68,12 @@
     "continue_claude": "Continue in Claude",
     "continue_help": "Copies a prompt to paste into Claude Desktop (Biblio extension installed): it carries the question and these sources",
     "claude_prompt": "Question: {question}\nPubMed query already used in Biblio: {query}\nSources already found (Biblio tool ids):\n{sources}\n\nUsing the Biblio tools, read these sources (get_summary), extend the search if needed (search_online, search_library), answer citing every sentence, then save the synthesis with save_synthesis.",
-    "history_on": "Result of the search on {date}, not run again."
+    "history_on": "Result of the search on {date}, not run again.",
+    "off_topic_concepts": "{n} articles removed: they don't cover all of these concepts: {concepts}.",
+    "follow_up": "Go further",
+    "follow_up_placeholder": "Follow-up question: narrow, widen or ask a detail (new search with the whole exchange)…",
+    "follow_up_submit": "Search with context",
+    "turn_sources": "{n} sources for this answer"
   },
   "source": {
     "summary": "Biblio summary",
@@ -77,7 +82,8 @@
     "adding": "Adding…",
     "open_in_library": "In library",
     "free_pdf": "Free PDF",
-    "cited_by": "cited {n} times"
+    "cited_by": "cited {n} times",
+    "missing": "Doesn't mention: {concepts}"
   },
   "badge": {
     "oa": "Open access"

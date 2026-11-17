@@ -31,6 +31,7 @@
     </div>
   </div>
   <div class="badges"><Badges {rec} /></div>
+  {#if rec.missing?.length}<p class="missing small">⚠ {$t("source.missing", { concepts: rec.missing.join(", ") })}</p>{/if}
 
   {#if rec.passages?.length}
     <ul class="passages">
@@ -83,6 +84,7 @@
 </article>
 
 <style>
+  .missing { color: var(--warn); margin: 4px 0 0; }
   article {
     padding: 14px 16px; border-bottom: 1px solid var(--border); cursor: default;
     border-left: 3px solid transparent; transition: background 0.2s;

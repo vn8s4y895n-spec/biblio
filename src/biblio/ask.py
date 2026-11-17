@@ -103,7 +103,7 @@ def _decorate(rec: dict) -> dict:
 
 
 def ask_online(conn: sqlite3.Connection, question: str, filters: search.Filters, limit: int = 20,
-               query: str | None = None, origin: str | None = None) -> dict:  # fmt: skip
+               query: str | None = None, origin: str | None = None, context: list[dict] | None = None) -> dict:  # fmt: skip
     """`query` : requête corrigée à la main (envoyée telle quelle) ; la question sert toujours à choisir les phrases.
     Sinon, avec un modèle de langue configuré, il écrit la requête PubMed et propose des questions liées
     (`query_by` = ai). Sans modèle (ou s'il échoue), la question devient une liste de mots-clés (voir question.py),
@@ -112,7 +112,9 @@ def ask_online(conn: sqlite3.Connection, question: str, filters: search.Filters,
     from . import ai, llm  # import local : ai importe ce module
 
     translated: list = []
-    terms = None if query or questions.is_syntax(question) else questions.keywords(question, translated)
+    # Question de suivi sans IA : ses mots-clés reprennent ceux de la question de départ.
+    subject = f"{context[0]['question']} {question}" if context else question
+    terms = None if query or questions.is_syntax(question) else questions.keywords(subject, translated)
     if terms is not None and not terms:
         terms = None
     if query:
@@ -125,7 +127,9 @@ def ask_online(conn: sqlite3.Connection, question: str, filters: search.Filters,
     if terms and ai.enabled():
         trace.step("ai_plan_start", model=llm.current.model)
         try:  # requête écrite par le modèle (traduction, MeSH, synonymes) ; sinon, mots-clés
-            planned = ai.plan(question, origin)
+            required: list = []
+            questions.keywords(question, required)
+            planned = ai.plan(question, origin, context, [en for _, en in required])
             query, related, query_by, terms = planned["query"], planned["related"], "ai", None
             trace.step("ai_plan", query=query, related=related)
         except llm.LLMError as exc:
@@ -134,7 +138,7 @@ def ask_online(conn: sqlite3.Connection, question: str, filters: search.Filters,
     query = query or (" ".join(terms) if terms else question)
     found = search.search(conn, query, limit=limit * 3, filters=filters)
     if query_by == "ai" and found["total"] < RELAX_BELOW:  # requête du modèle trop étroite : mots-clés
-        terms = questions.keywords(question)
+        terms = questions.keywords(subject)
         query, query_by = " ".join(terms), "keywords"
         trace.step("fallback", found=found["total"], minimum=RELAX_BELOW, query=query)
         found = search.search(conn, query, limit=limit * 3, filters=filters)
@@ -143,13 +147,16 @@ def ask_online(conn: sqlite3.Connection, question: str, filters: search.Filters,
         trace.step("relax", found=found["total"], minimum=RELAX_BELOW, query=query)
         found = search.search(conn, query, limit=limit * 3, filters=filters)
     results = found["results"]
-    off_topic = 0
-    if query_by == "ai":  # concepts de la requête de l'IA : il peut en manquer un au plus
+    off_topic, concepts = 0, []
+    if query_by == "ai":  # concepts de la requête de l'IA : tous s'il y en a deux, sinon il peut en manquer un
         groups = questions.concept_groups(query)
-        need = (len(groups) - 1) / len(groups) if len(groups) > 1 else 1.0
+        concepts = [g[0] for g in groups]
+        need = (len(groups) - 1) / len(groups) if len(groups) > 2 else 1.0
+        for r in results:
+            r["missing"] = questions.missing_concepts(groups, r)
 
         def cover(r: dict) -> float:
-            return questions.group_coverage(groups, r)
+            return (len(groups) - len(r["missing"])) / len(groups) if groups else 1.0
     elif terms and len(terms) >= 2:
         need = MIN_COVERAGE
 
@@ -160,15 +167,15 @@ def ask_online(conn: sqlite3.Connection, question: str, filters: search.Filters,
     if cover is not None:
         kept = [r for r in results if cover(r) >= need]
         off_topic = len(results) - len(kept)
-        # À rang égal dans les bases, la source qui couvre le plus la question passe devant.
-        kept.sort(key=lambda r: -(r["score"] + cover(r) / search.RRF_K))
+        # Les sources qui couvrent toute la question d'abord, puis l'ordre des bases.
+        kept.sort(key=lambda r: (-cover(r), -r["score"]))
         results = kept
         trace.step("topic", by="concepts" if query_by == "ai" else "keywords", removed=off_topic, kept=len(kept),
                    need=round(need, 2))  # fmt: skip
     sources = [_decorate(rec) for rec in results[:limit]]
     trace.step("answer", shown=len(sources))
     return {"scope": "online", "question": question, "query": query, "query_by": query_by, "related": related,
-            "warnings": warnings, "total": len(results), "hidden": found["hidden"], "off_topic": off_topic,
+            "warnings": warnings, "total": len(results), "hidden": found["hidden"], "off_topic": off_topic, "concepts": concepts,
             "status": found["sources"], "answer": compose(question, sources), "sources": sources}  # fmt: skip
 
 

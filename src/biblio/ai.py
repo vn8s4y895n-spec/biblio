@@ -6,6 +6,7 @@ des sources qu'elle cite (modèle sémantique local, sinon mots en commun) et si
 """
 
 import hashlib
+import json
 import re
 import sqlite3
 from collections.abc import Iterator
@@ -13,6 +14,8 @@ from collections.abc import Iterator
 from . import ask, db, llm, semantic
 
 MAX_SOURCES = 8  # sources données au modèle pour rédiger
+CONTEXT_TURNS = 3  # questions de suivi : échanges précédents donnés au modèle
+CONTEXT_CHARS = 1500
 ABSTRACT_CHARS = 1500
 SUPPORT_SEMANTIC = 0.5  # cosinus minimal entre une phrase et une phrase de la source citée
 SUPPORT_LEXICAL = 0.35  # sans modèle sémantique : part des mots de la phrase présents dans la source
@@ -38,7 +41,15 @@ Règles :
 - Chaque phrase se termine par le numéro de la ou des sources qui l'appuient, entre crochets : [1] ou [2][4].
 - N'écris rien qui ne soit pas dans les sources ; si elles ne suffisent pas, dis-le clairement.
 - Précise le type d'étude et l'effectif quand ils comptent pour le niveau de preuve.
-- Signale les résultats contradictoires entre sources."""
+- Signale les résultats contradictoires entre sources.
+- Si la plupart des sources ne traitent pas de la question, commence par le dire.
+- Vocabulaire médical français exact, jamais traduit mot à mot de l'anglais : ESBL = BLSE (bêta-lactamase à
+  spectre étendu, une enzyme, pas une bactérie) ; MDR = multirésistant ; XDR = ultrarésistant (extensively
+  drug-resistant) ; PDR = toto-résistant (pandrug-resistant) ; CRE = entérobactéries résistantes aux carbapénèmes ;
+  CPE = entérobactéries productrices de carbapénémase (EPC) ; VRE = entérocoque résistant à la vancomycine (ERV) ;
+  MRSA = SARM ; ICU = réanimation ; critically ill = patients de réanimation. En cas de doute sur un terme, garde
+  le terme anglais entre parenthèses.
+- Pour une question de suivi, réponds à la nouvelle question en tenant compte de l'échange précédent."""
 
 SUMMARY_PROMPT = """Résume cet article scientifique en 3 phrases au plus, en {lang} : type d'étude et population
 (avec l'effectif), résultat principal (avec les chiffres clés), conclusion des auteurs. Uniquement à partir du texte
@@ -52,16 +63,55 @@ def enabled() -> bool:
 # --- Requête PubMed -----------------------------------------------------------------------------------
 
 
-def plan(question: str, origin: str | None = None) -> dict:
-    """Requête PubMed et questions liées. `origin` : la question de départ quand celle-ci est une question liée
-    cliquée ; les nouvelles questions liées restent dans son sujet au lieu de dériver de génération en génération.
-    Lève llm.LLMError si le modèle échoue ou répond mal."""
-    content = question if not origin or origin == question else (
-        f"{question}\n\n(Question de départ, dont les questions liées ne doivent pas s'éloigner : {origin})")
-    data = llm.chat_json([{"role": "system", "content": PLAN_PROMPT}, {"role": "user", "content": content}])
+def _context(context: list[dict] | None) -> str:
+    """Échange précédent (questions de suivi), sans les numéros de citation qui renvoient à d'autres sources."""
+    turns = [f"Question : {t['question']}\nRéponse : {CITATION.sub('', t.get('answer') or '')[:CONTEXT_CHARS].strip()}"
+             for t in (context or [])[-CONTEXT_TURNS:]]  # fmt: skip
+    return "Échange précédent :\n\n" + "\n\n".join(turns) if turns else ""
+
+
+def _checked(data: dict) -> str:
     query = " ".join(str(data.get("pubmed_query") or "").split())
     if not query or len(query) > 1500 or query.count("(") != query.count(")"):
         raise llm.LLMError("Requête PubMed du modèle inutilisable")
+    return query
+
+
+def _missing(query: str, required: list[str] | None) -> list[str]:
+    """Termes médicaux reconnus dans la question (BLSE → ESBL…) absents de la requête du modèle."""
+    from . import question as questions
+
+    groups = [[t.strip('"')] for t in required or []]
+    missing = questions.missing_concepts(groups, {"title": re.sub(r"\[[^\]]*\]", " ", query)})
+    return missing
+
+
+def plan(question: str, origin: str | None = None, context: list[dict] | None = None,
+         required: list[str] | None = None) -> dict:  # fmt: skip
+    """Requête PubMed et questions liées. `origin` : la question de départ quand celle-ci est une question liée
+    cliquée ; les nouvelles questions liées restent dans son sujet au lieu de dériver de génération en génération.
+    `context` : questions et réponses précédentes quand celle-ci est une question de suivi (« et chez l'enfant ? »).
+    `required` : termes que la requête doit contenir (traductions faites par Biblio).
+    Lève llm.LLMError si le modèle échoue ou répond mal."""
+    content = question if not origin or origin == question else (
+        f"{question}\n\n(Question de départ, dont les questions liées ne doivent pas s'éloigner : {origin})")
+    if previous := _context(context):
+        content = (f"{previous}\n\nQuestion de suivi : {content}\n\nLa requête PubMed répond à la question de suivi "
+                   "en reprenant du contexte ce qu'elle sous-entend (molécule, micro-organisme, population).")  # fmt: skip
+    messages = [{"role": "system", "content": PLAN_PROMPT}, {"role": "user", "content": content}]
+    data = llm.chat_json(messages)
+    query = _checked(data)
+    if missing := _missing(query, required):  # concept oublié (petit modèle) : une seconde chance, puis on l'ajoute
+        messages += [{"role": "assistant", "content": json.dumps(data, ensure_ascii=False)},
+                     {"role": "user", "content": f"Ta requête oublie ces concepts de la question : {', '.join(missing)}. "
+                                                 "Réécris-la en les reliant par AND au reste."}]  # fmt: skip
+        try:
+            data = llm.chat_json(messages)
+            query = _checked(data)
+        except llm.LLMError:
+            pass
+        if missing := _missing(query, required):
+            query = " AND ".join([f"({query})", *(f'"{m}"[tiab]' if " " in m else f"{m}[tiab]" for m in missing)])
     related = [str(q).strip() for q in data.get("related_questions") or [] if str(q).strip()][:3]
     return {"query": query, "related": related}
 
@@ -76,16 +126,18 @@ def _source_block(n: int, rec: dict) -> str:
     return f"[{n}] {rec['title']} ({', '.join(str(m) for m in meta if m)})\n{abstract}"
 
 
-def answer_messages(question: str, sources: list[dict]) -> list[dict]:
+def answer_messages(question: str, sources: list[dict], context: list[dict] | None = None) -> list[dict]:
     blocks = "\n\n".join(_source_block(n, rec) for n, rec in enumerate(sources[:MAX_SOURCES], 1))
+    previous = _context(context)
+    asked = f"{previous}\n\nQuestion de suivi : {question}" if previous else f"Question : {question}"
     return [{"role": "system", "content": ANSWER_PROMPT},
-            {"role": "user", "content": f"Sources :\n\n{blocks}\n\nQuestion : {question}"}]  # fmt: skip
+            {"role": "user", "content": f"Sources :\n\n{blocks}\n\n{asked}"}]  # fmt: skip
 
 
-def answer_stream(question: str, sources: list[dict]) -> Iterator[str]:
+def answer_stream(question: str, sources: list[dict], context: list[dict] | None = None) -> Iterator[str]:
     if not sources:
         raise llm.LLMError("Aucune source pour rédiger une réponse")
-    yield from llm.stream(answer_messages(question, sources), max_tokens=1200)
+    yield from llm.stream(answer_messages(question, sources, context), max_tokens=1200)
 
 
 def _cited(group: str) -> list[int]:

@@ -29,9 +29,16 @@
   let history = $state([]); // questions posées récemment
   let savedInfo = $state(null); // recherche enregistrée affichée
   let historyInfo = $state(null); // résultat gardé d'une question de l'historique, affiché sans relancer
+  let thread = $state([]); // échanges précédents quand on approfondit : { question, result, synthesis }
+  let followUp = $state("");
   let input;
   let runs = 0; // seule la dernière recherche lancée s'affiche
 
+  // Échange précédent envoyé au serveur : la nouvelle recherche et la réponse tiennent compte de tout le fil.
+  const context = $derived(thread.map((x) => ({
+    question: x.question,
+    answer: x.synthesis?.text ?? x.result.answer.map((s) => s.text).join(" "),
+  })));
   const hiddenCount = $derived(Object.values(result?.hidden ?? {}).reduce((a, b) => a + b, 0));
 
   onMount(() => {
@@ -61,6 +68,7 @@
   async function askAgain(h) {
     question = h.question;
     scope = h.scope;
+    thread = [];
     if (!h.has_result) return run();
     try {
       const kept = await api("/history/result", { params: { question: h.question, scope: h.scope } });
@@ -82,9 +90,10 @@
     refreshSaved();
   }
 
-  async function run(query = null, related = false) {
+  async function run(query = null, related = false, followingUp = false) {
     if (!question.trim()) return;
-    if (!related) origin = null;
+    if (!followingUp) thread = [];
+    if (!related && !followingUp) origin = null;
     const ticket = ++runs;
     loading = true;
     error = null;
@@ -97,7 +106,7 @@
       let out = null;
       const body = {
         question: question.trim(), scope, query, all_journals: !recommendedOnly,
-        year_from: yearFrom ? Number(yearFrom) : null, open_access: openAccess, origin,
+        year_from: yearFrom ? Number(yearFrom) : null, open_access: openAccess, origin, context,
       };
       await apiStream("/ask/stream", body, (event) => {
         if (ticket !== runs) return;
@@ -128,7 +137,7 @@
   async function write(ticket) {
     synthesis = { text: "", streaming: true };
     try {
-      await apiStream("/ask/answer", { question: question.trim(), sources: result.sources }, (event) => {
+      await apiStream("/ask/answer", { question: question.trim(), sources: result.sources, context }, (event) => {
         if (ticket !== runs) return;
         if (event.delta) synthesis.text += event.delta;
         if (event.error) synthesis = { ...synthesis, error: event.error, streaming: false };
@@ -142,9 +151,20 @@
     }
   }
 
+  // Approfondir : l'échange affiché rejoint le fil, la question de suivi lance une recherche avec tout le contexte.
+  function askFollowUp() {
+    if (!followUp.trim() || loading) return;
+    thread = [...thread, { question: question.trim(), result, synthesis }];
+    origin ??= thread[0].question;
+    question = followUp.trim();
+    followUp = "";
+    run(null, true, true);
+  }
+
   async function openSaved(id) {
     try {
       const s = await api(`/searches/${id}`);
+      thread = [];
       question = s.question;
       scope = s.scope;
       editedQuery = s.query ?? "";
@@ -318,6 +338,26 @@
         </p>
       {/if}
 
+      {#each thread as turn}
+        <div class="turn">
+          <p class="turn-question">{turn.question}</p>
+          {#if turn.synthesis?.text}<Synthesis synthesis={turn.synthesis} oncite={() => {}} />{/if}
+          <details>
+            <summary class="small muted">{$t("ask.turn_sources", { n: turn.result.sources.length })}</summary>
+            <ol class="small">
+              {#each turn.result.sources as rec}<li>{rec.title}{rec.year ? ` (${rec.year})` : ""}</li>{/each}
+            </ol>
+          </details>
+        </div>
+      {/each}
+      {#if thread.length}<p class="turn-question">{question}</p>{/if}
+
+      {#if result.off_topic && result.concepts?.length}
+        <p class="off-topic small">
+          ⚠ {$t("ask.off_topic_concepts", { n: result.off_topic, concepts: result.concepts.join(", ") })}
+        </p>
+      {/if}
+
       {#if synthesis}
         <div class="answer">
           <div class="row">
@@ -338,6 +378,17 @@
             </p>
           {/if}
         </div>
+      {/if}
+
+      {#if aiEnabled && synthesis && !synthesis.streaming}
+        <form class="follow-up card" onsubmit={(e) => { e.preventDefault(); askFollowUp(); }}>
+          <span class="eyebrow">{$t("ask.follow_up")}</span>
+          <textarea rows="2" bind:value={followUp} placeholder={$t("ask.follow_up_placeholder")}
+            onkeydown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); askFollowUp(); } }}></textarea>
+          <div class="row"><div class="grow"></div>
+            <button class="primary" type="submit" disabled={loading || !followUp.trim()}>{$t("ask.follow_up_submit")} <span class="kbd">⏎</span></button>
+          </div>
+        </form>
       {/if}
 
       {#if result.related?.length}
@@ -491,6 +542,14 @@
   }
   .cite:hover { background: var(--accent); color: var(--accent-text); }
   .error { color: var(--danger); }
+  .turn { border-left: 2px solid var(--border); padding-left: 14px; opacity: 0.85; }
+  .turn ol { margin: 6px 0 0; padding-left: 20px; }
+  .turn-question { font: 600 16px var(--serif); margin: 0; }
+  .off-topic { background: var(--warn-soft); color: var(--warn); padding: 6px 12px; border-radius: 8px; margin: 0; }
+  .follow-up { padding: 10px 14px; display: grid; gap: 6px; }
+  .follow-up textarea { width: 100%; border: none; background: transparent; resize: none; font: 15px/1.45 var(--serif); padding: 0; }
+  .follow-up textarea:focus-visible { outline: none; }
+  .follow-up:focus-within { border-color: var(--accent); }
   .intro { display: grid; gap: 10px; }
   .saved { list-style: none; padding: 0; margin: 0; }
   .saved li { padding: 7px 0; border-bottom: 1px solid var(--border); }

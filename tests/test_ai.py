@@ -171,7 +171,39 @@ def test_related_questions_keep_the_original_topic(api, ai_on):
     """Une question liée cliquée garde la question de départ : le modèle la reçoit pour ne pas dériver."""
     api.post("/api/v1/ask", json={"question": "Prévention du portage ?", "origin": "Transmission intrafamiliale des E. coli BLSE ?",
                                   "all_journals": True})  # fmt: skip
-    prompt = json.loads(ai_on.calls[-1].content)["messages"][-1]["content"]
+    prompt = json.loads(ai_on.calls[-1].content)["messages"][1]["content"]
     assert prompt.startswith("Prévention du portage ?") and "Question de départ" in prompt and "E. coli BLSE" in prompt
     api.post("/api/v1/ask", json={"question": "Transmission des BLSE ?", "all_journals": True})
     assert json.loads(ai_on.calls[-1].content)["messages"][-1]["content"] == "Transmission des BLSE ?"
+
+
+def test_two_concepts_are_both_required_whatever_the_spelling():
+    from biblio import question
+
+    groups = question.concept_groups("(Phosphomycin[MeSH] OR fosfomycine[tiab]) AND (\"Intensive Care Units\"[MeSH] OR ICU[tiab])")
+    on = {"title": "Intravenous fosfomycin in ICU patients", "abstract": ""}
+    off = {"title": "ICU delirium: a survey of nursing staff", "abstract": ""}
+    assert question.missing_concepts(groups, on) == [] and question.missing_concepts(groups, off) == ["phosphomycin"]
+
+
+def test_follow_up_question_carries_the_previous_exchange(api, ai_on):
+    """Question de suivi : le modèle reçoit l'échange précédent (sans ses numéros de citation) pour écrire la
+    requête et la réponse."""
+    context = [{"question": "Fosfomycine en réanimation ?", "answer": "Utilisée contre les BLSE [1][2]."}]
+    api.post("/api/v1/ask", json={"question": "Et chez l'enfant ?", "context": context, "all_journals": True})
+    prompt = json.loads(ai_on.calls[-1].content)["messages"][1]["content"]
+    assert "Fosfomycine en réanimation ?" in prompt and "Question de suivi : Et chez l'enfant ?" in prompt and "[1]" not in prompt
+    messages = ai.answer_messages("Et chez l'enfant ?", [{"title": "T", "abstract": "A"}], context)
+    assert "Échange précédent" in messages[-1]["content"] and messages[-1]["content"].endswith("Question de suivi : Et chez l'enfant ?")
+
+
+def test_plan_adds_a_forgotten_concept(monkeypatch):
+    """Petit modèle qui oublie « réanimation » : relancé une fois, puis Biblio ajoute le concept elle-même."""
+    from biblio import llm
+
+    answers = iter([{"pubmed_query": "Fosfomycin[MeSH]"}, {"pubmed_query": "fosfomycin[tiab]"}])
+    monkeypatch.setattr(llm, "chat_json", lambda messages: next(answers))
+    out = ai.plan("Fosfomycine en réanimation", required=["fosfomycin", "intensive care"])
+    assert out["query"] == '(fosfomycin[tiab]) AND "intensive care"[tiab]'
+    answers = iter([{"pubmed_query": "Fosfomycin[MeSH] AND \"Intensive Care Units\"[MeSH]"}])
+    assert ai.plan("Fosfomycine en réanimation", required=["fosfomycin", "intensive care"])["query"].endswith("Units\"[MeSH]")

@@ -140,6 +140,11 @@ class LabelWorks(BaseModel):
     move: bool = False  # collection : retirer d'abord les notices de leurs autres collections
 
 
+class Turn(BaseModel):
+    question: str
+    answer: str = ""
+
+
 class AskRequest(BaseModel):
     question: str
     scope: Literal["online", "library"] = "online"
@@ -151,6 +156,7 @@ class AskRequest(BaseModel):
     open_access: bool = False
     all_journals: bool = False  # montrer aussi les revues hors liste
     origin: str | None = None  # question de départ, quand celle-ci est une question liée cliquée (IA)
+    context: list[Turn] = []  # question de suivi : questions et réponses précédentes, la plus ancienne d'abord
 
 
 class SavedSearch(BaseModel):
@@ -187,6 +193,7 @@ class Settings(BaseModel):
 class AnswerRequest(BaseModel):
     question: str
     sources: list[dict]  # sources renvoyées par POST /ask, dans le même ordre
+    context: list[Turn] = []  # question de suivi : échange précédent
 
 
 class SummaryRequest(BaseModel):
@@ -439,11 +446,14 @@ def ask_question(body: AskRequest, conn: Conn):
 def _ask(body: AskRequest, conn: sqlite3.Connection) -> dict:
     organize.remember_question(conn, body.question, body.scope)
     if body.scope == "library":
-        result = ask.ask_library(conn, body.question, body.limit)
+        # Question de suivi : la question de départ donne le sujet que la suite sous-entend.
+        text = f"{body.context[0].question} {body.question}" if body.context else body.question
+        result = {**ask.ask_library(conn, text, body.limit), "question": body.question}
     else:
         filters = search.Filters(year_from=body.year_from, year_to=body.year_to, study_types=body.study_type,
                                  open_access=body.open_access, journal_status=[] if body.all_journals else ["recommended"])  # fmt: skip
-        result = ask.ask_online(conn, body.question, filters, body.limit, body.query, body.origin)
+        context = [t.model_dump() for t in body.context]
+        result = ask.ask_online(conn, body.question, filters, body.limit, body.query, body.origin, context)
     organize.keep_result(conn, body.question, body.scope, result)
     return result
 
@@ -530,7 +540,7 @@ def ask_answer(body: AnswerRequest):
     def events():
         text = ""
         try:
-            for piece in ai.answer_stream(body.question, body.sources):
+            for piece in ai.answer_stream(body.question, body.sources, [t.model_dump() for t in body.context]):
                 text += piece
                 yield f"data: {_json.dumps({'delta': piece}, ensure_ascii=False)}\n\n"
             done = {"done": True, "text": text, "sentences": ai.verify(text, body.sources), "model": llm.current.model}
