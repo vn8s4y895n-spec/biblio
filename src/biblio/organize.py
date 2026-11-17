@@ -278,7 +278,7 @@ def get_report(conn: sqlite3.Connection, report_id: int) -> dict:
     row = conn.execute("SELECT * FROM reports WHERE id = ?", (report_id,)).fetchone()
     if row is None:
         raise core.NotFound(f"Signalement introuvable : {report_id}")
-    return {"id": row["id"], "created_at": row["created_at"], "question": row["question"],
+    return {"id": row["id"], "created_at": row["created_at"], "sent_at": row["sent_at"], "question": row["question"],
             "reasons": json.loads(row["reasons_json"]), "comment": row["comment"], **json.loads(row["report_json"])}  # fmt: skip
 
 
@@ -292,13 +292,38 @@ def delete_report(conn: sqlite3.Connection, report_id: int) -> None:
 
 
 REASONS = {"sources": "Articles mal choisis", "answer": "Synthèse de l'IA"}
+RELAY_URL = "https://biblio-signalements.netlify.app/api/report"  # crée le ticket dans le dépôt privé (relay/)
+relay_transport = None  # remplacé dans les tests
+
+
+def send_report(conn: sqlite3.Connection, report: dict) -> dict:
+    """Envoie le signalement au développeur par le relais (sans compte GitHub). En cas d'échec, il reste gardé
+    ici et `issue_url` permet de l'envoyer à la main."""
+    import httpx
+
+    title, body = issue_text(report)
+    try:
+        with httpx.Client(timeout=15, transport=relay_transport) as client:
+            client.post(RELAY_URL, json={"title": title, "body": body}).raise_for_status()
+    except httpx.HTTPError:
+        return {**report, "sent": False, "issue_url": issue_url(report)}
+    with db.transaction(conn):
+        conn.execute("UPDATE reports SET sent_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = ?", (report["id"],))
+    return {**get_report(conn, report["id"]), "sent": True}
 
 
 def issue_url(report: dict) -> str:
-    """Ticket GitHub prérempli (relu par l'utilisateur avant envoi) : le signalement parvient au développeur."""
+    """Ticket GitHub prérempli, si le relais ne répond pas (compte GitHub nécessaire)."""
     from urllib.parse import urlencode
 
     from . import REPOSITORY
+
+    title, body = issue_text(report)
+    return f"https://github.com/{REPOSITORY}/issues/new?{urlencode({'title': title, 'body': body})}"
+
+
+def issue_text(report: dict) -> tuple[str, str]:
+    """Titre et texte du ticket : question, problème, commentaire, requête, sources hors sujet, synthèse."""
 
     def ref(s: dict) -> str:
         link = f"doi:{s['doi']}" if s.get("doi") else f"pmid:{s['pmid']}" if s.get("pmid") else ""
@@ -316,7 +341,5 @@ def issue_url(report: dict) -> str:
     if report.get("synthesis"):
         lines += ["", "**Synthèse de l'IA**", "> " + report["synthesis"][:1500].replace("\n", "\n> ")]
     lines += ["", "<details><summary>Toutes les sources</summary>", "", *map(ref, report["sources"]), "</details>"]
-    body = "\n".join(lines)[:6000]
-    query = urlencode({"title": f"Signalement : {report['question'][:90]}", "body": body, "labels": "signalement"})
-    return f"https://github.com/{REPOSITORY}/issues/new?{query}"
+    return f"Signalement : {report['question'][:90]}", "\n".join(lines)[:6000]
 

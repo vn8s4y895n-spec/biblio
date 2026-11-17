@@ -527,10 +527,11 @@
     "which": "Which ones are off-topic? (optional)",
     "reason_answer": "The AI synthesis is wrong or badly worded",
     "comment": "Details if needed (a wrong term, what you expected…)",
-    "submit": "Save the report",
-    "saved": "Report saved in Biblio.",
-    "send_help": "To get it to the developer, open the prefilled GitHub issue: you review it before sending (GitHub account needed).",
-    "send": "Send to the developer",
-    "close": "Close"
+    "submit": "Send the report",
+    "send_help": "You can send it by hand as a prefilled GitHub issue (GitHub account needed), or try again later.",
+    "send": "Send via GitHub",
+    "close": "Close",
+    "sent": "Report sent to the developer. Thank you!",
+    "not_sent": "Report kept in Biblio, but sending it to the developer failed (offline?)."
   }
 }

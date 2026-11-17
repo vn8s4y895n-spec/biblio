@@ -527,10 +527,11 @@
     "which": "Lesquels sont hors sujet ? (facultatif)",
     "reason_answer": "La synthèse de l'IA est fausse ou mal formulée",
     "comment": "Précise si besoin (un terme faux, ce que tu attendais…)",
-    "submit": "Enregistrer le signalement",
-    "saved": "Signalement enregistré dans Biblio.",
-    "send_help": "Pour qu'il parvienne au développeur, ouvre le ticket GitHub prérempli : tu le relis avant de l'envoyer (compte GitHub nécessaire).",
-    "send": "Envoyer au développeur",
-    "close": "Fermer"
+    "submit": "Envoyer le signalement",
+    "send_help": "Tu peux l'envoyer à la main par un ticket GitHub prérempli (compte GitHub nécessaire), ou réessayer plus tard.",
+    "send": "Envoyer par GitHub",
+    "close": "Fermer",
+    "sent": "Signalement envoyé au développeur. Merci !",
+    "not_sent": "Signalement gardé dans Biblio, mais l'envoi au développeur a échoué (pas de connexion ?)."
   }
 }

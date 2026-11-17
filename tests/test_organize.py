@@ -318,19 +318,33 @@ def test_history_keeps_last_result_to_show_without_rerunning(api):
     assert api.get("/api/v1/history/result", params={"question": "Jamais posée", "scope": "library"}).status_code == 404
 
 
-def test_report_is_kept_and_prefills_an_issue(api):
+def test_report_is_kept_and_sent_through_the_relay(api, monkeypatch):
+    import httpx
     from urllib.parse import parse_qs, urlparse
 
+    from biblio import organize
+
+    sent = []
+
+    def relay(request):
+        sent.append(json.loads(request.content))
+        return httpx.Response(201 if len(sent) == 1 else 503, json={})
+
+    monkeypatch.setattr(organize, "relay_transport", httpx.MockTransport(relay))
     sources = [{"title": "Fosfomycin in ICU", "year": 2019, "identifiers": {"doi": "10.1/a"}},
                {"title": "ICU delirium survey", "year": 2014, "identifiers": {"pmid": "123"}}]  # fmt: skip
     body = {"question": "Fosfomycine en réanimation ?", "reasons": ["sources", "answer"], "comment": "« bactérie à spectre étendu »",
             "bad_sources": [2, 9], "query": "fosfomycin AND ICU", "query_by": "ai", "sources": sources,
             "synthesis": {"text": "Réponse [1].", "model": "qwen3.5:9b"}, "context": [{"question": "Avant ?", "answer": "R"}]}  # fmt: skip
     out = api.post("/api/v1/reports", json=body).json()
+    assert out["sent"] and out["sent_at"] and "issue_url" not in out
     assert out["bad_sources"] == [{"n": 2, "title": "ICU delirium survey", "year": 2014, "pmid": "123"}]
     assert out["context"] == ["Avant ?"] and out["model"] == "qwen3.5:9b" and len(out["sources"]) == 2
-    issue = parse_qs(urlparse(out["issue_url"]).query)
-    assert issue["title"] == ["Signalement : Fosfomycine en réanimation ?"]
-    assert "2. ICU delirium survey (2014) pmid:123" in issue["body"][0] and "Synthèse de l'IA" in issue["body"][0]
-    assert [r["id"] for r in api.get("/api/v1/reports").json()] == [out["id"]]
-    assert api.delete(f"/api/v1/reports/{out['id']}").status_code == 204 and api.get("/api/v1/reports").json() == []
+    assert sent[0]["title"] == "Signalement : Fosfomycine en réanimation ?"
+    assert "2. ICU delirium survey (2014) pmid:123" in sent[0]["body"] and "Synthèse de l'IA" in sent[0]["body"]
+
+    failed = api.post("/api/v1/reports", json=body).json()  # relais en panne : gardé ici, lien GitHub en secours
+    assert not failed["sent"] and failed["sent_at"] is None
+    assert parse_qs(urlparse(failed["issue_url"]).query)["title"] == ["Signalement : Fosfomycine en réanimation ?"]
+    assert [r["id"] for r in api.get("/api/v1/reports").json()] == [failed["id"], out["id"]]
+    assert api.delete(f"/api/v1/reports/{out['id']}").status_code == 204 and len(api.get("/api/v1/reports").json()) == 1

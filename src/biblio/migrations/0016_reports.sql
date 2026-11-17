@@ -7,5 +7,6 @@ CREATE TABLE reports (
     question TEXT NOT NULL,
     reasons_json TEXT NOT NULL,  -- ["sources", "answer"]
     comment TEXT NOT NULL DEFAULT '',
-    report_json TEXT NOT NULL  -- requête, sources (et celles jugées hors sujet), synthèse, modèle, version
+    report_json TEXT NOT NULL,  -- requête, sources (et celles jugées hors sujet), synthèse, modèle, version
+    sent_at TEXT  -- envoyé au développeur (relais des signalements) ; NULL : gardé ici seulement
 );

@@ -540,10 +540,9 @@ class ReportRequest(BaseModel):
 
 @router.post("/reports", status_code=201, summary="Signaler une réponse insatisfaisante (articles ou synthèse)")
 def create_report(body: ReportRequest, conn: Conn):
-    """Le signalement est gardé dans Biblio ; `issue_url` ouvre un ticket GitHub prérempli pour l'envoyer au
-    développeur (l'utilisateur le relit avant de l'envoyer)."""
-    report = organize.save_report(conn, body.model_dump())
-    return {**report, "issue_url": organize.issue_url(report)}
+    """Le signalement est gardé dans Biblio et envoyé au développeur par le relais des signalements (`sent`).
+    Si le relais ne répond pas, `issue_url` ouvre un ticket GitHub prérempli pour l'envoyer à la main."""
+    return organize.send_report(conn, organize.save_report(conn, body.model_dump()))
 
 
 @router.get("/reports", summary="Signalements enregistrés (le plus récent d'abord)")

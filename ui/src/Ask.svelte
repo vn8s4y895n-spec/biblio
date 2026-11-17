@@ -164,6 +164,8 @@
   }
 
   async function sendReport() {
+    if (report.sending) return;
+    report.sending = true;
     const reasons = ["sources", "answer"].filter((r) => report[r]);
     try {
       report.saved = await api("/reports", {
@@ -177,6 +179,8 @@
       });
     } catch (e) {
       toast(e.message, "error");
+    } finally {
+      if (report) report.sending = false;
     }
   }
 
@@ -456,8 +460,11 @@
 
       {#if report}
         <div class="report card">
-          {#if report.saved}
-            <p>✓ {$t("report.saved")}</p>
+          {#if report.saved?.sent}
+            <p>✓ {$t("report.sent")}</p>
+            <div class="row"><button class="ghost" onclick={() => (report = null)}>{$t("report.close")}</button></div>
+          {:else if report.saved}
+            <p>{$t("report.not_sent")}</p>
             <p class="small muted">{$t("report.send_help")}</p>
             <div class="row">
               <a class="send" href={report.saved.issue_url} target="_blank" rel="noreferrer">{$t("report.send")} ↗</a>
@@ -481,7 +488,7 @@
             <div class="row">
               <div class="grow"></div>
               <button class="ghost" onclick={() => (report = null)}>{$t("common.cancel")}</button>
-              <button class="primary" disabled={!report.sources && !report.answer && !report.comment.trim()} onclick={sendReport}>{$t("report.submit")}</button>
+              <button class="primary" disabled={report.sending || (!report.sources && !report.answer && !report.comment.trim())} onclick={sendReport}>{$t("report.submit")}</button>
             </div>
           {/if}
         </div>

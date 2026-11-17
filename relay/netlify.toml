@@ -1,0 +1,5 @@
+# Relais des signalements de Biblio : reçoit un signalement envoyé par l'app et en fait un ticket dans un dépôt
+# GitHub privé. La clé GitHub reste ici (variable d'environnement GITHUB_TOKEN), jamais dans l'app.
+[build]
+  publish = "public"
+  functions = "netlify/functions"
