@@ -130,6 +130,42 @@ def coverage(terms: list[str], rec: dict) -> float:
     return found / len(terms) if terms else 1.0
 
 
+def _top_level(query: str) -> list[str]:
+    """Morceaux d'une requête et opérateurs AND / NOT du premier niveau (hors parenthèses et guillemets)."""
+    parts, depth, current = [], 0, ""
+    for token in re.split(r'("[^"]*"|[()]|\bAND\b|\bNOT\b)', query):
+        depth += token == "("
+        depth -= token == ")"
+        if token in ("AND", "NOT") and depth == 0:
+            parts += [current.strip(), token]
+            current = ""
+        else:
+            current += token
+    return [*parts, current.strip()]
+
+
+def grouped(query: str) -> str:
+    """Chaque concept entre parenthèses : PubMed lit les opérateurs de gauche à droite, si bien que
+    « A AND B OR C » devient « (A AND B) OR C » et laisse passer C seul. Ici : « (A) AND (B OR C) »."""
+    out = []
+    for part in _top_level(query):
+        if part not in ("AND", "NOT") and re.search(r"\bOR\b", "".join(_outside(part))):
+            part = f"({part})"
+        out.append(part)
+    return " ".join(p for p in out if p)
+
+
+def _outside(part: str) -> list[str]:
+    """Texte hors parenthèses et guillemets (pour savoir si un OR est au premier niveau)."""
+    out, depth = [], 0
+    for token in re.split(r'("[^"]*"|[()])', part):
+        depth += token == "("
+        depth -= token == ")"
+        if depth == 0 and token not in ("(", ")") and not token.startswith('"'):
+            out.append(token)
+    return out
+
+
 def concept_groups(query: str) -> list[list[str]]:
     """Concepts d'une requête booléenne : les blocs reliés par AND au premier niveau, chacun avec ses termes
     (synonymes reliés par OR). Les étiquettes [MeSH], [tiab]… et les blocs NOT sont ignorés."""

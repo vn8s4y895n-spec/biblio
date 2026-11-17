@@ -24,7 +24,9 @@ CITATION = re.compile(r"\[(\d+(?:\s*[-–,]\s*\d+)*)\]")
 PLAN_PROMPT = """Tu aides un médecin biologiste (bactériologie, maladies infectieuses) à chercher dans PubMed.
 À partir de sa question (en français ou en anglais), écris :
 - "pubmed_query" : une requête PubMed en anglais, booléenne, avec les descripteurs MeSH utiles ([MeSH]) et des
-  synonymes en texte libre ([tiab]) reliés par OR, les concepts reliés par AND. Pas de filtre de date ni de type
+  synonymes en texte libre ([tiab]) reliés par OR, les concepts reliés par AND. Chaque concept (molécule,
+  micro-organisme, population…) entre ses propres parenthèses : (A OR A2) AND (B OR B2), jamais de OR entre deux
+  concepts. Pas de filtre de date ni de type
   d'étude. Si la question contient plusieurs sous-questions, couvre-les toutes (OR entre les sous-requêtes).
   Les synonymes doivent être de vrais synonymes : n'ajoute jamais une molécule, un organisme ou une maladie
   absents de la question, même au nom proche (dalbavancine n'est pas dalfopristine).
@@ -42,7 +44,10 @@ Règles :
 - N'écris rien qui ne soit pas dans les sources ; si elles ne suffisent pas, dis-le clairement.
 - Précise le type d'étude et l'effectif quand ils comptent pour le niveau de preuve.
 - Signale les résultats contradictoires entre sources.
-- Si la plupart des sources ne traitent pas de la question, commence par le dire.
+- Ne cite une source que si elle traite directement de ce que dit ta phrase. Si aucune source ne répond à la
+  question, dis seulement, en une ou deux phrases sans citation, que les articles trouvés ne la traitent pas : ne
+  résume pas des articles sans rapport pour justifier l'absence de données. Si seules quelques sources répondent,
+  appuie-toi sur elles et ignore les autres.
 - Vocabulaire médical français exact, jamais traduit mot à mot de l'anglais : ESBL = BLSE (bêta-lactamase à
   spectre étendu, une enzyme, pas une bactérie) ; MDR = multirésistant ; XDR = ultrarésistant (extensively
   drug-resistant) ; PDR = toto-résistant (pandrug-resistant) ; CRE = entérobactéries résistantes aux carbapénèmes ;
@@ -74,16 +79,17 @@ def _checked(data: dict) -> str:
     query = " ".join(str(data.get("pubmed_query") or "").split())
     if not query or len(query) > 1500 or query.count("(") != query.count(")"):
         raise llm.LLMError("Requête PubMed du modèle inutilisable")
-    return query
+    from . import question as questions
+
+    return questions.grouped(query)
 
 
 def _missing(query: str, required: list[str] | None) -> list[str]:
     """Termes médicaux reconnus dans la question (BLSE → ESBL…) absents de la requête du modèle."""
     from . import question as questions
 
-    groups = [[t.strip('"')] for t in required or []]
-    missing = questions.missing_concepts(groups, {"title": re.sub(r"\[[^\]]*\]", " ", query)})
-    return missing
+    plain = re.sub(r"\[[^\]]*\]", " ", query)
+    return questions.missing_concepts([[t.strip('"')] for t in required or []], {"title": plain})
 
 
 def plan(question: str, origin: str | None = None, context: list[dict] | None = None,
@@ -104,7 +110,7 @@ def plan(question: str, origin: str | None = None, context: list[dict] | None = 
     if missing := _missing(query, required):  # concept oublié (petit modèle) : une seconde chance, puis on l'ajoute
         messages += [{"role": "assistant", "content": json.dumps(data, ensure_ascii=False)},
                      {"role": "user", "content": f"Ta requête oublie ces concepts de la question : {', '.join(missing)}. "
-                                                 "Réécris-la en les reliant par AND au reste."}]  # fmt: skip
+                                                 "Réécris-la : chaque concept entre ses parenthèses, relié aux autres par AND."}]  # fmt: skip
         try:
             data = llm.chat_json(messages)
             query = _checked(data)

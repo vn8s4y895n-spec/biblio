@@ -98,6 +98,26 @@ def compose(question: str, sources: list[dict]) -> list[dict]:
     return [{"text": sentence, "source": n, "score": round(score, 4)} for n, (score, sentence) in ranked if score >= minimum]
 
 
+def age_penalty(rec: dict, this_year: int | None = None) -> float:
+    """Places reculées à cause de l'âge : aucune les 5 premières années, puis 0,3 place par an, 8 au plus.
+    Un article ancien reste dans la liste ; les articles récents sur le même sujet passent devant lui."""
+    # ponytail: pente fixe ; à rendre réglable si des sujets historiques en pâtissent
+    import datetime
+
+    year = rec.get("year")
+    if not year:
+        return 3.0
+    age = (this_year or datetime.date.today().year) - int(year)
+    return min(8.0, max(0.0, 0.3 * (age - 5)))
+
+
+def _by_rank_and_age(results: list[dict], cover=None) -> list[dict]:
+    """Ordre des bases (rang fusionné), reculé selon l'âge ; les sources qui couvrent toute la question d'abord."""
+    ranked = sorted(results, key=lambda r: -r["score"])
+    order = {id(r): i + age_penalty(r) for i, r in enumerate(ranked)}
+    return sorted(ranked, key=lambda r: (-(cover(r) if cover else 1), order[id(r)]))
+
+
 def _decorate(rec: dict) -> dict:
     return {**rec, "summary": summary(rec.get("abstract")), "sample_size": sample_size(rec.get("abstract"))}
 
@@ -167,11 +187,11 @@ def ask_online(conn: sqlite3.Connection, question: str, filters: search.Filters,
     if cover is not None:
         kept = [r for r in results if cover(r) >= need]
         off_topic = len(results) - len(kept)
-        # Les sources qui couvrent toute la question d'abord, puis l'ordre des bases.
-        kept.sort(key=lambda r: (-cover(r), -r["score"]))
-        results = kept
+        results = _by_rank_and_age(kept, cover)
         trace.step("topic", by="concepts" if query_by == "ai" else "keywords", removed=off_topic, kept=len(kept),
                    need=round(need, 2))  # fmt: skip
+    else:
+        results = _by_rank_and_age(results)
     sources = [_decorate(rec) for rec in results[:limit]]
     trace.step("answer", shown=len(sources))
     return {"scope": "online", "question": question, "query": query, "query_by": query_by, "related": related,

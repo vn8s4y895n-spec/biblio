@@ -70,8 +70,8 @@
     "claude_prompt": "Question: {question}\nPubMed query already used in Biblio: {query}\nSources already found (Biblio tool ids):\n{sources}\n\nUsing the Biblio tools, read these sources (get_summary), extend the search if needed (search_online, search_library), answer citing every sentence, then save the synthesis with save_synthesis.",
     "history_on": "Result of the search on {date}, not run again.",
     "off_topic_concepts": "{n} articles removed: they don't cover all of these concepts: {concepts}.",
-    "follow_up": "Go further",
-    "follow_up_placeholder": "Follow-up question: narrow, widen or ask a detail (new search with the whole exchange)…",
+    "follow_up": "Go further · related questions",
+    "follow_up_placeholder": "Another question? Type it here: it is searched with the whole previous exchange…",
     "follow_up_submit": "Search with context",
     "turn_sources": "{n} sources for this answer"
   },

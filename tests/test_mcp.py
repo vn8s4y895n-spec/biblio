@@ -46,13 +46,14 @@ def test_skill_end_to_end(mcp, api, conn):
     assert found["results"] and all(set(r) <= {"n", "id", "title", "first_author", "journal", "year", "study_type",
                                                "sample_size", "journal_status", "in_library", "retracted", "conclusion"}
                                     for r in found["results"])  # fmt: skip
-    first = found["results"][0]
+    first = next(r for r in found["results"] if r.get("sample_size") == 74)  # l'ordre dépend aussi de la date de parution
+    other = next(r for r in found["results"] if r is not first)
     summary = mcp("get_summary", ref=first["id"])
     assert summary["abstract"].startswith("OBJECTIVES") and summary["sample_size"] == 74
     answer = ("Transmission of ESBL-producing bacteria in households is frequent [1]. "
               "The moon is made of cheese, according to an invented source [2].")
     saved = mcp("save_synthesis", question="Transmission intrafamiliale des BLSE ?", answer=answer,
-                sources=[first["id"], found["results"][1]["id"]], query=found["query"], model="Claude Opus")  # fmt: skip
+                sources=[first["id"], other["id"]], query=found["query"], model="Claude Opus")  # fmt: skip
     assert saved["saved"] and [f["status"] for f in saved["flagged"]] == ["weak"]
     row = conn.execute("SELECT origin, synthesis_json, sources_json FROM saved_searches WHERE id = ?", (saved["id"],)).fetchone()
     assert row["origin"] == "claude" and json.loads(row["synthesis_json"])["model"] == "Claude Opus"

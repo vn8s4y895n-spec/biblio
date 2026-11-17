@@ -207,3 +207,23 @@ def test_plan_adds_a_forgotten_concept(monkeypatch):
     assert out["query"] == '(fosfomycin[tiab]) AND "intensive care"[tiab]'
     answers = iter([{"pubmed_query": "Fosfomycin[MeSH] AND \"Intensive Care Units\"[MeSH]"}])
     assert ai.plan("Fosfomycine en réanimation", required=["fosfomycin", "intensive care"])["query"].endswith("Units\"[MeSH]")
+
+
+def test_old_articles_step_back_a_few_places_only():
+    from biblio import ask
+
+    assert ask.age_penalty({"year": 2022}, 2026) == 0 and ask.age_penalty({"year": 1994}, 2026) == 8
+    old = {"title": "1994", "year": 1994, "score": 0.05}
+    recent = [{"title": str(i), "year": 2024, "score": 0.04 - i / 1000} for i in range(12)]
+    titles = [r["title"] for r in ask._by_rank_and_age([old, *recent])]
+    assert titles.index("1994") == 7  # premier par les bases : 7 articles récents passent devant, il reste dans la liste
+
+
+def test_ai_query_gets_one_parenthesis_per_concept(monkeypatch):
+    """PubMed lit de gauche à droite : « A AND B OR C » laisserait passer C seul."""
+    from biblio import llm, question
+
+    assert question.grouped('("A"[MeSH] OR "B"[tiab]) AND C OR D AND (E)') == '("A"[MeSH] OR "B"[tiab]) AND (C OR D) AND (E)'
+    assert question.grouped('"x OR y"[tiab] AND z NOT (review[pt])') == '"x OR y"[tiab] AND z NOT (review[pt])'
+    monkeypatch.setattr(llm, "chat_json", lambda messages: {"pubmed_query": "VRE[tiab] AND fosfomycin[MeSH] OR fosfomycin[tiab]"})
+    assert ai.plan("Fosfomycine et ERV", required=["fosfomycin", "VRE"])["query"] == "VRE[tiab] AND (fosfomycin[MeSH] OR fosfomycin[tiab])"

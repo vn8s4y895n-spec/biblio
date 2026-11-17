@@ -70,8 +70,8 @@
     "claude_prompt": "Question : {question}\nRequête PubMed déjà utilisée dans Biblio : {query}\nSources déjà trouvées (ids des outils Biblio) :\n{sources}\n\nAvec les outils Biblio, lis ces sources (get_summary), complète si besoin la recherche (search_online, search_library), réponds en citant chaque phrase, puis enregistre la synthèse avec save_synthesis.",
     "history_on": "Résultat de la recherche du {date}, non relancée.",
     "off_topic_concepts": "{n} articles écartés car ils ne parlent pas de tous ces concepts : {concepts}.",
-    "follow_up": "Approfondir",
-    "follow_up_placeholder": "Question de suivi : précise, élargis ou demande un détail (nouvelle recherche avec tout l'échange)…",
+    "follow_up": "Approfondir · questions liées",
+    "follow_up_placeholder": "Une autre question ? Écris-la ici : elle est recherchée avec tout l'échange précédent…",
     "follow_up_submit": "Relancer avec le contexte",
     "turn_sources": "{n} sources de cette réponse"
   },

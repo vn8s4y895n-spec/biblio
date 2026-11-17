@@ -154,11 +154,11 @@
   }
 
   // Approfondir : l'échange affiché rejoint le fil, la question de suivi lance une recherche avec tout le contexte.
-  function askFollowUp() {
-    if (!followUp.trim() || loading) return;
+  function askFollowUp(next = followUp) {
+    if (!next.trim() || loading) return;
     thread = [...thread, { question: question.trim(), result, synthesis }];
     origin ??= thread[0].question;
-    question = followUp.trim();
+    question = next.trim();
     followUp = "";
     run(null, true, true);
   }
@@ -399,24 +399,22 @@
         </div>
       {/if}
 
-      {#if aiEnabled && synthesis && !synthesis.streaming}
+      {#if aiEnabled && !synthesis?.streaming}
         <form class="follow-up card" onsubmit={(e) => { e.preventDefault(); askFollowUp(); }}>
           <span class="eyebrow">{$t("ask.follow_up")}</span>
+          {#if result.related?.length}
+            <div class="row wrap related">
+              {#each result.related as q}
+                <button type="button" class="chip" disabled={loading} onclick={() => askFollowUp(q)}>{q}</button>
+              {/each}
+            </div>
+          {/if}
           <textarea rows="2" bind:value={followUp} placeholder={$t("ask.follow_up_placeholder")}
             onkeydown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); askFollowUp(); } }}></textarea>
           <div class="row"><div class="grow"></div>
             <button class="primary" type="submit" disabled={loading || !followUp.trim()}>{$t("ask.follow_up_submit")} <span class="kbd">⏎</span></button>
           </div>
         </form>
-      {/if}
-
-      {#if result.related?.length}
-        <div class="row wrap related">
-          <span class="small muted">{$t("ai.related")}</span>
-          {#each result.related as q}
-            <button class="chip" onclick={() => { origin ??= question.trim(); question = q; run(null, true); }}>{q}</button>
-          {/each}
-        </div>
       {/if}
 
       <details class="answer" open={!synthesis}>
