@@ -525,6 +525,37 @@ def forget_question(body: ForgetRequest, conn: Conn):
     return {"removed": organize.forget_question(conn, body.question, body.scope)}
 
 
+class ReportRequest(BaseModel):
+    question: str
+    reasons: list[Literal["sources", "answer"]]
+    comment: str = ""
+    bad_sources: list[int] = []  # numéros (1…) des sources jugées hors sujet
+    scope: Literal["online", "library"] = "online"
+    query: str | None = None
+    query_by: str | None = None
+    sources: list[dict] = []
+    synthesis: dict | None = None
+    context: list[Turn] = []
+
+
+@router.post("/reports", status_code=201, summary="Signaler une réponse insatisfaisante (articles ou synthèse)")
+def create_report(body: ReportRequest, conn: Conn):
+    """Le signalement est gardé dans Biblio ; `issue_url` ouvre un ticket GitHub prérempli pour l'envoyer au
+    développeur (l'utilisateur le relit avant de l'envoyer)."""
+    report = organize.save_report(conn, body.model_dump())
+    return {**report, "issue_url": organize.issue_url(report)}
+
+
+@router.get("/reports", summary="Signalements enregistrés (le plus récent d'abord)")
+def list_reports(conn: Conn):
+    return organize.reports(conn)
+
+
+@router.delete("/reports/{report_id}", status_code=204, summary="Supprimer un signalement")
+def delete_report(report_id: int, conn: Conn):
+    organize.delete_report(conn, report_id)
+
+
 @router.get("/llm", summary="Intelligence artificielle : fournisseur, modèle, joignable, modèles proposés")
 def llm_status():
     return llm.status()

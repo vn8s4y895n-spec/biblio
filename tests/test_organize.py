@@ -316,3 +316,21 @@ def test_history_keeps_last_result_to_show_without_rerunning(api):
     api.post("/api/v1/ask", json=q)  # relancée : nouvelle réponse, l'ancienne synthèse n'est plus gardée
     assert api.get("/api/v1/history/result", params=q).json()["synthesis"] is None
     assert api.get("/api/v1/history/result", params={"question": "Jamais posée", "scope": "library"}).status_code == 404
+
+
+def test_report_is_kept_and_prefills_an_issue(api):
+    from urllib.parse import parse_qs, urlparse
+
+    sources = [{"title": "Fosfomycin in ICU", "year": 2019, "identifiers": {"doi": "10.1/a"}},
+               {"title": "ICU delirium survey", "year": 2014, "identifiers": {"pmid": "123"}}]  # fmt: skip
+    body = {"question": "Fosfomycine en réanimation ?", "reasons": ["sources", "answer"], "comment": "« bactérie à spectre étendu »",
+            "bad_sources": [2, 9], "query": "fosfomycin AND ICU", "query_by": "ai", "sources": sources,
+            "synthesis": {"text": "Réponse [1].", "model": "qwen3.5:9b"}, "context": [{"question": "Avant ?", "answer": "R"}]}  # fmt: skip
+    out = api.post("/api/v1/reports", json=body).json()
+    assert out["bad_sources"] == [{"n": 2, "title": "ICU delirium survey", "year": 2014, "pmid": "123"}]
+    assert out["context"] == ["Avant ?"] and out["model"] == "qwen3.5:9b" and len(out["sources"]) == 2
+    issue = parse_qs(urlparse(out["issue_url"]).query)
+    assert issue["title"] == ["Signalement : Fosfomycine en réanimation ?"]
+    assert "2. ICU delirium survey (2014) pmid:123" in issue["body"][0] and "Synthèse de l'IA" in issue["body"][0]
+    assert [r["id"] for r in api.get("/api/v1/reports").json()] == [out["id"]]
+    assert api.delete(f"/api/v1/reports/{out['id']}").status_code == 204 and api.get("/api/v1/reports").json() == []

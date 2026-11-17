@@ -518,5 +518,19 @@
     "confirm_one": "Supprimer « {title} » de la bibliothèque ?\n\nSa note et son PDF iront à la Corbeille.",
     "confirm": "Supprimer {n} article(s) de la bibliothèque ?\n\nLeurs notes et leurs PDF iront à la Corbeille.",
     "done": "{n} article(s) supprimé(s) (notes et PDF à la Corbeille)"
+  },
+  "report": {
+    "button": "Signaler un problème",
+    "help": "Articles mal choisis ou synthèse fausse : signale-le pour que la recherche soit corrigée",
+    "title": "Qu'est-ce qui ne va pas ?",
+    "reason_sources": "Les articles choisis ne correspondent pas à la question",
+    "which": "Lesquels sont hors sujet ? (facultatif)",
+    "reason_answer": "La synthèse de l'IA est fausse ou mal formulée",
+    "comment": "Précise si besoin (un terme faux, ce que tu attendais…)",
+    "submit": "Enregistrer le signalement",
+    "saved": "Signalement enregistré dans Biblio.",
+    "send_help": "Pour qu'il parvienne au développeur, ouvre le ticket GitHub prérempli : tu le relis avant de l'envoyer (compte GitHub nécessaire).",
+    "send": "Envoyer au développeur",
+    "close": "Fermer"
   }
 }

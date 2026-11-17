@@ -518,5 +518,19 @@
     "confirm_one": "Delete “{title}” from the library?\n\nIts note and PDF will go to the Trash.",
     "confirm": "Delete {n} article(s) from the library?\n\nTheir notes and PDFs will go to the Trash.",
     "done": "{n} article(s) deleted (notes and PDFs moved to the Trash)"
+  },
+  "report": {
+    "button": "Report a problem",
+    "help": "Wrong articles or wrong synthesis: report it so the search can be fixed",
+    "title": "What's wrong?",
+    "reason_sources": "The articles don't match the question",
+    "which": "Which ones are off-topic? (optional)",
+    "reason_answer": "The AI synthesis is wrong or badly worded",
+    "comment": "Details if needed (a wrong term, what you expected…)",
+    "submit": "Save the report",
+    "saved": "Report saved in Biblio.",
+    "send_help": "To get it to the developer, open the prefilled GitHub issue: you review it before sending (GitHub account needed).",
+    "send": "Send to the developer",
+    "close": "Close"
   }
 }

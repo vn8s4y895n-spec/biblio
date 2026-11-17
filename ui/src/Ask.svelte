@@ -31,6 +31,7 @@
   let historyInfo = $state(null); // résultat gardé d'une question de l'historique, affiché sans relancer
   let thread = $state([]); // échanges précédents quand on approfondit : { question, result, synthesis }
   let followUp = $state("");
+  let report = $state(null); // signalement en cours : { sources, answer, bad: { n: true }, comment, saved }
   let input;
   let runs = 0; // seule la dernière recherche lancée s'affiche
 
@@ -100,6 +101,7 @@
     highlight = null;
     savedInfo = null;
     historyInfo = null;
+    report = null;
     const started = performance.now();
     trace = { steps: [], running: true, ms: 0 };
     try {
@@ -159,6 +161,23 @@
     question = followUp.trim();
     followUp = "";
     run(null, true, true);
+  }
+
+  async function sendReport() {
+    const reasons = ["sources", "answer"].filter((r) => report[r]);
+    try {
+      report.saved = await api("/reports", {
+        method: "POST",
+        body: {
+          question: question.trim(), reasons, comment: report.comment.trim(),
+          bad_sources: Object.keys(report.bad).filter((n) => report.bad[n]).map(Number),
+          scope: result.scope, query: result.query, query_by: result.query_by, sources: result.sources,
+          synthesis: synthesis?.text ? { text: synthesis.text, model: synthesis.model } : null, context,
+        },
+      });
+    } catch (e) {
+      toast(e.message, "error");
+    }
   }
 
   async function openSaved(id) {
@@ -432,7 +451,43 @@
           <button onclick={sendPackage} title={$t("package.search_help")}>{$t("package.send_search")}</button>
         {/if}
         <button onclick={continueInClaude} disabled={!result.sources.length} title={$t("ask.continue_help")}>{$t("ask.continue_claude")}</button>
+        <button class="ghost" title={$t("report.help")} onclick={() => (report = report ? null : { sources: false, answer: false, bad: {}, comment: "", saved: null })}>
+          ⚑ {$t("report.button")}
+        </button>
       </div>
+
+      {#if report}
+        <div class="report card">
+          {#if report.saved}
+            <p>✓ {$t("report.saved")}</p>
+            <p class="small muted">{$t("report.send_help")}</p>
+            <div class="row">
+              <a class="send" href={report.saved.issue_url} target="_blank" rel="noreferrer">{$t("report.send")} ↗</a>
+              <button class="ghost" onclick={() => (report = null)}>{$t("report.close")}</button>
+            </div>
+          {:else}
+            <span class="eyebrow">{$t("report.title")}</span>
+            <label class="row small"><input type="checkbox" bind:checked={report.sources} /> {$t("report.reason_sources")}</label>
+            {#if report.sources && result.sources.length}
+              <div class="bad small">
+                <span class="muted">{$t("report.which")}</span>
+                {#each result.sources as rec, i}
+                  <label class="row"><input type="checkbox" bind:checked={report.bad[i + 1]} /> {i + 1}. {rec.title}</label>
+                {/each}
+              </div>
+            {/if}
+            {#if synthesis?.text}
+              <label class="row small"><input type="checkbox" bind:checked={report.answer} /> {$t("report.reason_answer")}</label>
+            {/if}
+            <textarea rows="3" bind:value={report.comment} placeholder={$t("report.comment")}></textarea>
+            <div class="row">
+              <div class="grow"></div>
+              <button class="ghost" onclick={() => (report = null)}>{$t("common.cancel")}</button>
+              <button class="primary" disabled={!report.sources && !report.answer && !report.comment.trim()} onclick={sendReport}>{$t("report.submit")}</button>
+            </div>
+          {/if}
+        </div>
+      {/if}
     {:else}
       <div class="intro">
         {#if history.length}
@@ -546,6 +601,12 @@
   .turn ol { margin: 6px 0 0; padding-left: 20px; }
   .turn-question { font: 600 16px var(--serif); margin: 0; }
   .off-topic { background: var(--warn-soft); color: var(--warn); padding: 6px 12px; border-radius: 8px; margin: 0; }
+  .report { padding: 12px 14px; display: grid; gap: 8px; }
+  .report p { margin: 0; }
+  .report .send { background: var(--accent); color: var(--accent-text); border-radius: 7px; padding: 5px 11px; font-weight: 550; text-decoration: none; }
+  .report textarea { width: 100%; }
+  .report .bad { display: grid; gap: 4px; max-height: 220px; overflow: auto; padding-left: 22px; }
+  .report .bad label { align-items: flex-start; }
   .follow-up { padding: 10px 14px; display: grid; gap: 6px; }
   .follow-up textarea { width: 100%; border: none; background: transparent; resize: none; font: 15px/1.45 var(--serif); padding: 0; }
   .follow-up textarea:focus-visible { outline: none; }

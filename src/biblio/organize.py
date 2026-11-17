@@ -243,3 +243,80 @@ def delete_search(conn: sqlite3.Connection, search_id: int) -> None:
     get_search(conn, search_id)
     with db.transaction(conn):
         conn.execute("DELETE FROM saved_searches WHERE id = ?", (search_id,))
+
+
+# --- Signalements ---------------------------------------------------------------------------------------
+
+
+def _ids(rec: dict) -> dict:
+    ids = rec.get("identifiers") or {}
+    return {k: v for k, v in {"title": rec.get("title"), "year": rec.get("year"), "doi": ids.get("doi"),
+                              "pmid": ids.get("pmid")}.items() if v}  # fmt: skip
+
+
+def save_report(conn: sqlite3.Connection, data: dict) -> dict:
+    """Signalement d'une réponse : `reasons` (sources, answer), `comment`, `bad_sources` (numéros 1… des sources
+    hors sujet), et la réponse telle qu'affichée (`query`, `sources`, `synthesis`, `context`)."""
+    from . import __version__
+
+    sources = data.get("sources") or []
+    report = {
+        "scope": data.get("scope"), "query": data.get("query"), "query_by": data.get("query_by"),
+        "context": [t.get("question") for t in data.get("context") or []], "version": __version__,
+        "bad_sources": [{"n": n, **_ids(sources[n - 1])} for n in data.get("bad_sources") or [] if 0 < n <= len(sources)],
+        "sources": [{"n": n, **_ids(rec)} for n, rec in enumerate(sources, 1)],
+        "synthesis": (data.get("synthesis") or {}).get("text"), "model": (data.get("synthesis") or {}).get("model"),
+    }  # fmt: skip
+    with db.transaction(conn):
+        cur = conn.execute("INSERT INTO reports (question, reasons_json, comment, report_json) VALUES (?, ?, ?, ?)",
+                           (data["question"], json.dumps(data.get("reasons") or []), data.get("comment") or "",
+                            json.dumps(report, ensure_ascii=False)))  # fmt: skip
+    return get_report(conn, cur.lastrowid)
+
+
+def get_report(conn: sqlite3.Connection, report_id: int) -> dict:
+    row = conn.execute("SELECT * FROM reports WHERE id = ?", (report_id,)).fetchone()
+    if row is None:
+        raise core.NotFound(f"Signalement introuvable : {report_id}")
+    return {"id": row["id"], "created_at": row["created_at"], "question": row["question"],
+            "reasons": json.loads(row["reasons_json"]), "comment": row["comment"], **json.loads(row["report_json"])}  # fmt: skip
+
+
+def reports(conn: sqlite3.Connection) -> list[dict]:
+    return [get_report(conn, r[0]) for r in conn.execute("SELECT id FROM reports ORDER BY id DESC")]
+
+
+def delete_report(conn: sqlite3.Connection, report_id: int) -> None:
+    with db.transaction(conn):
+        conn.execute("DELETE FROM reports WHERE id = ?", (report_id,))
+
+
+REASONS = {"sources": "Articles mal choisis", "answer": "Synthèse de l'IA"}
+
+
+def issue_url(report: dict) -> str:
+    """Ticket GitHub prérempli (relu par l'utilisateur avant envoi) : le signalement parvient au développeur."""
+    from urllib.parse import urlencode
+
+    from . import REPOSITORY
+
+    def ref(s: dict) -> str:
+        link = f"doi:{s['doi']}" if s.get("doi") else f"pmid:{s['pmid']}" if s.get("pmid") else ""
+        return f"{s['n']}. {s.get('title', '')} ({s.get('year', '')}) {link}".strip()
+
+    lines = [f"**Question** : {report['question']}"]
+    if report["context"]:
+        lines.append("**Questions précédentes** : " + " → ".join(report["context"]))
+    lines += [f"**Problème** : {', '.join(REASONS.get(r, r) for r in report['reasons'])}",
+              f"**Commentaire** : {report['comment'] or '—'}", "",
+              f"Requête ({report.get('query_by') or '?'}) : `{report.get('query') or ''}`",
+              f"Biblio {report['version']} · modèle : {report.get('model') or '—'}"]  # fmt: skip
+    if report["bad_sources"]:
+        lines += ["", "**Sources hors sujet**", *map(ref, report["bad_sources"])]
+    if report.get("synthesis"):
+        lines += ["", "**Synthèse de l'IA**", "> " + report["synthesis"][:1500].replace("\n", "\n> ")]
+    lines += ["", "<details><summary>Toutes les sources</summary>", "", *map(ref, report["sources"]), "</details>"]
+    body = "\n".join(lines)[:6000]
+    query = urlencode({"title": f"Signalement : {report['question'][:90]}", "body": body, "labels": "signalement"})
+    return f"https://github.com/{REPOSITORY}/issues/new?{query}"
+

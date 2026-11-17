@@ -4,7 +4,7 @@ SQLite en mode WAL, clés étrangères actives. Les migrations sont dans `src/bi
 
 Ce document décrit le schéma **réellement en place**.
 
-## `schema_migrations` (version actuelle : 15)
+## `schema_migrations` (version actuelle : 16)
 
 | Colonne | Type | Rôle |
 |---|---|---|
@@ -178,6 +178,10 @@ La question posée sur l'écran Question qui a mené à ajouter l'article : `(wo
 `(question, scope)` en clé primaire, `asked_at` (à la milliseconde), `times` (nombre de fois posée). Chaque question de l'écran Question y est inscrite ; la reposer la fait remonter en tête.
 
 Migration 15 : `result_json` (dernier résultat, celui de POST /ask) et `synthesis_json` (synthèse de l'IA rédigée ensuite, effacée quand la question est relancée) ; un clic dans l'historique les réaffiche sans relancer la recherche. NULL pour les questions posées avant.
+
+## `reports` : signalements de l'écran Question (migration 16)
+
+`(id, created_at, question, reasons_json, comment, report_json)`. `reasons_json` : `["sources", "answer"]` (articles mal choisis, synthèse de l'IA). `report_json` : la réponse telle qu'affichée, pour la corriger ensuite : `scope`, `query`, `query_by`, `context` (questions précédentes), `version`, `model`, `synthesis` (texte), `sources` et `bad_sources` (`{n, title, year, doi, pmid}`). POST /reports renvoie aussi `issue_url`, un ticket GitHub prérempli que l'utilisateur relit avant de l'envoyer.
 
 ## IA (migration 11)
 
