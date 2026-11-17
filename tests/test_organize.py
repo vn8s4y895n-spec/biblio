@@ -302,3 +302,17 @@ def test_label_colors_pins_moves_views_and_recent(api, network):
     api.put("/api/v1/views", json={"name": "thèse", "state": {**state, "sort": "title"}})  # même nom : remplacée
     assert [(v["name"], v["state"]["sort"]) for v in api.get("/api/v1/views").json()] == [("Thèse", "title")]
     assert api.delete(f"/api/v1/views/{saved['id']}").status_code == 204 and api.get("/api/v1/views").json() == []
+
+
+def test_history_keeps_last_result_to_show_without_rerunning(api):
+    q = {"question": "Transmission  des BLSE ?", "scope": "library"}
+    asked = api.post("/api/v1/ask", json=q).json()
+    assert api.get("/api/v1/history").json()[0]["has_result"] is True
+    kept = api.get("/api/v1/history/result", params=q).json()
+    assert kept["result"] == asked and kept["synthesis"] is None
+    synthesis = {"text": "Réponse", "sentences": [], "model": "test"}
+    assert api.put("/api/v1/history/synthesis", json={**q, "synthesis": synthesis}).status_code == 204
+    assert api.get("/api/v1/history/result", params=q).json()["synthesis"] == synthesis
+    api.post("/api/v1/ask", json=q)  # relancée : nouvelle réponse, l'ancienne synthèse n'est plus gardée
+    assert api.get("/api/v1/history/result", params=q).json()["synthesis"] is None
+    assert api.get("/api/v1/history/result", params={"question": "Jamais posée", "scope": "library"}).status_code == 404

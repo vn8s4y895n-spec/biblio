@@ -4,7 +4,7 @@ SQLite en mode WAL, clés étrangères actives. Les migrations sont dans `src/bi
 
 Ce document décrit le schéma **réellement en place**.
 
-## `schema_migrations` (version actuelle : 14)
+## `schema_migrations` (version actuelle : 15)
 
 | Colonne | Type | Rôle |
 |---|---|---|
@@ -176,6 +176,8 @@ La question posée sur l'écran Question qui a mené à ajouter l'article : `(wo
 ## `question_history` : questions posées (migration 10)
 
 `(question, scope)` en clé primaire, `asked_at` (à la milliseconde), `times` (nombre de fois posée). Chaque question de l'écran Question y est inscrite ; la reposer la fait remonter en tête.
+
+Migration 15 : `result_json` (dernier résultat, celui de POST /ask) et `synthesis_json` (synthèse de l'IA rédigée ensuite, effacée quand la question est relancée) ; un clic dans l'historique les réaffiche sans relancer la recherche. NULL pour les questions posées avant.
 
 ## IA (migration 11)
 

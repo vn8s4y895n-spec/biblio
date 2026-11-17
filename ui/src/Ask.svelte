@@ -28,6 +28,7 @@
   let saved = $state([]); // recherches enregistrées
   let history = $state([]); // questions posées récemment
   let savedInfo = $state(null); // recherche enregistrée affichée
+  let historyInfo = $state(null); // résultat gardé d'une question de l'historique, affiché sans relancer
   let input;
   let runs = 0; // seule la dernière recherche lancée s'affiche
 
@@ -56,10 +57,24 @@
     [saved, history] = await Promise.all([api("/searches").catch(() => []), api("/history").catch(() => [])]);
   }
 
-  function askAgain(h) {
+  // Question de l'historique : son dernier résultat s'affiche tel quel ; « Relancer » refait la recherche.
+  async function askAgain(h) {
     question = h.question;
     scope = h.scope;
-    run();
+    if (!h.has_result) return run();
+    try {
+      const kept = await api("/history/result", { params: { question: h.question, scope: h.scope } });
+      result = kept.result;
+      editedQuery = result.query ?? "";
+      synthesis = kept.synthesis;
+      savedInfo = null;
+      historyInfo = { asked_at: kept.asked_at };
+      trace = null;
+      error = null;
+      selected = 0;
+    } catch (e) {
+      toast(e.message, "error");
+    }
   }
 
   async function forget(h) {
@@ -75,6 +90,7 @@
     error = null;
     highlight = null;
     savedInfo = null;
+    historyInfo = null;
     const started = performance.now();
     trace = { steps: [], running: true, ms: 0 };
     try {
@@ -116,7 +132,10 @@
         if (ticket !== runs) return;
         if (event.delta) synthesis.text += event.delta;
         if (event.error) synthesis = { ...synthesis, error: event.error, streaming: false };
-        if (event.done) synthesis = { text: event.text, sentences: event.sentences, model: event.model, streaming: false };
+        if (event.done) {
+          synthesis = { text: event.text, sentences: event.sentences, model: event.model, streaming: false };
+          api("/history/synthesis", { method: "PUT", body: { question: question.trim(), scope: result.scope, synthesis } }).catch(() => {});
+        }
       });
     } catch (e) {
       if (ticket === runs) synthesis = { ...synthesis, error: e.message, streaming: false };
@@ -132,6 +151,7 @@
       result = { scope: s.scope, query: s.query, answer: s.answer, sources: s.sources, hidden: {}, total: s.sources.length };
       synthesis = s.synthesis;
       savedInfo = s;
+      historyInfo = null;
       trace = null;
       selected = 0;
     } catch (e) {
@@ -284,6 +304,12 @@
         </details>
       {/if}
 
+      {#if historyInfo}
+        <p class="saved-banner small">
+          {$t("ask.history_on", { date: $fmt.date(historyInfo.asked_at) })}
+          <button class="ghost small" onclick={() => run()}>{$t("ask.rerun")}</button>
+        </p>
+      {/if}
       {#if savedInfo}
         <p class="saved-banner small">
           {$t("ask.saved_on", { date: $fmt.date(savedInfo.created_at) })}

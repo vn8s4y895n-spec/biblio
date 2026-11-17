@@ -172,8 +172,30 @@ def remember_question(conn: sqlite3.Connection, question: str, scope: str) -> No
 
 
 def question_history(conn: sqlite3.Connection, limit: int = 30) -> list[dict]:
-    rows = conn.execute("SELECT question, scope, asked_at, times FROM question_history ORDER BY asked_at DESC LIMIT ?", (limit,))
-    return [dict(r) for r in rows]
+    rows = conn.execute("SELECT question, scope, asked_at, times, result_json IS NOT NULL AS has_result"
+                        " FROM question_history ORDER BY asked_at DESC LIMIT ?", (limit,))  # fmt: skip
+    return [{**dict(r), "has_result": bool(r["has_result"])} for r in rows]
+
+
+def keep_result(conn: sqlite3.Connection, question: str, scope: str, result: dict | None = None,
+                synthesis: dict | None = None) -> None:
+    """Garde le dernier résultat d'une question de l'historique (ou sa synthèse, rédigée ensuite par l'IA)."""
+    question = " ".join(question.split())
+    column, value = ("synthesis_json", synthesis) if result is None else ("result_json", result)
+    with db.transaction(conn):
+        if result is not None:  # nouveau résultat : l'ancienne synthèse ne lui correspond plus
+            conn.execute("UPDATE question_history SET synthesis_json = NULL WHERE question = ? AND scope = ?", (question, scope))
+        conn.execute(f"UPDATE question_history SET {column} = ? WHERE question = ? AND scope = ?",
+                     (json.dumps(value, ensure_ascii=False, default=str), question, scope))  # fmt: skip
+
+
+def history_result(conn: sqlite3.Connection, question: str, scope: str) -> dict:
+    row = conn.execute("SELECT asked_at, result_json, synthesis_json FROM question_history WHERE question = ? AND scope = ?",
+                       (" ".join(question.split()), scope)).fetchone()  # fmt: skip
+    if row is None or row["result_json"] is None:
+        raise core.NotFound("Pas de résultat gardé pour cette question : relancer la recherche")
+    return {"asked_at": row["asked_at"], "result": json.loads(row["result_json"]),
+            "synthesis": row["synthesis_json"] and json.loads(row["synthesis_json"])}  # fmt: skip
 
 
 def forget_question(conn: sqlite3.Connection, question: str | None = None, scope: str | None = None) -> int:

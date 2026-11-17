@@ -439,10 +439,13 @@ def ask_question(body: AskRequest, conn: Conn):
 def _ask(body: AskRequest, conn: sqlite3.Connection) -> dict:
     organize.remember_question(conn, body.question, body.scope)
     if body.scope == "library":
-        return ask.ask_library(conn, body.question, body.limit)
-    filters = search.Filters(year_from=body.year_from, year_to=body.year_to, study_types=body.study_type,
-                             open_access=body.open_access, journal_status=[] if body.all_journals else ["recommended"])  # fmt: skip
-    return ask.ask_online(conn, body.question, filters, body.limit, body.query, body.origin)
+        result = ask.ask_library(conn, body.question, body.limit)
+    else:
+        filters = search.Filters(year_from=body.year_from, year_to=body.year_to, study_types=body.study_type,
+                                 open_access=body.open_access, journal_status=[] if body.all_journals else ["recommended"])  # fmt: skip
+        result = ask.ask_online(conn, body.question, filters, body.limit, body.query, body.origin)
+    organize.keep_result(conn, body.question, body.scope, result)
+    return result
 
 
 @router.post("/ask/stream", summary="Poser une question en suivant son déroulé (SSE)")
@@ -489,6 +492,22 @@ class ForgetRequest(BaseModel):
 @router.get("/history", summary="Questions posées récemment (la plus récente d'abord)")
 def question_history(conn: Conn, limit: Annotated[int, Query(ge=1, le=200)] = 30):
     return organize.question_history(conn, limit)
+
+
+@router.get("/history/result", summary="Dernier résultat gardé d'une question de l'historique (sans relancer)")
+def history_result(conn: Conn, question: str, scope: Literal["online", "library"] = "online"):
+    return organize.history_result(conn, question, scope)
+
+
+class HistorySynthesis(BaseModel):
+    question: str
+    scope: Literal["online", "library"] = "online"
+    synthesis: dict
+
+
+@router.put("/history/synthesis", status_code=204, summary="Garder la synthèse de l'IA avec la question de l'historique")
+def history_synthesis(body: HistorySynthesis, conn: Conn):
+    organize.keep_result(conn, body.question, body.scope, synthesis=body.synthesis)
 
 
 @router.post("/history/forget", summary="Retirer une question de l'historique (ou tout l'effacer)")
